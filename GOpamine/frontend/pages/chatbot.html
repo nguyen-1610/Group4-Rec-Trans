@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Bot</title>
+    <link rel="stylesheet" href="../static/css/chatbot.css">
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn">←</button>
+        <div class="header-right">
+            <div class="toggle-group">
+                <button class="toggle-btn">Map</button>
+                <button class="toggle-btn active">AI</button>
+            </div>
+            <div class="profile-icon">👤</div>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="message-group">
+            <div class="title-message">
+                Khi bạn cần một chuyến hành trình là lúc chúng tôi sẵn sàng.
+            </div>
+
+            <div class="bot-message">
+                <div class="bot-avatar">🤖</div>
+                <div class="message-bubble">
+                    Hãy cho tôi biết bạn muốn đi đâu? Tôi có thể gợi ý đường đi và phương tiện phù hợp với nhu cầu của bạn ^^
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-container">
+        <button class="add-btn">+</button>
+        <div class="input-wrapper">
+            <input type="text" class="chat-input" placeholder="Trò chuyện">
+            <button class="send-btn"></button>
+        </div>
+    </div>
+
+    <div class="suggestions-container">
+        <button class="suggestion-btn">Lộ trình hôm nay</button>
+        <button class="suggestion-btn">Tuyến đường</button>
+        <button class="suggestion-btn">Phương tiện</button>
+    </div>
+
+    <script src="../static/js/chatbot.js"></script>
+</body>
+</html>

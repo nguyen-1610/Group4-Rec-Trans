@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thiết lập lộ trình</title>
+    <link rel="stylesheet" href="../static/css/form.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button class="back-btn">←</button>
+            <div class="profile-icon">👤</div>
+        </div>
+
+        <div class="form-container">
+            <h1>Thiết lập lộ trình</h1>
+            
+            <div class="form-wrapper">
+                    <div class="form-group">
+                    <label class="form-label">
+                        Điểm xuất phát
+                    </label>
+                    <input type="text" placeholder="Tìm kiếm">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Điểm đến
+                        <button class="add-btn">Thêm</button>
+                    </label>
+                    <input type="text" placeholder="Tìm kiếm">
+                </div>
+
+                <div class="form-group">
+                    <div class="budget-info">
+                        <span class="form-label">Ngân sách</span>
+                        <span class="budget-value">đ0-1.000.000</span>
+                    </div>
+                    <input type="range" class="range-slider" min="0" max="1000000" value="1000000" step="1000">
+                </div>
+
+                <div class="form-group">
+                    <div class="input-group">
+                        <div>
+                            <label class="form-label">Số hành khách</label>
+                            <input type="text" placeholder="Số hành khách">
+                        </div>
+                        <div>
+                            <label class="form-label">Tuổi</label>
+                            <input type="text" placeholder="Tuổi">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <button class="dropdown-header">
+                        Ưu tiên
+                    </button>
+
+                    <div class="dropdown-content">
+                        <p class="dropdown-hint">Lựa chọn các ưu tiên theo sở thích của bạn dưới đây, hoặc thêm một ưu tiên bạn muốn.</p>
+                        <div class="checkbox-item">
+                            <span>Tốc độ</span>
+                            <input type="checkbox" checked>
+                        </div>
+                        <div class="checkbox-item">
+                            <span>Tiết kiệm</span>
+                            <input type="checkbox">
+                        </div>
+                        <div class="checkbox-item">
+                            <span>Thoải mái</span>
+                            <input type="checkbox" checked>
+                        </div>
+                        <div class="checkbox-item">
+                            <span>An toàn</span>
+                            <input type="checkbox" checked>
+                        </div>
+                        <div class="checkbox-item">
+                            <span>Cân bằng</span>
+                            <input type="checkbox">
+                        </div>
+                        <button class="add-preference">Thêm</button>
+                    </div>
+                </div>
+
+                <button class="submit-btn">Hoàn tất</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="../static/js/form.js"></script>
+</body>
+</html>
