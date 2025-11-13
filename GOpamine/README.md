@@ -28,9 +28,9 @@ GOPamine/
 │   ├── pages/                     # HTML pages
 │   ├── static/                    # CSS, JS, images
 │   └── templates/                 # templates (menu, header, footer)
-├── .gitignore
-├── README.md
-└── requirements.txt
+├── .gitignore						# để các file thực thi kh lên
+├── README.md						
+└── requirements.txt				# thư viện cần tải
 ```
 
 ---
@@ -39,16 +39,16 @@ GOPamine/
 
 ### Backend (BE)
 
-| File | Chức năng |
-|------|-----------|
-| `AI.py` | Chatbot dùng Gemini API, xử lý NLP |
-| `app.py` | Flask app chính, đăng ký routes, config |
+| File 			| Chức năng |
+|------			|-----------|
+| `AI.py` 		| Chatbot dùng Gemini API, xử lý NLP |
+| `app.py` 		| Flask app chính, đăng ký routes, config |
 | `feedback.py` | Nhận và xử lý feedback người dùng |
-| `form.py` | Validation forms với WTForms |
-| `home.py` | Routes cho trang chủ, danh sách tuyến |
-| `login.py` | Đăng nhập, đăng ký, session |
-| `Map_Trans.py` | Render bản đồ OSM, tính tuyến đường |
-| `weather.py` | Lấy thông tin thời tiết TP.HCM |
+| `form.py` 	| Validation forms với WTForms |
+| `home.py` 	| Routes cho trang chủ, danh sách tuyến |
+| `login.py` 	| Đăng nhập, đăng ký, session |
+| `Map_Trans.py`| Render bản đồ OSM, tính tuyến đường |
+| `weather.py` 	| Lấy thông tin thời tiết TP.HCM |
 
 ### Data
 
