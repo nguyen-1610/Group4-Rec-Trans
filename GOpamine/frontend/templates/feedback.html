@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đánh giá từ cộng đồng</title>
+    <link rel="stylesheet" href="../static/css/feedback.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Đánh giá từ cộng đồng</h1>
+
+        <div class="review-form-card">
+            <h2>Chia sẻ trải nghiệm của bạn</h2>
+            <form id="reviewForm">
+                <div class="form-group">
+                    <label for="userName">Tên của bạn</label>
+                    <input type="text" id="userName" placeholder="Nhập tên của bạn" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Đánh giá của bạn</label>
+                    <div class="star-rating" id="starRating">
+                        <span class="star-input" data-value="1">☆</span>
+                        <span class="star-input" data-value="2">☆</span>
+                        <span class="star-input" data-value="3">☆</span>
+                        <span class="star-input" data-value="4">☆</span>
+                        <span class="star-input" data-value="5">☆</span>
+                    </div>
+                    <input type="hidden" id="ratingValue" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="reviewText">Nhận xét của bạn</label>
+                    <textarea id="reviewText" rows="4" placeholder="Chia sẻ trải nghiệm của bạn..." required></textarea>
+                </div>
+                
+                <button type="submit" class="submit-button">Gửi đánh giá</button>
+            </form>
+        </div>
+
+        <div class="reviews-card">
+            <h2 class="reviews-title">Đánh giá gần đây</h2>
+            <div id="reviewsList">
+            </div>
+        </div>
+    </div>
+
+    <script src="../static/js/feedback.js"></script>
+</body>
+</html>
