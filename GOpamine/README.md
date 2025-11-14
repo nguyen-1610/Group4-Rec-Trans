@@ -1,6 +1,4 @@
-# 🚌 GOPamine - Bus Route Management System
-
-Hệ thống quản lý thông tin tuyến xe buýt TP.HCM với AI chatbot (Gemini) và bản đồ (OpenStreetMap).
+# 🚌 GOPamine - Smart Itinerary & Transport Advisor
 
 ---
 
