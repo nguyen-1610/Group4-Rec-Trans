@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GOpamine{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% block extra_css %}{% endblock %}
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Styles */
+        .header {
+            background-color: #fff;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background-color: #2d5016;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 20px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: #000;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Language Toggle */
+        .lang-switch {
+            display: flex;
+            background-color: #e0e0e0;
+            border-radius: 20px;
+            padding: 4px;
+            position: relative;
+            cursor: pointer;
+            width: 70px;
+            height: 32px;
+        }
+
+        .lang-switch-text {
+            flex: 1;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.3s;
+        }
+
+        .lang-switch-text.vi {
+            color: #666;
+        }
+
+        .lang-switch-text.en {
+            color: #666;
+        }
+
+        .lang-switch.active .lang-switch-text.vi {
+            color: #fff;
+        }
+
+        .lang-switch:not(.active) .lang-switch-text.en {
+            color: #fff;
+        }
+
+        .lang-switch-slider {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: calc(50% - 4px);
+            height: calc(100% - 8px);
+            background-color: #2d5016;
+            border-radius: 16px;
+            transition: transform 0.3s;
+            z-index: 1;
+        }
+
+        .lang-switch:not(.active) .lang-switch-slider {
+            transform: translateX(100%);
+        }
+
+        /* Menu Icon (Mobile) */
+        .menu-icon {
+            font-size: 24px;
+            cursor: pointer;
+            color: #333;
+            display: block;
+        }
+
+        /* Desktop Navigation */
+        .desktop-nav {
+            display: none;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .desktop-nav a {
+            text-decoration: none;
+            color: #333;
+            font-size: 16px;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .desktop-nav a:hover {
+            background-color: #e8f5e9;
+            color: #2d5016;
+        }
+
+        .desktop-nav a.active {
+            background-color: #c8e6c9;
+            color: #2d5016;
+        }
+
+        .desktop-nav .login-btn {
+            background-color: #2d5016;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-left: 10px;
+        }
+
+        .desktop-nav .login-btn:hover {
+            background-color: #1e350e;
+        }
+
+        /* Mobile Menu Dropdown */
+        .menu-dropdown {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .menu-dropdown.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .menu-sidebar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100%;
+            background-color: #fff;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            transform: translateX(-100%);
+            transition: transform 0.3s;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+        }
+
+        .menu-dropdown.active .menu-sidebar {
+            transform: translateX(0);
+        }
+
+        .menu-items {
+            flex: 1;
+            padding: 20px 0;
+        }
+
+        .menu-item {
+            display: block;
+            padding: 15px 20px;
+            text-decoration: none;
+            color: #333;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .menu-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .menu-item.active {
+            background-color: #c8e6c9;
+            color: #2d5016;
+        }
+
+        .menu-login-btn {
+            margin: 20px;
+            padding: 15px;
+            background-color: #2d5016;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            transition: background-color 0.3s;
+        }
+
+        .menu-login-btn:hover {
+            background-color: #1e350e;
+        }
+
+        /* Content Area */
+        .content-wrapper {
+            flex: 1;
+            padding: 20px;
+        }
+
+        /* Responsive Design */
+        @media (min-width: 768px) {
+            .menu-icon {
+                display: none;
+            }
+
+            .desktop-nav {
+                display: flex;
+            }
+
+            .menu-dropdown {
+                display: none !important;
+            }
+
+            .header {
+                padding: 15px 40px;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .desktop-nav {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <i class="fas fa-leaf"></i>
+                </div>
+                <span class="logo-text">GOpamine</span>
+            </div>
+            <div class="header-right">
+                <div class="lang-switch active" id="langSwitch">
+                    <span class="lang-switch-text vi">VI</span>
+                    <span class="lang-switch-text en">EN</span>
+                    <div class="lang-switch-slider"></div>
+                </div>
+                <i class="fas fa-bars menu-icon" id="menuIcon"></i>
+                
+                <!-- Desktop Navigation -->
+                <nav class="desktop-nav">
+                    <a href="/" class="{% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
+                    <a href="/ai-assistant" class="{% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
+                    <a href="/suggestions" class="{% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
+                    <a href="/about" class="{% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
+                    <a href="/guide" class="{% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
+                    <a href="/auth" class="login-btn">Đăng nhập/ Đăng ký</a>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Mobile Menu Dropdown -->
+        <div class="menu-dropdown" id="menuDropdown">
+            <div class="menu-sidebar">
+                <nav class="menu-items">
+                    <a href="/" class="menu-item {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
+                    <a href="/ai-assistant" class="menu-item {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
+                    <a href="/suggestions" class="menu-item {% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
+                    <a href="/about" class="menu-item {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
+                    <a href="/guide" class="menu-item {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
+                </nav>
+                <a href="/auth" class="menu-login-btn">Đăng nhập/ Đăng ký</a>
+            </div>
+        </div>
+
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <script>
+        // Language Toggle Functionality
+        const langSwitch = document.getElementById('langSwitch');
+        if (langSwitch) {
+            langSwitch.addEventListener('click', function() {
+                this.classList.toggle('active');
+                const isVI = this.classList.contains('active');
+                // You can add language switching logic here
+                console.log('Language switched to:', isVI ? 'VI' : 'EN');
+            });
+        }
+
+        // Mobile Menu Toggle
+        const menuIcon = document.getElementById('menuIcon');
+        const menuDropdown = document.getElementById('menuDropdown');
+
+        if (menuIcon && menuDropdown) {
+            menuIcon.addEventListener('click', function(e) {
+                e.stopPropagation();
+                menuDropdown.classList.toggle('active');
+            });
+
+            // Close menu when clicking outside
+            document.addEventListener('click', function(e) {
+                if (menuDropdown.classList.contains('active')) {
+                    if (!menuDropdown.contains(e.target) && e.target !== menuIcon) {
+                        menuDropdown.classList.remove('active');
+                    }
+                }
+            });
+
+            // Close menu when clicking on menu item
+            const menuItems = menuDropdown.querySelectorAll('.menu-item');
+            menuItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    menuDropdown.classList.remove('active');
+                });
+            });
+
+            // Close menu when clicking on login button
+            const menuLoginBtn = menuDropdown.querySelector('.menu-login-btn');
+            if (menuLoginBtn) {
+                menuLoginBtn.addEventListener('click', function() {
+                    menuDropdown.classList.remove('active');
+                });
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 768) {
+                menuDropdown.classList.remove('active');
+            }
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
