@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GOpamine - Trang chủ</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="../static/css/home.css">
+</head>
+<body>
+
+    <div class="container">
+
+        <div class="header">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <i class="fas fa-leaf"></i> </div>
+                <span class="logo-text">GOpamine</span>
+            </div>
+            <div class="header-right">
+                <div class="lang-switch active" id="langSwitch">
+                    <span class="lang-switch-text vi">VI</span>
+                    <span class="lang-switch-text en">EN</span>
+                    <div class="lang-switch-slider"></div>
+                </div>
+                <i class="fas fa-bars menu-icon" id="menuIcon"></i>
+                
+                <nav class="desktop-nav">
+                    <a href="/" class="active">Trang chủ</a>
+                    <a href="#">Trợ lý AI</a>
+                    <a href="#">Gợi ý</a>
+                    <a href="#">Về chúng tôi</a>
+                    <a href="#">Hướng dẫn</a>
+                    <a href="#" class="login-btn">Đăng nhập/ Đăng ký</a>
+                </nav>
+            </div>
+        </div>
+
+        <div class="menu-dropdown" id="menuDropdown">
+            <div class="menu-sidebar">
+                <nav class="menu-items">
+                    <a href="/" class="menu-item active">Trang chủ</a>
+                    <a href="#" class="menu-item">Trợ lý AI</a>
+                    <a href="#" class="menu-item">Gợi ý</a>
+                    <a href="#" class="menu-item">Về chúng tôi</a>
+                    <a href="#" class="menu-item">Hướng dẫn</a>
+                </nav>
+                <a href="#" class="menu-login-btn">Đăng nhập/ Đăng ký</a>
+            </div>
+        </div>
+
+        <div class="content-wrapper">
+            
+            <section id="hero">
+                <h1>Khám phá hành trình hoàn hảo của bạn.</h1>
+                <p>Al gợi ý phương tiện di chuyển tối ưu dựa trên
+                   ngân sách, thời gian và sở thích của bạn.</p>
+                
+                <div class="hero-buttons">
+                    <a href="#" class="btn btn-primary">Bắt đầu tìm lộ trình</a>
+                    <a href="#" class="btn btn-secondary">Tạo tài khoản</a>
+                    <a href="#" class="btn btn-secondary">Đăng nhập</a>
+                </div>
+            </section>
+            
+            <section id="featured">
+                <h2>Khám phá thành phố Hồ Chí Minh</h2>
+                <p>Thành phố lớn nhất Việt Nam với lịch sử phong phú
+                   và văn hoá sôi nổi</p>
+                
+                <div class="location-grid">
+                    <div class="location-card">
+                        <img src="../image/cho_ben_thanh.jpg" alt="Chợ Bến Thành">
+                        <h3>Chợ Bến Thành</h3>
+                        <p>Biểu tượng Sài Gòn, chợ lâu đời, sầm uất.</p>
+                    </div>
+            
+                    <div class="location-card">
+                        <img src="../image/bao-tang_chung-tich_chien-tranh.jpg" alt="Bảo tàng Chứng tích Chiến tranh">
+                        <h3>Bảo tàng Chứng tích Chiến tranh</h3>
+                        <p>Trưng bày hậu quả chiến tranh, nhắc nhở giá trị hòa bình.</p>
+                    </div>
+                    </div>
+                <a href="#" class="view-more">View more</a>
+            </section>
+            
+            <section id="why-us">
+                <h2>Tại sao chọn chúng tôi?</h2>
+                <p>Nền tảng Al tiên tiến giúp bạn tìm
+                   kiếm phương tiện di chuyển hoàn hảo...</p>
+            
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <img src="../icons/cost.png" alt="Icon Tối ưu chi phí">
+                        <h3>Tối Ưu Chi Phí</h3>
+                        <p>So sánh giá cả từ nhiều nhà cung cấp...</p>
+                    </div>
+            
+                    <div class="feature-card">
+                        <img src="../icons/personalise.png" alt="Icon Trải nghiệm cá nhân">
+                        <h3>Trải Nghiệm Cá Nhân</h3>
+                        <p>Tùy chỉnh gợi ý dựa trên sở thích cá nhân...</p>
+                    </div>
+                    </div>
+            </section>
+            
+            <section id="testimonials">
+                <h2>Đánh giá từ cộng đồng</h2>
+                
+                <div class="testimonial-list">
+                    <div class="testimonial-card">
+                        <p>"Just used this app for recommending my best route around
+                           District 1, and somehow it actually worked better..."</p>
+                        <strong>- James Stewart</strong>
+                    </div>
+            
+                    <div class="testimonial-card">
+                        <p>"Mình ở Hà Nội đến, và cũng chưa nghĩ đến sẽ đi như thế nào.
+                           Khá may mắn là ứng dụng hỗ trợ rất tốt..."</p>
+                        <strong>- Lê Phạm Hải Anh</strong>
+                    </div>
+                    </div>
+            </section>
+            
+            <footer>
+                <div class="footer-content">
+                    <div class="footer-column">
+                        <h3>Dịch vụ</h3>
+                        <ul>
+                            <li><a href="#">Tìm kiếm phương tiện</a></li>
+                            <li><a href="#">Lập kế hoạch hành trình</a></li>
+                            <li><a href="#">So sánh giá cả</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h3>Hỗ trợ</h3>
+                        <ul>
+                            <li><a href="#">Trung tâm trợ giúp</a></li>
+                            <li><a href="#">Liên hệ</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h3>Kết nối</h3>
+                        <p>Email: info@sgtravel.com</p>
+                        <p>ĐT: 0123 456 789</p>
+                        <p>Địa chỉ: 227 Nguyễn Văn Cừ...</p>
+                    </div>
+                </div>
+                <div class="footer-bottom">
+                    <p>© 2025 SGTravel Corporation.</p>
+                    <a href="#">Chính sách bảo mật</a>
+                    <a href="#">Điều khoản dịch vụ</a>
+                </div>
+            </footer>
+        </div> </div> <script src="../static/js/home.js"></script>
+</body>
+</html>

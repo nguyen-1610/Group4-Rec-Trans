@@ -1,0 +1,508 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+.container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header Styles */
+.header {
+    background-color: #fff;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-icon {
+    width: 40px;
+    height: 40px;
+    background-color: #2d5016;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+}
+
+.logo-text {
+    font-size: 20px;
+    font-weight: 600;
+    color: #000;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Language Toggle */
+.lang-switch {
+    display: flex;
+    background-color: #e0e0e0;
+    border-radius: 20px;
+    padding: 4px;
+    position: relative;
+    cursor: pointer;
+    width: 70px;
+    height: 32px;
+}
+
+.lang-switch-text {
+    flex: 1;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.3s;
+}
+
+.lang-switch-text.vi {
+    color: #666;
+}
+
+.lang-switch-text.en {
+    color: #666;
+}
+
+.lang-switch.active .lang-switch-text.vi {
+    color: #fff;
+}
+
+.lang-switch:not(.active) .lang-switch-text.en {
+    color: #fff;
+}
+
+.lang-switch-slider {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    height: calc(100% - 8px);
+    background-color: #2d5016;
+    border-radius: 16px;
+    transition: transform 0.3s;
+    z-index: 1;
+}
+
+.lang-switch:not(.active) .lang-switch-slider {
+    transform: translateX(100%);
+}
+
+/* Menu Icon (Mobile) */
+.menu-icon {
+    font-size: 24px;
+    cursor: pointer;
+    color: #333;
+    display: block;
+}
+
+/* Desktop Navigation */
+.desktop-nav {
+    display: none;
+    align-items: center;
+    gap: 30px;
+}
+
+.desktop-nav a {
+    text-decoration: none;
+    color: #333;
+    font-size: 16px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.desktop-nav a:hover {
+    background-color: #e8f5e9;
+    color: #2d5016;
+}
+
+.desktop-nav a.active {
+    background-color: #c8e6c9;
+    color: #2d5016;
+}
+
+.desktop-nav .login-btn {
+    background-color: #2d5016;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-left: 10px;
+}
+
+.desktop-nav .login-btn:hover {
+    background-color: #1e350e;
+}
+
+/* Mobile Menu Dropdown */
+.menu-dropdown {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.menu-dropdown.active {
+    display: block;
+    opacity: 1;
+}
+
+.menu-sidebar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 280px;
+    height: 100%;
+    background-color: #fff;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 0;
+}
+
+.menu-dropdown.active .menu-sidebar {
+    transform: translateX(0);
+}
+
+.menu-items {
+    flex: 1;
+    padding: 20px 0;
+}
+
+.menu-item {
+    display: block;
+    padding: 15px 20px;
+    text-decoration: none;
+    color: #333;
+    font-size: 16px;
+    font-weight: 500;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.menu-item:hover {
+    background-color: #f5f5f5;
+}
+
+.menu-item.active {
+    background-color: #c8e6c9;
+    color: #2d5016;
+}
+
+.menu-login-btn {
+    margin: 20px;
+    padding: 15px;
+    background-color: #2d5016;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    display: block;
+    transition: background-color 0.3s;
+}
+
+.menu-login-btn:hover {
+    background-color: #1e350e;
+}
+
+/* Content Area */
+.content-wrapper {
+    flex: 1;
+    padding: 20px;
+}
+
+/* Responsive Design */
+@media (min-width: 768px) {
+    .menu-icon {
+        display: none;
+    }
+
+    .desktop-nav {
+        display: flex;
+    }
+
+    .menu-dropdown {
+        display: none !important;
+    }
+
+    .header {
+        padding: 15px 40px;
+    }
+}
+
+@media (max-width: 767px) {
+    .desktop-nav {
+        display: none;
+    }
+}
+
+/* === HERO SECTION (Nâng cấp) === */
+#hero {
+    position: relative; /* Cần thiết để đặt lớp phủ */
+    z-index: 1; /* Đảm bảo nội dung nổi lên trên */
+    text-align: center;
+    padding: 60px 0px;
+    
+    min-height: 100vh; /* Đảm bảo hero chiếm 100% chiều cao */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Căn giữa nội dung theo chiều dọc */
+
+    /* 1. Thiết lập ảnh nền */
+    background-image: url('../image/ben-thanh_hero.jpeg'); /* <-- THAY ĐỔI ĐƯỜNG DẪN TỚI ẢNH CỦA BẠN */
+    background-size: cover; /* Phủ đầy */
+    background-position: center; /* Căn giữa */
+
+    /* 2. Đổi màu chữ sang TRẮNG để nổi bật */
+    color: #fff;
+}
+
+/* 3. Lớp phủ (overlay) mờ */
+/* Đây là một "lớp giả" nằm giữa ảnh nền và chữ */
+#hero::before {
+    content: ""; /* Bắt buộc phải có */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    
+    /* Lớp phủ màu đen mờ 40% */
+    background-color: rgba(0, 0, 0, 0.4); 
+    
+    z-index: -1; /* Đặt lớp phủ NẰM DƯỚI chữ */
+}
+
+/* 4. Thêm bóng cho chữ để dễ đọc hơn */
+#hero h1, #hero p {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* (Phần CSS cho .btn, .btn-primary... giữ nguyên) */
+
+.hero-buttons .btn {
+    display: block;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 10px;
+    font-weight: 700;
+    transition: background-color 0.3s ease;
+}
+
+.btn-primary {
+    background-color: #2a9d8f; /* Màu xanh chính */
+    color: white;
+}
+.btn-primary:hover {
+    background-color: #268a7e;
+}
+
+.btn-secondary {
+    background-color: #e9ecef; /* Màu xám nhạt */
+    color: #333;
+}
+.btn-secondary:hover {
+    background-color: #dee2e6;
+}
+
+/* === FEATURED LOCATIONS (Nâng cấp) === */
+.location-grid {
+    display: grid; /* Đổi sang Grid */
+    
+    /* Mặc định 1 cột trên điện thoại */
+    grid-template-columns: 1fr; 
+    
+    gap: 20px; /* Khoảng cách giữa các thẻ */
+}
+
+.location-card {
+    background-color: #fff;
+    border-radius: 12px; /* Bo góc như thiết kế */
+    overflow: hidden; /* Bắt buộc để ảnh cũng bị bo góc */
+    
+    /* Đây là "Shadowed box" */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    transition: transform 0.3s ease; /* Hiệu ứng khi di chuột */
+}
+
+.location-card:hover {
+    transform: translateY(-5px); /* Nhấc thẻ lên một chút */
+}
+
+.location-card img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+}
+
+.location-card h3 {
+    padding: 15px 15px 5px 15px;
+}
+
+.location-card p {
+    padding: 0 15px 20px 15px;
+    color: #555;
+    font-size: 14px;
+}
+
+/* === WHY US (Nâng cấp) === */
+.features-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* 1 cột trên điện thoại */
+    gap: 15px;
+}
+
+.feature-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 40px 0;
+    background-color: #fff; /* Đổi nền trắng để thấy shadow */
+    border-radius: 12px;
+    
+    /* Đây là "Shadowed box" */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+/* (Giữ nguyên CSS cũ cho .feature-card img, h3, p) */
+
+
+/* === TESTIMONIALS (Nâng cấp) === */
+.testimonial-list {
+    display: grid;
+    grid-template-columns: 1fr; /* 1 cột trên điện thoại */
+    gap: 15px;
+}
+
+.testimonial-card {
+    padding: 40px 0;
+    background-color: #fff;
+    border-radius: 8px;
+    
+    /* Đây là "Shadowed box" */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    
+    /* Đường viền xanh lá cây (lấy từ base.html) */
+    border-left: 5px solid #2d5016; 
+}
+/* (Giữ nguyên CSS cũ cho .testimonial-card p, strong) */
+
+/* === MEDIA QUERIES (Cho Máy tính) === */
+
+/* Áp dụng cho màn hình Tablet trở lên */
+@media (min-width: 768px) {
+    .location-grid {
+        /* Chia làm 2 cột */
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .features-grid {
+        /* Chia làm 2 cột */
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .testimonial-list {
+        /* Chia làm 2 cột */
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Áp dụng cho màn hình Desktop */
+@media (min-width: 1024px) {
+    .location-grid {
+        /* Chia làm 3 cột */
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .features-grid {
+        /* Chia làm 3 cột */
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* === FOOTER (Trang 11) === */
+footer {
+    background-color: #212529; /* Màu nền tối */
+    color: #f8f9fa;
+    padding: 40px 0px 20px 0px;
+}
+
+.footer-content {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.footer-column h3 {
+    font-size: 18px;
+    margin-bottom: 15px;
+    color: #fff;
+}
+
+.footer-column ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.footer-column a, .footer-column p {
+    color: #adb5bd; /* Màu chữ xám nhạt */
+    font-size: 14px;
+}
+
+.footer-column a:hover {
+    color: #fff;
+}
+
+.footer-bottom {
+    border-top: 1px solid #495057;
+    padding-top: 20px;
+    margin-top: 30px;
+    text-align: center;
+    font-size: 12px;
+    color: #adb5bd;
+}
+
+.footer-bottom a {
+    margin: 0 5px;
+}
