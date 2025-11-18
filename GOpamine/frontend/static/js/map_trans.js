@@ -1,91 +1,119 @@
-// ================================================================
-// 🔑 CẤU HÌNH API KEY (DÀNH CHO LEADER)
-// ================================================================
-// Hiện tại đang dùng OpenStreetMap (Miễn phí) nên chưa cần Key.
-// Nếu sau này đổi sang MapTiler/Goong, hãy điền Key vào đây:
-const API_KEY = "YOUR_API_KEY_HERE"; 
-// ================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // ================================================================
+    // 1. CẤU HÌNH DỮ LIỆU (DATA)
+    // ================================================================
+    const routeData = {
+        // Tọa độ điểm đi (Công viên Tao Đàn)
+        start: { lat: 10.7748, lng: 106.6937 }, 
+        // Tọa độ điểm đến (NYNA Coffee - giả lập)
+        end: { lat: 10.7626, lng: 106.6964 }
+    };
 
-// === DỮ LIỆU MẪU ===
-const routeData = {
-    start: { lat: 10.7880, lng: 106.7025, name: "Công viên Tao Đàn" },
-    end: { lat: 10.7626, lng: 106.6964, name: "NYNA Coffee" }
-};
+    // ================================================================
+    // 2. KHỞI TẠO BẢN ĐỒ (DÙNG OPENSTREETMAP - MIỄN PHÍ 100%)
+    // ================================================================
+    const map = L.map('map').setView([routeData.start.lat, routeData.start.lng], 14);
 
-// === KHỞI TẠO BẢN ĐỒ ===
-const map = L.map('map').setView([routeData.start.lat, routeData.start.lng], 14);
+    // Đây là link server của OpenStreetMap, không cần API Key
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(map);
 
-// Dùng OpenStreetMap (Miễn phí)
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap',
-    maxZoom: 19
-}).addTo(map);
+    // ================================================================
+    // 3. VẼ TUYẾN ĐƯỜNG (ROUTING)
+    // ================================================================
+    L.Routing.control({
+        waypoints: [
+            L.latLng(routeData.start.lat, routeData.start.lng),
+            L.latLng(routeData.end.lat, routeData.end.lng)
+        ],
+        routeWhileDragging: false, // Tắt tính năng kéo đường để sửa
+        addWaypoints: false,       // Không cho thêm điểm giữa
+        draggableWaypoints: false, // Không cho di chuyển điểm đầu/cuối
+        fitSelectedRoutes: true,   // Tự động zoom để thấy toàn bộ đường đi
+        lineOptions: {
+            styles: [{ color: '#4285f4', weight: 6, opacity: 0.8 }] // Màu xanh Google Maps
+        },
+        createMarker: function() { return null; } // Ẩn marker mặc định của thư viện routing
+    }).addTo(map);
 
-// === VẼ TUYẾN ĐƯỜNG ===
-const routingControl = L.Routing.control({
-    waypoints: [
-        L.latLng(routeData.start.lat, routeData.start.lng),
-        L.latLng(routeData.end.lat, routeData.end.lng)
-    ],
-    routeWhileDragging: false,
-    addWaypoints: false,
-    lineOptions: {
-        styles: [{ color: '#4285f4', weight: 6, opacity: 0.8 }]
-    },
-    createMarker: function() { return null; } 
-}).addTo(map);
+    // Tạo Marker đẹp cho điểm đi và đến (Tùy chọn - nếu muốn hiện icon tròn)
+    const createCustomMarker = (lat, lng, color) => {
+        const icon = L.divIcon({
+            html: `<div style="background: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>`,
+            className: 'custom-marker',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+        L.marker([lat, lng], { icon: icon }).addTo(map);
+    };
 
-// Fit khung nhìn
-map.fitBounds([
-    [routeData.start.lat, routeData.start.lng],
-    [routeData.end.lat, routeData.end.lng]
-], { padding: [100, 100] });
+    createCustomMarker(routeData.start.lat, routeData.start.lng, '#4285f4'); // Điểm đi: Xanh
+    createCustomMarker(routeData.end.lat, routeData.end.lng, '#ea4335');   // Điểm đến: Đỏ
 
-// === XỬ LÝ CHỌN PHƯƠNG TIỆN ===
-let selectedVehicle = 'motorbike';
-
-document.querySelectorAll('.option-card').forEach(card => {
-    card.addEventListener('click', function() {
-        // Bỏ chọn tất cả
-        document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
-        
-        // Chọn card hiện tại
-        this.classList.add('selected');
-        selectedVehicle = this.dataset.vehicle;
-        
-        // Cập nhật UI nếu cần
-        const price = this.dataset.price;
-        const time = this.querySelector('.vehicle-info p').textContent;
-        console.log(`Đã chọn: ${selectedVehicle}, Giá: ${price}`);
+    // ================================================================
+    // 4. XỬ LÝ SỰ KIỆN CHỌN PHƯƠNG TIỆN
+    // ================================================================
+    const optionCards = document.querySelectorAll('.option-card');
+    
+    optionCards.forEach(card => {
+        card.addEventListener('click', function() {
+            // Xóa class 'selected' ở tất cả các thẻ cũ
+            optionCards.forEach(c => c.classList.remove('selected'));
+            
+            // Thêm class 'selected' cho thẻ vừa bấm
+            this.classList.add('selected');
+            
+            // Lấy dữ liệu từ thẻ vừa bấm (để xử lý sau này)
+            const vehicleType = this.dataset.vehicle;
+            const price = this.dataset.price;
+            console.log(`Đã chọn phương tiện: ${vehicleType} - Giá: ${price}`);
+        });
     });
 });
 
-// === HÀM XỬ LÝ BUTTONS ===
+// ================================================================
+// 5. CÁC HÀM XỬ LÝ NÚT BẤM (BUTTON FUNCTIONS)
+// Phải để ngoài cùng để HTML gọi được (onclick="...")
+// ================================================================
+
 function goToPreviousPage() {
-    alert('Quay về trang trước');
+    console.log("Back button clicked");
+    // Code quay lại trang trước
+    window.history.back();
 }
 
-function switchTab(tab) {
+function switchTab(tabName) {
     const tabs = document.querySelectorAll('.tab-btn');
     tabs.forEach(btn => btn.classList.remove('active'));
     
-    if (tab === 'map') {
-        tabs[0].classList.add('active');
-    } else if (tab === 'ai') {
-        tabs[1].classList.add('active');
-        alert('Chuyển sang chế độ AI Chat Bot');
+    // Tìm nút nào đang gọi hàm này và active nó (đơn giản hóa)
+    if(event && event.target) {
+        event.target.classList.add('active');
+    }
+
+    if (tabName === 'ai') {
+        alert("Chuyển sang màn hình AI Chatbot...");
+        // window.location.href = '/ai-chat'; // Ví dụ đường dẫn
     }
 }
 
 function goBack() {
-    alert('Chức năng Tư Vấn - Sẽ mở chat hoặc hotline hỗ trợ');
+    alert("Mở tính năng Tư Vấn...");
 }
 
 function confirmRoute() {
+    // Tìm thẻ xe đang được chọn
     const selectedCard = document.querySelector('.option-card.selected');
-    const vehicleType = selectedCard.dataset.vehicle;
-    const price = selectedCard.dataset.price;
-    const vehicleName = selectedCard.querySelector('h4').textContent;
     
-    alert(`Xác nhận chọn: ${vehicleName}\nGiá: ${parseInt(price).toLocaleString('vi-VN')}đ`);
+    if (selectedCard) {
+        const vehicleName = selectedCard.querySelector('h4').innerText;
+        const price = selectedCard.querySelector('.price').innerText;
+        const time = selectedCard.querySelector('.vehicle-info p').innerText;
+        
+        alert(`XÁC NHẬN:\n- Phương tiện: ${vehicleName}\n- Thời gian: ${time}\n- Chi phí: ${price}`);
+    } else {
+        alert("Vui lòng chọn một phương tiện!");
+    }
 }
