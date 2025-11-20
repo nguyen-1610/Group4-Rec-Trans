@@ -51,3 +51,44 @@ submitBtn.addEventListener('click', () => {
     // Hoặc nếu theo cấu trúc của bạn: ../static/html/chatbot.html
     // window.location.href = '../static/html/chatbot.html';
 });
+
+submitBtn.addEventListener('click', async () => {
+    // Thu thập dữ liệu form
+    const formData = {
+        origin: document.querySelector('input[placeholder="Tìm kiếm"]').value,
+        destination: document.querySelectorAll('input[placeholder="Tìm kiếm"]')[1].value,
+        budget: rangeSlider.value,
+        passengers: document.querySelector('input[placeholder="Số hành khách"]').value,
+        age: document.querySelector('input[placeholder="Tuổi"]').value,
+        preferences: Array.from(document.querySelectorAll('.checkbox-item input:checked'))
+            .map(cb => cb.parentElement.querySelector('span').textContent)
+    };
+
+    // Lấy session ID từ localStorage (hoặc tạo mới)
+    let sessionId = localStorage.getItem('sessionId');
+    
+    if (!sessionId) {
+        // Tạo session mới
+        const response = await fetch('http://localhost:5000/api/session', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        sessionId = data.session_id;
+        localStorage.setItem('sessionId', sessionId);
+    }
+
+    // Gửi form data đến backend
+    await fetch('http://localhost:5000/api/form', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            session_id: sessionId,
+            form_data: formData
+        })
+    });
+
+    // Chuyển sang trang chatbot
+    window.location.href = 'chatbot.html';
+});
