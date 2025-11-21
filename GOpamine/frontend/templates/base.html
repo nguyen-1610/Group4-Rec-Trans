@@ -16,8 +16,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #f5f5f5;
-            color: #333;
+            background-color: #dfe9e4;
+            color: #2f4f3d;
         }
 
         .container {
@@ -28,15 +28,16 @@
 
         /* Header Styles */
         .header {
-            background-color: #fff;
-            padding: 15px 20px;
+            background: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+            padding: 18px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 24px rgba(31, 74, 58, 0.12);
             position: sticky;
             top: 0;
             z-index: 1000;
+            border-bottom: 1px solid rgba(40, 72, 57, 0.08);
         }
 
         .logo-section {
@@ -45,22 +46,24 @@
             gap: 10px;
         }
 
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background-color: #2d5016;
-            border-radius: 8px;
+        .logo-circle {
+            width: 44px;
+            height: 44px;
+            background-color: #244c38;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #fff;
             font-size: 20px;
+            box-shadow: 0 6px 18px rgba(36, 76, 56, 0.35);
         }
 
         .logo-text {
             font-size: 20px;
             font-weight: 600;
-            color: #000;
+            color: #254033;
+            letter-spacing: 0.3px;
         }
 
         .header-right {
@@ -72,13 +75,14 @@
         /* Language Toggle */
         .lang-switch {
             display: flex;
-            background-color: #e0e0e0;
-            border-radius: 20px;
+            background-color: #f0f4f2;
+            border-radius: 999px;
             padding: 4px;
             position: relative;
             cursor: pointer;
             width: 70px;
             height: 32px;
+            align-items: center;
         }
 
         .lang-switch-text {
@@ -113,23 +117,23 @@
             position: absolute;
             top: 4px;
             left: 4px;
-            width: calc(50% - 4px);
-            height: calc(100% - 8px);
-            background-color: #2d5016;
-            border-radius: 16px;
+            width: 32px;
+            height: 24px;
+            background-color: #244c38;
+            border-radius: 999px;
             transition: transform 0.3s;
             z-index: 1;
         }
 
         .lang-switch:not(.active) .lang-switch-slider {
-            transform: translateX(100%);
+            transform: translateX(34px);
         }
 
         /* Menu Icon (Mobile) */
         .menu-icon {
             font-size: 24px;
             cursor: pointer;
-            color: #333;
+            color: #314e3f;
             display: block;
         }
 
@@ -137,53 +141,54 @@
         .desktop-nav {
             display: none;
             align-items: center;
-            gap: 30px;
+            gap: 18px;
         }
 
-        .desktop-nav a {
+        .desktop-nav .nav-link {
             text-decoration: none;
-            color: #333;
-            font-size: 16px;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 8px;
+            color: #2c4a3a;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 10px 16px;
+            border-radius: 999px;
             transition: background-color 0.3s, color 0.3s;
         }
 
-        .desktop-nav a:hover {
-            background-color: #e8f5e9;
-            color: #2d5016;
+        .desktop-nav .nav-link:hover {
+            background-color: rgba(36, 76, 56, 0.12);
+            color: #1f362b;
         }
 
-        .desktop-nav a.active {
-            background-color: #c8e6c9;
-            color: #2d5016;
+        .desktop-nav .nav-link.active {
+            background-color: #d8e6de;
+            color: #204432;
         }
 
         .desktop-nav .login-btn {
-            background-color: #2d5016;
+            background-color: #244c38;
             color: #fff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            margin-left: 10px;
+            padding: 10px 22px;
+            border-radius: 999px;
+            margin-left: 4px;
+            box-shadow: 0 6px 12px rgba(36, 76, 56, 0.25);
         }
 
         .desktop-nav .login-btn:hover {
-            background-color: #1e350e;
+            background-color: #1e3f2e;
         }
 
         /* Mobile Menu Dropdown */
         .menu-dropdown {
             position: fixed;
-            top: 70px;
+            top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(20, 35, 28, 0.55);
             z-index: 999;
             display: none;
             opacity: 0;
-            transition: opacity 0.3s;
+            transition: opacity 0.3s ease;
         }
 
         .menu-dropdown.active {
@@ -194,16 +199,18 @@
         .menu-sidebar {
             position: absolute;
             top: 0;
-            left: 0;
-            width: 280px;
+            right: 0;
+            width: 78%;
+            max-width: 320px;
             height: 100%;
             background-color: #fff;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-            transform: translateX(-100%);
-            transition: transform 0.3s;
+            box-shadow: -8px 0 24px rgba(22, 38, 31, 0.2);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
             display: flex;
             flex-direction: column;
-            padding: 20px 0;
+            padding: 28px 0;
+            border-radius: 24px 0 0 24px;
         }
 
         .menu-dropdown.active .menu-sidebar {
@@ -212,46 +219,48 @@
 
         .menu-items {
             flex: 1;
-            padding: 20px 0;
         }
 
         .menu-item {
             display: block;
-            padding: 15px 20px;
+            padding: 16px 28px;
             text-decoration: none;
-            color: #333;
-            font-size: 16px;
-            font-weight: 500;
-            transition: background-color 0.3s, color 0.3s;
+            color: #2d4c3a;
+            font-size: 17px;
+            font-weight: 600;
+            transition: background-color 0.25s;
+            border-bottom: 1px solid #eef2f0;
         }
 
         .menu-item:hover {
-            background-color: #f5f5f5;
+            background-color: #f4f7f5;
         }
 
         .menu-item.active {
-            background-color: #c8e6c9;
-            color: #2d5016;
+            background-color: #e5efe9;
+            color: #1f3a2d;
         }
 
         .menu-login-btn {
-            margin: 20px;
-            padding: 15px;
-            background-color: #2d5016;
+            margin: 24px;
+            padding: 16px;
+            background-color: #244c38;
             color: #fff;
             border: none;
-            border-radius: 8px;
+            border-radius: 999px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             text-align: center;
             text-decoration: none;
             display: block;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, transform 0.2s;
+            box-shadow: 0 12px 24px rgba(36, 76, 56, 0.3);
         }
 
         .menu-login-btn:hover {
-            background-color: #1e350e;
+            background-color: #1e3f2e;
+            transform: translateY(-1px);
         }
 
         /* Content Area */
@@ -261,7 +270,7 @@
         }
 
         /* Responsive Design */
-        @media (min-width: 768px) {
+        @media (min-width: 992px) {
             .menu-icon {
                 display: none;
             }
@@ -275,11 +284,11 @@
             }
 
             .header {
-                padding: 15px 40px;
+                padding: 18px 48px;
             }
         }
 
-        @media (max-width: 767px) {
+        @media (max-width: 991px) {
             .desktop-nav {
                 display: none;
             }
@@ -290,8 +299,8 @@
     <div class="container">
         <div class="header">
             <div class="logo-section">
-                <div class="logo-icon">
-                    <i class="fas fa-leaf"></i>
+                <div class="logo-circle">
+                    <i class="fas fa-building"></i>
                 </div>
                 <span class="logo-text">GOpamine</span>
             </div>
@@ -305,12 +314,12 @@
                 
                 <!-- Desktop Navigation -->
                 <nav class="desktop-nav">
-                    <a href="/" class="{% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
-                    <a href="/ai-assistant" class="{% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
-                    <a href="/suggestions" class="{% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
-                    <a href="/about" class="{% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
-                    <a href="/guide" class="{% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
-                    <a href="/auth" class="login-btn">Đăng nhập/ Đăng ký</a>
+                    <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
+                    <a href="/ai-assistant" class="nav-link {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
+                    <a href="/suggestions" class="nav-link {% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
+                    <a href="/about" class="nav-link {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
+                    <a href="/guide" class="nav-link {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
+                    <a href="/auth" class="nav-link login-btn">Đăng nhập/ Đăng ký</a>
                 </nav>
             </div>
         </div>
