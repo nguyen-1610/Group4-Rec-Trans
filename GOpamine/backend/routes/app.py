@@ -18,5 +18,9 @@ def index():
 def auth():
 	return render_template('auth.html')
 
+@app.route('/astar')
+def astar_demo():
+	return render_template('astar.html')
+
 if __name__ == '__main__':
 	app.run(debug=True)

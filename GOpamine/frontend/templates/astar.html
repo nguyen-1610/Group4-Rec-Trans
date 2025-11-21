@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}A* Pathfinding Demo{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/astar.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="astar-page">
+    <div class="astar-container">
+        <div class="astar-header">
+            <h1>🗺️ Tìm Đường Tối Ưu TP.HCM</h1>
+            <p>A* Algorithm demo với Leaflet Map và 20 địa điểm phổ biến</p>
+        </div>
+
+        <div class="astar-main">
+            <div class="astar-control-panel">
+                <div class="astar-form-group">
+                    <label>📍 Điểm xuất phát</label>
+                    <select id="startPlace">
+                        <option value="">-- Chọn điểm đầu --</option>
+                    </select>
+                </div>
+
+                <div class="astar-form-group">
+                    <label>🎯 Điểm đến</label>
+                    <select id="endPlace">
+                        <option value="">-- Chọn điểm cuối --</option>
+                    </select>
+                </div>
+
+                <div class="astar-form-group">
+                    <label>🚗 Phương tiện</label>
+                    <div class="vehicle-options" id="vehicleOptions"></div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="astar-btn btn-primary" id="findRouteBtn">🚀 Tìm đường</button>
+                    <button class="astar-btn btn-secondary" id="resetBtn">🔄 Reset</button>
+                </div>
+
+                <div id="resultBox" style="display:none;"></div>
+
+                <div class="info-box">
+                    <strong>⚠️ Lưu ý:</strong> Đây là demo đường chim bay. Để có đường đi thực tế cần dữ liệu từ OpenStreetMap.
+                </div>
+            </div>
+
+            <div id="astarMap" class="astar-map"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="{{ url_for('static', filename='js/astar.js') }}"></script>
+{% endblock %}
+
