@@ -47,15 +47,8 @@ addDestinationBtn.addEventListener('click', () => {
     `;
     
     destinationsList.appendChild(newDestination);
-
-    // Khởi tạo sự kiện cho item mới
     initDestinationItem(newDestination);
-
-    
-    // Cập nhật hiển thị nút xóa
     updateDestinationVisibility();
-    
-    // Focus vào input mới
     newDestination.querySelector('.destination-input').focus();
 });
 
@@ -65,16 +58,15 @@ function updateDestinationVisibility() {
     items.forEach((item) => {
         const removeBtn = item.querySelector('.remove-destination-btn');
         if (removeBtn) {
-            removeBtn.style.display = 'flex'; // luôn hiển thị
+            removeBtn.style.display = 'flex';
         }
     });
 }
 
-// Hàm khởi tạo 1 destination-item: thêm sự kiện xóa + drag & drop
+// Hàm khởi tạo 1 destination-item
 function initDestinationItem(item) {
     if (!item) return;
 
-    // Sự kiện xóa
     const removeBtn = item.querySelector('.remove-destination-btn');
     if (removeBtn) {
         removeBtn.onclick = () => {
@@ -83,14 +75,12 @@ function initDestinationItem(item) {
         };
     }
 
-    // Sự kiện drag & drop
     addDragAndDropEvents(item);
 }
 
-// Biến để lưu item đang được kéo
+// Drag & drop
 let draggedItem = null;
 
-// Hàm thêm sự kiện drag & drop
 function addDragAndDropEvents(item) {
     item.addEventListener('dragstart', handleDragStart);
     item.addEventListener('dragover', handleDragOver);
@@ -140,11 +130,9 @@ function getDragAfterElement(container, y) {
     }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
-// Khởi tạo sự kiện cho item đầu tiên
+// Khởi tạo item đầu tiên
 const firstDestination = destinationsList.querySelector('.destination-item');
 initDestinationItem(firstDestination);
-
-// Cập nhật hiển thị ban đầu
 updateDestinationVisibility();
 
 // Thêm ưu tiên mới
@@ -152,54 +140,87 @@ addPreferenceBtn.addEventListener('click', () => {
     const preferenceName = prompt('Nhập tên ưu tiên mới:');
     
     if (preferenceName && preferenceName.trim() !== '') {
-        // Tạo item mới
         const newItem = document.createElement('div');
         newItem.className = 'checkbox-item';
         newItem.innerHTML = `
             <span>${preferenceName.trim()}</span>
             <input type="checkbox">
         `;
-        
-        // Thêm vào trước nút "Thêm"
         dropdownContent.insertBefore(newItem, addPreferenceBtn);
     }
 });
 
-// Chuyển sang trang chatbot khi bấm Hoàn tất
-submitBtn.addEventListener('click', async () => {
-    // Thu thập tất cả điểm đến
-    const destinationInputs = document.querySelectorAll('.destination-input');
-    const destinations = Array.from(destinationInputs)
-        .map(input => input.value)
-        .filter(value => value.trim() !== '');
-    
-    // Thu thập dữ liệu form
-    const formData = {
-        origin: document.getElementById('origin-input').value,
-        destinations: destinations, // Mảng các điểm đến
-        budget: rangeSlider.value,
-        passengers: document.querySelector('input[placeholder="Số hành khách"]').value,
-        age: document.querySelector('input[placeholder="Tuổi"]').value,
-        preferences: Array.from(document.querySelectorAll('.checkbox-item input:checked'))
-            .map(cb => cb.parentElement.querySelector('span').textContent)
-    };
+// ========================================
+// PHẦN QUAN TRỌNG: Submit form và chuyển trang
+// ========================================
 
+submitBtn.addEventListener('click', async () => {
+    // Hiển thị loading (optional)
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Đang xử lý...';
+    
     try {
-        // Lấy session ID từ localStorage (hoặc tạo mới)
+        // 1. Thu thập tất cả điểm đến
+        const destinationInputs = document.querySelectorAll('.destination-input');
+        const destinations = Array.from(destinationInputs)
+            .map(input => input.value.trim())
+            .filter(value => value !== '');
+        
+        // 2. Thu thập dữ liệu form
+        const formData = {
+            origin: document.getElementById('origin-input').value.trim(),
+            destinations: destinations,
+            budget: rangeSlider.value,
+            passengers: document.querySelector('input[placeholder="Số hành khách"]').value.trim(),
+            age: document.querySelector('input[placeholder="Tuổi"]')?.value.trim() || '',
+            preferences: Array.from(document.querySelectorAll('.checkbox-item input:checked'))
+                .map(cb => cb.parentElement.querySelector('span').textContent)
+        };
+        
+        console.log('📋 Form Data:', formData);
+        
+        // Validate dữ liệu cơ bản
+        if (!formData.origin) {
+            alert('Vui lòng nhập điểm xuất phát!');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Hoàn tất';
+            return;
+        }
+        
+        if (destinations.length === 0) {
+            alert('Vui lòng nhập ít nhất một điểm đến!');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Hoàn tất';
+            return;
+        }
+        
+        // 3. Lấy hoặc tạo session ID
         let sessionId = localStorage.getItem('sessionId');
         
         if (!sessionId) {
-            // Tạo session mới
+            console.log('🆕 Tạo session mới...');
             const response = await fetch('http://localhost:5000/api/session', {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
+            
+            if (!response.ok) {
+                throw new Error('Không thể tạo session');
+            }
+            
             const data = await response.json();
             sessionId = data.session_id;
             localStorage.setItem('sessionId', sessionId);
+            console.log('✅ Session created:', sessionId);
+        } else {
+            console.log('♻️ Sử dụng session có sẵn:', sessionId);
         }
-
-        // Gửi form data đến backend
-        await fetch('http://localhost:5000/api/form', {
+        
+        // 4. Gửi form data đến backend
+        console.log('📤 Gửi form data đến backend...');
+        const submitResponse = await fetch('http://localhost:5000/api/form', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -209,11 +230,24 @@ submitBtn.addEventListener('click', async () => {
                 form_data: formData
             })
         });
-
-        // Chuyển sang trang chatbot
+        
+        if (!submitResponse.ok) {
+            throw new Error('Không thể gửi dữ liệu form');
+        }
+        
+        const result = await submitResponse.json();
+        console.log('✅ Form submitted:', result);
+        
+        // 5. Chuyển sang trang chatbot
+        console.log('🔄 Chuyển sang chatbot...');
         window.location.href = 'chatbot.html';
+        
     } catch (error) {
-        console.error('Error submitting form:', error);
-        alert('Có lỗi xảy ra. Vui lòng thử lại!');
+        console.error('❌ Error:', error);
+        alert('Có lỗi xảy ra: ' + error.message + '\nVui lòng thử lại!');
+        
+        // Reset button
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Hoàn tất';
     }
 });
