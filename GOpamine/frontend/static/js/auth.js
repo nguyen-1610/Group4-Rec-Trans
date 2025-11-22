@@ -17,6 +17,7 @@ if (window.translations) {
         or: "Hoặc",
         guestLogin: "Đăng nhập với tài khoản khách",
         signUp: "Đăng Ký",
+        login: "Đăng Nhập",
         haveAccount: "Đã có tài khoản."
     });
     
@@ -34,6 +35,7 @@ if (window.translations) {
         or: "Or",
         guestLogin: "Login as guest",
         signUp: "Sign Up",
+        login: "Login",
         haveAccount: "Already have an account."
     });
 }
@@ -41,16 +43,29 @@ if (window.translations) {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     // Update language for login page specific translations
-    if (typeof changeLanguage === 'function') {
-        changeLanguage(getCurrentLanguage());
-    }
+    // Wait a bit to ensure base.html translations are loaded
+    setTimeout(function() {
+        if (typeof changeLanguage === 'function' && typeof getCurrentLanguage === 'function') {
+            changeLanguage(getCurrentLanguage());
+        }
+    }, 100);
 
     // Password toggle functionality
     document.querySelectorAll('.toggle-password').forEach(function(toggle) {
         toggle.addEventListener('click', function() {
-            // Lấy input tương ứng từ data-target attribute
+            // Lấy input tương ứng từ data-target attribute hoặc tìm input password gần nhất
             const targetId = this.getAttribute('data-target');
-            const passwordInput = document.getElementById(targetId);
+            let passwordInput = null;
+            
+            if (targetId) {
+                passwordInput = document.getElementById(targetId);
+            } else {
+                // Nếu không có data-target, tìm input password trong cùng input-wrapper
+                const inputWrapper = this.closest('.input-wrapper');
+                if (inputWrapper) {
+                    passwordInput = inputWrapper.querySelector('input[type="password"], input[type="text"]');
+                }
+            }
             
             if (passwordInput) {
                 // Toggle giữa password và text
@@ -68,6 +83,33 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // Social login handlers (for login page)
+    const facebookBtn = document.getElementById('facebookLogin');
+    const googleBtn = document.getElementById('googleLogin');
+    
+    if (facebookBtn) {
+        facebookBtn.addEventListener('click', function() {
+            // Add Facebook login logic here
+            console.log('Facebook login clicked');
+        });
+    }
+    
+    if (googleBtn) {
+        googleBtn.addEventListener('click', function() {
+            // Add Google login logic here
+            console.log('Google login clicked');
+        });
+    }
+    
+    // Form submission handlers
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(e) {
+            // Add form validation and submission logic here
+            // e.preventDefault(); // Uncomment if handling with AJAX
+        });
+    }
 
 });
 

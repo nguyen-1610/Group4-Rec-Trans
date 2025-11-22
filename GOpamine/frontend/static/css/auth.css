@@ -19,7 +19,7 @@
 
 .title h1 {
     color: #7a7a7a;
-    font-size: 25px;
+    font-size: 30px;
     font-weight: 800;
     margin-bottom: 5px;
 }
@@ -31,7 +31,7 @@
 
 .title p {
     color: #3C7363;
-    font-size: 25px;
+    font-size: 30px;
     font-weight: 900;
 }
 
@@ -173,6 +173,15 @@
 @media (max-width: 480px) {
     .auth-page {
         padding: 24px 12px 36px;
+    }
+
+    .form-container {
+        max-width: 420px;
+        padding: 40px 32px;
+        background: #ffffff;
+        border-radius: 28px;
+        box-shadow: 0 25px 50px rgba(33, 66, 54, 0.18);
+        border: 1px solid rgba(53, 92, 77, 0.08);
     }
 }
 

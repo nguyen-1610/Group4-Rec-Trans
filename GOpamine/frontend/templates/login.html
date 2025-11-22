@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}GOpamine - Đăng Nhập{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="form-container">
+        <div class="title">
+            <h1 data-i18n="title">Khám phá hành trình</h1>
+            <p data-i18n="subtitle">hoàn hảo của bạn.</p>
+        </div>
+
+        <form id="loginForm" method="POST" action="/auth/login">
+            <div class="form-group">
+                <label for="email" data-i18n="email">Email</label>
+                <input type="email" id="email" name="email" data-i18n-placeholder="emailPlaceholder" placeholder="Nhập email của bạn" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password" data-i18n="password">Mật Khẩu</label>
+                <div class="input-wrapper">
+                    <input type="password" id="password" name="password" data-i18n-placeholder="passwordPlaceholder" placeholder="Nhập mật khẩu" required>
+                    <i class="fas fa-eye-slash toggle-password" data-target="password"></i>
+                </div>
+            </div>
+
+            <div class="social-login">
+                <p data-i18n="or">Hoặc</p>
+                <div class="social-buttons">
+                    <button type="button" class="social-btn facebook-btn" id="facebookLogin">
+                        <i class="fab fa-facebook-f"></i>
+                    </button>
+                    <button type="button" class="social-btn google-btn" id="googleLogin">
+                        <i class="fab fa-google"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="existing-account">
+                <a href="#" data-i18n="guestLogin">Đăng nhập với tài khoản khách</a>
+            </div>
+
+            <button type="submit" class="submit-btn" data-i18n="login">Đăng Nhập</button>
+
+            <div class="already-account">
+                <a href="/register" data-i18n="haveAccount">Đã có tài khoản.</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+{% endblock %}

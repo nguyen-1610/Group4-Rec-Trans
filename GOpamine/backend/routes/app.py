@@ -13,10 +13,15 @@ app = Flask(
 def index():
 	return render_template('home.html')
 
-@app.route('/auth')
-@app.route('/auth/')
-def auth():
-	return render_template('auth.html')
+@app.route('/register')
+@app.route('/register/')
+def register():
+	return render_template('register.html')
+
+@app.route('/login')
+@app.route('/login/')
+def login():
+	return render_template('login.html')
 
 if __name__ == '__main__':
 	app.run(debug=True)

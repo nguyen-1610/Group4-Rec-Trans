@@ -49,7 +49,7 @@
         .logo-circle {
             width: 44px;
             height: 44px;
-            background-color: #244c38;
+            background-color: #3C7363;
             border-radius: 14px;
             display: flex;
             align-items: center;
@@ -80,7 +80,7 @@
             padding: 4px;
             position: relative;
             cursor: pointer;
-            width: 70px;
+            width: 72px;
             height: 32px;
             align-items: center;
         }
@@ -95,6 +95,10 @@
             align-items: center;
             justify-content: center;
             transition: color 0.3s;
+            min-width: 32px;
+            height: 24px;
+            position: relative;
+            line-height: 1;
         }
 
         .lang-switch-text.vi {
@@ -107,10 +111,12 @@
 
         .lang-switch.active .lang-switch-text.vi {
             color: #fff;
+            font-weight: 600;
         }
 
         .lang-switch:not(.active) .lang-switch-text.en {
             color: #fff;
+            font-weight: 600;
         }
 
         .lang-switch-slider {
@@ -119,14 +125,14 @@
             left: 4px;
             width: 32px;
             height: 24px;
-            background-color: #244c38;
+            background-color: #3C7363;
             border-radius: 999px;
-            transition: transform 0.3s;
+            transition: transform 0.3s ease;
             z-index: 1;
         }
 
         .lang-switch:not(.active) .lang-switch-slider {
-            transform: translateX(34px);
+            transform: translateX(32px);
         }
 
         /* Menu Icon (Mobile) */
@@ -165,7 +171,7 @@
         }
 
         .desktop-nav .login-btn {
-            background-color: #244c38;
+            background-color: #3C7363;
             color: #fff;
             padding: 10px 22px;
             border-radius: 999px;
@@ -198,19 +204,28 @@
 
         .menu-sidebar {
             position: absolute;
-            top: 0;
+            top: 70px;
             right: 0;
             width: 78%;
             max-width: 320px;
-            height: 100%;
             background-color: #fff;
             box-shadow: -8px 0 24px rgba(22, 38, 31, 0.2);
             transform: translateX(100%);
             transition: transform 0.3s ease;
             display: flex;
             flex-direction: column;
-            padding: 28px 0;
-            border-radius: 24px 0 0 24px;
+            padding: 0;
+            border-radius: 0 0 0 24px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .menu-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 20px;
+            border-bottom: 1px solid #eef2f0;
         }
 
         .menu-dropdown.active .menu-sidebar {
@@ -229,7 +244,6 @@
             font-size: 17px;
             font-weight: 600;
             transition: background-color 0.25s;
-            border-bottom: 1px solid #eef2f0;
         }
 
         .menu-item:hover {
@@ -244,7 +258,7 @@
         .menu-login-btn {
             margin: 24px;
             padding: 16px;
-            background-color: #244c38;
+            background-color: #3C7363;
             color: #fff;
             border: none;
             border-radius: 999px;
@@ -334,7 +348,7 @@
                     <a href="/about" class="menu-item {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
                     <a href="/guide" class="menu-item {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
                 </nav>
-                <a href="/auth" class="menu-login-btn">Đăng nhập/ Đăng ký</a>
+                <a href="/register" class="menu-login-btn" data-i18n="loginRegister">Đăng nhập/ Đăng ký</a>
             </div>
         </div>
 
@@ -344,16 +358,120 @@
     </div>
 
     <script>
+        // Initialize translations object (only navigation, register pages handled by auth.js)
+        if (!window.translations) {
+            window.translations = {
+                vi: {
+                    // Navigation
+                    home: "Trang chủ",
+                    aiAssistant: "Trợ lý AI",
+                    suggestions: "Gợi ý",
+                    about: "Về chúng tôi",
+                    guide: "Hướng dẫn",
+                    loginRegister: "Đăng nhập/ Đăng ký"
+                },
+                en: {
+                    // Navigation
+                    home: "Home",
+                    aiAssistant: "AI Assistant",
+                    suggestions: "Suggestions",
+                    about: "About Us",
+                    guide: "Guide",
+                    loginRegister: "Login/ Register"
+                }
+            };
+        } else {
+            // Extend existing translations with navigation if needed
+            window.translations.vi = window.translations.vi || {};
+            window.translations.en = window.translations.en || {};
+            Object.assign(window.translations.vi, {
+                home: "Trang chủ",
+                aiAssistant: "Trợ lý AI",
+                suggestions: "Gợi ý",
+                about: "Về chúng tôi",
+                guide: "Hướng dẫn",
+                loginRegister: "Đăng nhập/ Đăng ký"
+            });
+            Object.assign(window.translations.en, {
+                home: "Home",
+                aiAssistant: "AI Assistant",
+                suggestions: "Suggestions",
+                about: "About Us",
+                guide: "Guide",
+                loginRegister: "Login/ Register"
+            });
+        }
+
+        // Get current language from localStorage or default to 'vi'
+        function getCurrentLanguage() {
+            return localStorage.getItem('language') || 'vi';
+        }
+
+        // Save language to localStorage
+        function setLanguage(lang) {
+            localStorage.setItem('language', lang);
+        }
+
+        // Change language function
+        function changeLanguage(lang) {
+            if (!window.translations || !window.translations[lang]) {
+                return;
+            }
+
+            const translations = window.translations[lang];
+            
+            // Update all elements with data-i18n attribute
+            document.querySelectorAll('[data-i18n]').forEach(function(element) {
+                const key = element.getAttribute('data-i18n');
+                if (translations[key]) {
+                    element.textContent = translations[key];
+                }
+            });
+
+            // Update all elements with data-i18n-placeholder attribute
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(function(element) {
+                const key = element.getAttribute('data-i18n-placeholder');
+                if (translations[key]) {
+                    element.placeholder = translations[key];
+                }
+            });
+
+            // Update language switch state
+            const langSwitch = document.getElementById('langSwitch');
+            if (langSwitch) {
+                if (lang === 'vi') {
+                    langSwitch.classList.add('active');
+                } else {
+                    langSwitch.classList.remove('active');
+                }
+            }
+        }
+
         // Language Toggle Functionality
         const langSwitch = document.getElementById('langSwitch');
         if (langSwitch) {
+            // Initialize language switch state based on saved language
+            const currentLang = getCurrentLanguage();
+            if (currentLang === 'vi') {
+                langSwitch.classList.add('active');
+            } else {
+                langSwitch.classList.remove('active');
+            }
+
             langSwitch.addEventListener('click', function() {
                 this.classList.toggle('active');
                 const isVI = this.classList.contains('active');
-                // You can add language switching logic here
-                console.log('Language switched to:', isVI ? 'VI' : 'EN');
+                const newLang = isVI ? 'vi' : 'en';
+                setLanguage(newLang);
+                changeLanguage(newLang);
             });
         }
+
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentLang = getCurrentLanguage();
+            changeLanguage(currentLang);
+        });
 
         // Mobile Menu Toggle
         const menuIcon = document.getElementById('menuIcon');
