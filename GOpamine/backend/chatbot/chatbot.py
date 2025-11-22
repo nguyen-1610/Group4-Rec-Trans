@@ -4,13 +4,11 @@ from config import Config
 from gemini_handler import GeminiBot
 import uuid
 
-gemini_bot = GeminiBot()
-
 app = Flask(__name__)
 CORS(app)
 app.config.from_object(Config)
 
-# Lưu session chat (tạm thời dùng dict, sau này dùng Redis)
+# Lưu session chat - mỗi session có 1 GeminiBot riêng
 chat_sessions = {}
 
 @app.route('/api/health', methods=['GET'])
@@ -22,10 +20,15 @@ def health_check():
 def create_session():
     """Tạo session mới cho user"""
     session_id = str(uuid.uuid4())
+    
+    # Tạo GeminiBot instance riêng cho mỗi session
     chat_sessions[session_id] = {
+        "bot": GeminiBot(),
         "history": [],
-        "form_data": None
+        "form_data": None,
+        "session_started": False
     }
+    
     return jsonify({"session_id": session_id})
 
 @app.route('/api/chat', methods=['POST'])
@@ -34,7 +37,6 @@ def chat():
     try:
         data = request.json
         
-        # Kiểm tra dữ liệu đầu vào
         if not data:
             return jsonify({"error": "No data provided"}), 400
         
@@ -42,26 +44,27 @@ def chat():
         message = data.get('message')
         
         # Validate
-        if not session_id:
-            return jsonify({"error": "Missing session_id"}), 400
-        
-        if not message:
-            return jsonify({"error": "Missing message"}), 400
+        if not session_id or not message:
+            return jsonify({"error": "Missing session_id or message"}), 400
         
         if session_id not in chat_sessions:
             return jsonify({"error": "Invalid session"}), 400
         
-        # Lấy context từ form_data nếu có
-        context = None
-        if chat_sessions[session_id].get("form_data"):
-            form_data = chat_sessions[session_id]["form_data"]
-            context = f"Thông tin người dùng: {form_data}"
+        session = chat_sessions[session_id]
+        bot = session["bot"]
         
-        # Gọi Gemini
-        response_text = gemini_bot.chat(message, context)
+        # Nếu chưa start session và có form_data, start với context
+        if not session["session_started"] and session.get("form_data"):
+            form_data = session["form_data"]
+            context = format_form_context(form_data)
+            bot.start_session(context)
+            session["session_started"] = True
+        
+        # Gọi Gemini chat
+        response_text = bot.chat(message)
         
         # Lưu lịch sử
-        chat_sessions[session_id]["history"].append({
+        session["history"].append({
             "user": message,
             "bot": response_text
         })
@@ -72,20 +75,77 @@ def chat():
         }), 200
         
     except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")  # Log lỗi
-        return jsonify({"error": str(e)}), 500
+        print(f"Error in chat endpoint: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/api/form', methods=['POST'])
 def submit_form():
     """Nhận dữ liệu từ form"""
-    data = request.json
-    session_id = data.get('session_id')
-    form_data = data.get('form_data')
-    
-    if session_id in chat_sessions:
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        form_data = data.get('form_data')
+        
+        if not session_id:
+            return jsonify({"error": "Missing session_id"}), 400
+        
+        # Tạo session mới nếu chưa có
+        if session_id not in chat_sessions:
+            chat_sessions[session_id] = {
+                "bot": GeminiBot(),
+                "history": [],
+                "form_data": None,
+                "session_started": False
+            }
+        
+        # Lưu form data
         chat_sessions[session_id]["form_data"] = form_data
+        
+        return jsonify({"status": "success"})
+        
+    except Exception as e:
+        print(f"Error in form endpoint: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/api/reset', methods=['POST'])
+def reset_session():
+    """Reset chat session"""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        
+        if session_id in chat_sessions:
+            chat_sessions[session_id]["bot"].reset_session()
+            chat_sessions[session_id]["history"] = []
+            chat_sessions[session_id]["session_started"] = False
+            
+        return jsonify({"status": "success"})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def format_form_context(form_data):
+    """Format form data thành context cho Gemini"""
+    context_parts = []
     
-    return jsonify({"status": "success"})
+    if form_data.get('origin'):
+        context_parts.append(f"Điểm xuất phát: {form_data['origin']}")
+    
+    if form_data.get('destination'):
+        context_parts.append(f"Điểm đến: {form_data['destination']}")
+    
+    if form_data.get('budget'):
+        budget = int(form_data['budget'])
+        context_parts.append(f"Ngân sách: {budget:,} VNĐ")
+    
+    if form_data.get('passengers'):
+        context_parts.append(f"Số người: {form_data['passengers']}")
+    
+    if form_data.get('preferences') and len(form_data['preferences']) > 0:
+        prefs = ", ".join(form_data['preferences'])
+        context_parts.append(f"Ưu tiên: {prefs}")
+    
+    return "\n".join(context_parts) if context_parts else None
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
