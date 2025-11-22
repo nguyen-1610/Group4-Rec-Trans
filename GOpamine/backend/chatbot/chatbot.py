@@ -128,22 +128,33 @@ def format_form_context(form_data):
     """Format form data thành context cho Gemini"""
     context_parts = []
     
+    # Điểm xuất phát
     if form_data.get('origin'):
-        context_parts.append(f"Điểm xuất phát: {form_data['origin']}")
+        context_parts.append(f"📍 Điểm xuất phát: {form_data['origin']}")
     
-    if form_data.get('destination'):
-        context_parts.append(f"Điểm đến: {form_data['destination']}")
+    # Điểm đến (có thể có nhiều)
+    if form_data.get('destinations'):
+        destinations = form_data['destinations']
+        if isinstance(destinations, list) and len(destinations) > 0:
+            if len(destinations) == 1:
+                context_parts.append(f"🎯 Điểm đến: {destinations[0]}")
+            else:
+                dest_list = "\n   ".join([f"{i+1}. {d}" for i, d in enumerate(destinations)])
+                context_parts.append(f"🎯 Các điểm đến:\n   {dest_list}")
     
+    # Ngân sách
     if form_data.get('budget'):
         budget = int(form_data['budget'])
-        context_parts.append(f"Ngân sách: {budget:,} VNĐ")
+        context_parts.append(f"💰 Ngân sách: {budget:,} VNĐ")
     
+    # Số hành khách
     if form_data.get('passengers'):
-        context_parts.append(f"Số người: {form_data['passengers']}")
+        context_parts.append(f"👥 Số hành khách: {form_data['passengers']}")
     
+    # Ưu tiên
     if form_data.get('preferences') and len(form_data['preferences']) > 0:
         prefs = ", ".join(form_data['preferences'])
-        context_parts.append(f"Ưu tiên: {prefs}")
+        context_parts.append(f"⭐ Ưu tiên: {prefs}")
     
     return "\n".join(context_parts) if context_parts else None
 
