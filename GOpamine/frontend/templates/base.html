@@ -181,6 +181,9 @@
 
         .desktop-nav .login-btn:hover {
             background-color: #1e3f2e;
+			color: #fff;
+			transform: translateY(-1px);
+			transition: transform 0.3s ease;
         }
 
         /* Mobile Menu Dropdown */
@@ -330,7 +333,7 @@
                 <nav class="desktop-nav">
                     <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
                     <a href="/ai-assistant" class="nav-link {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
-                    <a href="/suggestions" class="nav-link {% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
+                    <a href="#featured" class="menu-item {% if request.endpoint == 'featured' %}active{% endif %}">Gợi ý</a>
                     <a href="/about" class="nav-link {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
                     <a href="/guide" class="nav-link {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
                     <a href="/register" class="nav-link login-btn">Đăng nhập/ Đăng ký</a>
@@ -344,7 +347,7 @@
                 <nav class="menu-items">
                     <a href="/" class="menu-item {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
                     <a href="/ai-assistant" class="menu-item {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
-                    <a href="/suggestions" class="menu-item {% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
+                    <a href="#featured" class="menu-item {% if request.endpoint == 'featured' %}active{% endif %}">Gợi ý</a>
                     <a href="/about" class="menu-item {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
                     <a href="/guide" class="menu-item {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
                 </nav>
