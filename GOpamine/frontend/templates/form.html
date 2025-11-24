@@ -21,7 +21,7 @@
                     <label class="form-label">
                         Điểm xuất phát
                     </label>
-                    <input type="text" placeholder="Tìm kiếm" id="origin-input">
+                    <input type="text" placeholder="Tìm kiếm" id="origin-input" list="places-list" autocomplete="off">
                 </div>
 
                 <div class="form-group" id="destinations-group">
@@ -32,7 +32,7 @@
                     <div class="destinations-list">
                         <div class="destination-item">
                             <div class="destination-input-wrapper">
-                                <input type="text" placeholder="Tìm kiếm" class="destination-input">
+                                <input type="text" placeholder="Tìm kiếm" class="destination-input" list="places-list" autocomplete="off">
                                 <div class="destination-controls">
                                     <div class="drag-handle">
                                         <span></span>
@@ -96,6 +96,8 @@
             </div>
         </div>
     </div>
+    
+    <datalist id="places-list"></datalist>
     
     <script src="../static/js/form.js"></script>
 </body>

@@ -33,6 +33,24 @@ def register():
 def login():
 	return render_template('login.html')
 
+@app.route('/form')
+@app.route('/form/')
+def form():
+	return render_template('form.html')
+
+
+@app.route('/map_trans')
+@app.route('/map_trans/')
+def map_trans():
+	return render_template('map_trans.html')
+
+
+@app.route('/chatbot')
+@app.route('/chatbot/')
+def chatbot():
+	return render_template('chatbot.html')
+
+
 @app.route('/astar')
 def astar_demo():
 	return render_template('astar.html')

@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    const API_BASE = 'http://localhost:5000/api';
+    const API_BASE = `${window.location.origin}/api`;
     
     const VEHICLES = [
         { id: 1, name: "Xe máy", speed: 35, icon: "🏍️", type: "moto" },

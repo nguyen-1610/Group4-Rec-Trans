@@ -6,6 +6,15 @@ const addPreferenceBtn = document.querySelector('.add-preference');
 const submitBtn = document.querySelector('.submit-btn');
 const addDestinationBtn = document.getElementById('add-destination-btn');
 const destinationsList = document.querySelector('.destinations-list');
+const API_BASE = `${window.location.origin}/api`;
+const DEFAULT_VEHICLE = {
+    type: 'car',
+    speed: 45,
+    name: 'Ô tô',
+    icon: '🚗'
+};
+let cachedPlaces = null;
+const PLACE_DATALIST_ID = 'places-list';
 
 // Hàm format số tiền
 function formatCurrency(value) {
@@ -34,7 +43,7 @@ addDestinationBtn.addEventListener('click', () => {
     newDestination.draggable = true;
     newDestination.innerHTML = `
         <div class="destination-input-wrapper">
-            <input type="text" placeholder="Tìm kiếm" class="destination-input">
+            <input type="text" placeholder="Tìm kiếm" class="destination-input" list="${PLACE_DATALIST_ID}" autocomplete="off">
             <div class="destination-controls">
                 <div class="drag-handle">
                     <span></span>
@@ -61,6 +70,152 @@ function updateDestinationVisibility() {
             removeBtn.style.display = 'flex';
         }
     });
+}
+
+function normalizeText(value) {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+async function loadPlaces() {
+    if (cachedPlaces) return cachedPlaces;
+    
+    const response = await fetch(`${API_BASE}/places`);
+    const result = await response.json();
+    
+    if (!result.success) {
+        throw new Error(result.error || 'Không thể tải danh sách địa điểm');
+    }
+    
+    cachedPlaces = result.data;
+    return cachedPlaces;
+}
+
+async function resolvePlaceByInput(inputValue) {
+    if (!inputValue) return null;
+    
+    const numericId = parseInt(inputValue, 10);
+    if (!Number.isNaN(numericId)) {
+        const places = await loadPlaces();
+        return places.find(place => place.id === numericId) || null;
+    }
+    
+    const normalizedTarget = normalizeText(inputValue);
+    const places = await loadPlaces();
+    
+    return (
+        places.find(place => normalizeText(place.name) === normalizedTarget) ||
+        places.find(place => normalizeText(place.name).includes(normalizedTarget)) ||
+        null
+    );
+}
+
+async function requestAStarRoute(startPlace, endPlace, vehicle = DEFAULT_VEHICLE) {
+    const response = await fetch(`${API_BASE}/find-route`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            start_id: startPlace.id,
+            end_id: endPlace.id,
+            vehicle_type: vehicle.type,
+            vehicle_speed: vehicle.speed
+        })
+    });
+    
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.error || 'Không tìm được tuyến đường phù hợp');
+    }
+    
+    return result.data;
+}
+
+function persistRouteSelection(routeData, startPlace, endPlace, vehicle) {
+    const payload = {
+        timestamp: Date.now(),
+        start_place: startPlace,
+        end_place: endPlace,
+        route_coordinates: routeData.route_coordinates,
+        waypoints: routeData.waypoints,
+        distance_km: routeData.distance_km,
+        duration_min: routeData.duration_min,
+        total_waypoints: routeData.total_waypoints,
+        vehicle
+    };
+    
+    localStorage.setItem('selectedRoute', JSON.stringify(payload));
+}
+
+async function tryCreateSession() {
+    try {
+        const response = await fetch(`${API_BASE}/session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`status ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data?.session_id) {
+            localStorage.setItem('sessionId', data.session_id);
+            return data.session_id;
+        }
+    } catch (error) {
+        console.warn('Không thể tạo session (bỏ qua bước này):', error);
+    }
+    return null;
+}
+
+async function trySubmitFormData(sessionId, formData) {
+    if (!sessionId) {
+        return false;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/form`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                form_data: formData
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`status ${response.status}`);
+        }
+
+        await response.json();
+        return true;
+    } catch (error) {
+        console.warn('Không thể gửi dữ liệu form (bỏ qua bước này):', error);
+        return false;
+    }
+}
+
+async function initPlaceSuggestions() {
+    try {
+        const places = await loadPlaces();
+        const datalist = document.getElementById(PLACE_DATALIST_ID);
+        if (!datalist) return;
+        
+        datalist.innerHTML = places
+            .map(place => `<option value="${place.name}"></option>`)
+            .join('');
+    } catch (error) {
+        console.error('Không thể tải gợi ý địa điểm:', error);
+    }
 }
 
 // Hàm khởi tạo 1 destination-item
@@ -134,6 +289,7 @@ function getDragAfterElement(container, y) {
 const firstDestination = destinationsList.querySelector('.destination-item');
 initDestinationItem(firstDestination);
 updateDestinationVisibility();
+initPlaceSuggestions();
 
 // Thêm ưu tiên mới
 addPreferenceBtn.addEventListener('click', () => {
@@ -194,53 +350,36 @@ submitBtn.addEventListener('click', async () => {
             return;
         }
         
-        // 3. Lấy hoặc tạo session ID
+        // 3. Lấy hoặc tạo session ID (nếu API chatbot đang chạy)
         let sessionId = localStorage.getItem('sessionId');
-        
         if (!sessionId) {
-            console.log('🆕 Tạo session mới...');
-            const response = await fetch('http://localhost:5000/api/session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Không thể tạo session');
-            }
-            
-            const data = await response.json();
-            sessionId = data.session_id;
-            localStorage.setItem('sessionId', sessionId);
-            console.log('✅ Session created:', sessionId);
+            console.log('🆕 Tạo session mới (nếu API có sẵn)...');
+            sessionId = await tryCreateSession();
         } else {
             console.log('♻️ Sử dụng session có sẵn:', sessionId);
         }
         
-        // 4. Gửi form data đến backend
-        console.log('📤 Gửi form data đến backend...');
-        const submitResponse = await fetch('http://localhost:5000/api/form', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                session_id: sessionId,
-                form_data: formData
-            })
-        });
-        
-        if (!submitResponse.ok) {
-            throw new Error('Không thể gửi dữ liệu form');
+        if (sessionId) {
+            console.log('📤 Gửi form data đến backend (nếu chatbot API hoạt động)...');
+            await trySubmitFormData(sessionId, formData);
         }
         
-        const result = await submitResponse.json();
-        console.log('✅ Form submitted:', result);
+        // 5. Gọi A* backend để lấy lộ trình
+        const primaryDestination = destinations[0];
+        const startPlace = await resolvePlaceByInput(formData.origin);
+        const endPlace = await resolvePlaceByInput(primaryDestination);
         
-        // 5. Chuyển sang trang chatbot
-        console.log('🔄 Chuyển sang chatbot...');
-        window.location.href = 'chatbot.html';
+        if (!startPlace || !endPlace) {
+            throw new Error('Không tìm thấy địa điểm phù hợp trong cơ sở dữ liệu');
+        }
+        
+        console.log('🧭 Đang tính toán đường đi với A* ...');
+        const routeData = await requestAStarRoute(startPlace, endPlace, DEFAULT_VEHICLE);
+        persistRouteSelection(routeData, startPlace, endPlace, DEFAULT_VEHICLE);
+        
+        // 6. Chuyển sang trang bản đồ để hiển thị kết quả
+        console.log('🗺️ Mở bản đồ hiển thị lộ trình...');
+        window.location.href = 'map-trans';
         
     } catch (error) {
         console.error('❌ Error:', error);
