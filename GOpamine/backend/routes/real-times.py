@@ -1,13 +1,13 @@
+import os
 import requests
-from datetime import datetime
+from dotenv import load_dotenv
 
-# ==============================================================================
-# CẤU HÌNH API KEYS (BẠN ĐIỀN KEY THẬT VÀO ĐÂY)
-# ==============================================================================
-# Nếu bạn chưa có key, hãy để chuỗi rỗng "" hoặc giữ nguyên placeholder.
-# Hàm sẽ tự động phát hiện và trả về thông báo lỗi nếu key sai.
-WEATHER_KEY = "58949cf2ce6848f426f68a7f910472d7"
-TRAFFIC_KEY = "IInLxlLdECiULF6kiubdQit0Nhz8YQg2"
+# Load file .env
+load_dotenv()
+
+# Lấy key từ môi trường (An toàn tuyệt đối)
+WEATHER_KEY = os.getenv("OPENWEATHER_API_KEY")
+TRAFFIC_KEY = os.getenv("TOMTOM_API_KEY")
 
 # ==============================================================================
 # 1. HÀM GỌI API THỜI TIẾT (OPENWEATHERMAP)
