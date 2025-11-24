@@ -154,20 +154,43 @@
         </div>
     </section>
 
-    <section id="testimonials" class="section-pad">
+<section id="testimonials" class="section-pad bg-alt">
         <div class="container">
             <h2 class="section-title" data-i18n="reviews_title">Đánh giá từ cộng đồng</h2>
+            <p class="section-desc">Những chia sẻ thực tế từ người dùng đã trải nghiệm GOpamine.</p>
             
             <div class="grid-layout">
-                <div class="review-card">
-                    <p class="review-text">"Just used this app for recommending my best route around District 1, and somehow it actually worked better than I expected. Much recommended for every single international traveller who actually wants a trip to this city."</p>
-                    <div class="review-author">- James Stewart</div>
-                </div>
+                {% if reviews %}
+                    {% for review in reviews %}
+                    <div class="review-card">
+                        <div class="review-header">
+                            <div class="review-user-info">
+                                <img src="https://ui-avatars.com/api/?name={{ review.name }}&background={{ review.avatar_bg if review.avatar_bg else '3C7363' }}&color=fff&size=128" 
+                                     alt="{{ review.name }}" class="review-avatar">
+                                <div class="review-meta">
+                                    <h4 class="review-name">{{ review.name }}</h4>
+                                    <span class="review-date">{{ review.date }}</span>
+                                </div>
+                            </div>
+                            <div class="review-rating">
+                                {% for i in range(review.rating) %}★{% endfor %}
+                                {% for i in range(5 - review.rating) %}☆{% endfor %}
+                            </div>
+                        </div>
+                        <p class="review-text">"{{ review.text }}"</p>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="review-card empty-state">
+                        <p class="review-text" style="text-align:center; font-style: normal;">Chưa có đánh giá nào. Hãy là người đầu tiên chia sẻ trải nghiệm!</p>
+                    </div>
+                {% endif %}
+            </div>
 
-                <div class="review-card">
-                    <p class="review-text">"Mình ở Hà Nội đến, và cũng chưa nghĩ đến sẽ đi như thế nào. Khá may mắn là ứng dụng hỗ trợ rất tốt, nhờ vậy mình đỡ phải tốn tiền đi lại hơn :)))"</p>
-                    <div class="review-author">- Lê Phạm Hải Anh</div>
-                </div>
+            <div class="cta-container">
+                <a href="{{ url_for('feedback.feedback_page') }}" class="btn-share-experience">
+                    Chia sẻ trải nghiệm của bạn
+                </a>
             </div>
         </div>
     </section>
