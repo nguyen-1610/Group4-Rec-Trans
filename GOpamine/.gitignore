@@ -48,6 +48,7 @@ Thumbs.db
 htmlcov/
 
 # Database
+data/
 *.db
 *.sqlite
 *.sqlite3

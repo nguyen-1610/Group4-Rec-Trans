@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bản Đồ Địa Điểm</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- CSS của bạn (nếu có) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #map-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 60px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 400px;
+        }
+        
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .control-group {
+            margin-bottom: 10px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .control-group input,
+        .control-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .control-group button {
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .control-group button:hover {
+            background: #5568d3;
+        }
+        
+        #stats {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            min-width: 200px;
+        }
+        
+        #stats h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #667eea;
+        }
+        
+        #stats p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 2000;
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="map-container">
+        <!-- Bản đồ -->
+        <div id="map"></div>
+        
+        <!-- Controls -->
+        <div id="controls">
+            <h3>🔍 Tìm kiếm & Lọc</h3>
+            
+            <div class="control-group">
+                <label>Từ khóa:</label>
+                <input type="text" id="searchKeyword" placeholder="Tìm theo tên hoặc địa chỉ...">
+            </div>
+            
+            <div class="control-group">
+                <label>Đơn vị:</label>
+                <select id="filterUnit">
+                    <option value="">-- Tất cả --</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <button onclick="applyFilters()">🔍 Áp dụng</button>
+            </div>
+            
+            <div class="control-group">
+                <button onclick="resetFilters()" style="background: #95a5a6;">🔄 Reset</button>
+            </div>
+        </div>
+        
+        <!-- Thống kê -->
+        <div id="stats">
+            <h4>📊 Thống kê</h4>
+            <p>Tổng: <strong id="totalCount">0</strong></p>
+            <p>Hiển thị: <strong id="visibleCount">0</strong></p>
+        </div>
+        
+        <!-- Loading -->
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>Đang tải dữ liệu...</p>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Map Manager -->
+    <script src="{{ url_for('static', filename='js/map_manager.js') }}"></script>
+    
+    <!-- Main Script -->
+    <script>
+        // Khởi tạo
+        const mapManager = new MapManager('map');
+        let issueUnits = [];
+        
+        // Hàm hiển thị loading
+        function showLoading(show = true) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+        
+        // Load danh sách units cho dropdown
+        async function loadIssueUnits() {
+            try {
+                const response = await fetch('/api/issue-units');
+                const result = await response.json();
+                
+                if (result.success) {
+                    issueUnits = result.data;
+                    const select = document.getElementById('filterUnit');
+                    
+                    result.data.forEach(unit => {
+                        const option = document.createElement('option');
+                        option.value = unit;
+                        option.textContent = unit;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading units:', error);
+            }
+        }
+        
+        // Load thống kê
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('totalCount').textContent = result.data.total;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        // Áp dụng filters
+        async function applyFilters() {
+            showLoading(true);
+            
+            const keyword = document.getElementById('searchKeyword').value;
+            const unit = document.getElementById('filterUnit').value;
+            
+            try {
+                let url = '/api/places/filter?';
+                const params = [];
+                
+                if (keyword) params.push(`keyword=${encodeURIComponent(keyword)}`);
+                if (unit) params.push(`issue_unit=${encodeURIComponent(unit)}`);
+                
+                url += params.join('&');
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success) {
+                    mapManager.drawMarkers(result.data);
+                    document.getElementById('visibleCount').textContent = result.count;
+                }
+            } catch (error) {
+                console.error('Filter error:', error);
+                alert('Lỗi khi lọc dữ liệu!');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Reset filters
+        async function resetFilters() {
+            document.getElementById('searchKeyword').value = '';
+            document.getElementById('filterUnit').value = '';
+            
+            showLoading(true);
+            const count = await mapManager.loadAndDisplay();
+            document.getElementById('visibleCount').textContent = count;
+            showLoading(false);
+        }
+        
+        // Khởi động khi trang load
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Khởi tạo map
+            mapManager.init();
+            
+            // Load dữ liệu ban đầu
+            showLoading(true);
+            await loadIssueUnits();
+            await loadStats();
+            const count = await mapManager.loadAndDisplay();
+            document.getElementById('visibleCount').textContent = count;
+            showLoading(false);
+        });
+        
+        // Cho phép search bằng Enter
+        document.getElementById('searchKeyword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                applyFilters();
+            }
+        });
+    </script>
+</body>
+</html>
