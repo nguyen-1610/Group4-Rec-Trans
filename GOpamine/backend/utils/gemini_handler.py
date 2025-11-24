@@ -1,5 +1,5 @@
 import google.generativeai as genai
-from config import Config
+from GOpamine.backend.utils.config import Config
 import json
 
 class GeminiBot:
