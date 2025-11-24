@@ -1,15 +1,12 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import os
-<<<<<<< HEAD
 import sys
-=======
 
 # 1. IMPORT TỪ FEEDBACK.PY
 # (Đảm bảo file feedback.py nằm cùng thư mục với app.py)
 from feedback import feedback_bp, get_all_reviews
 
->>>>>>> home
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
