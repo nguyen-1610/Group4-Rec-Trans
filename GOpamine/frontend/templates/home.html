@@ -7,109 +7,204 @@
 {% endblock %}
 
 {% block content %}
+
     <section id="hero">
-        <h1>Khám phá hành trình hoàn hảo của bạn.</h1>
-        <p>Al gợi ý phương tiện di chuyển tối ưu dựa trên
-           ngân sách, thời gian và sở thích của bạn.</p>
+        <div class="hero-overlay"></div>
         
-        <div class="hero-buttons">
-            <a href="#" class="btn btn-primary">Bắt đầu tìm lộ trình</a>
-            <a href="#" class="btn btn-secondary">Tạo tài khoản</a>
-            <a href="#" class="btn btn-secondary">Đăng nhập</a>
-        </div>
-    </section>
-    
-    <section id="featured">
-        <h2>Khám phá thành phố Hồ Chí Minh</h2>
-        <p>Thành phố lớn nhất Việt Nam với lịch sử phong phú
-           và văn hoá sôi nổi</p>
-        
-        <div class="location-grid">
-            <div class="location-card">
-                <img src="../image/cho_ben_thanh.jpg" alt="Chợ Bến Thành">
-                <h3>Chợ Bến Thành</h3>
-                <p>Biểu tượng Sài Gòn, chợ lâu đời, sầm uất.</p>
-            </div>
-    
-            <div class="location-card">
-                <img src="../image/bao-tang_chung-tich_chien-tranh.jpg" alt="Bảo tàng Chứng tích Chiến tranh">
-                <h3>Bảo tàng Chứng tích Chiến tranh</h3>
-                <p>Trưng bày hậu quả chiến tranh, nhắc nhở giá trị hòa bình.</p>
-            </div>
-        </div>
-        <a href="#" class="view-more">View more</a>
-    </section>
-    
-    <section id="why-us">
-        <h2>Tại sao chọn chúng tôi?</h2>
-        <p>Nền tảng Al tiên tiến giúp bạn tìm
-           kiếm phương tiện di chuyển hoàn hảo...</p>
-    
-        <div class="features-grid">
-            <div class="feature-card">
-                <img src="../icons/cost.png" alt="Icon Tối ưu chi phí">
-                <h3>Tối Ưu Chi Phí</h3>
-                <p>So sánh giá cả từ nhiều nhà cung cấp...</p>
-            </div>
-    
-            <div class="feature-card">
-                <img src="../icons/personalise.png" alt="Icon Trải nghiệm cá nhân">
-                <h3>Trải Nghiệm Cá Nhân</h3>
-                <p>Tùy chỉnh gợi ý dựa trên sở thích cá nhân...</p>
+        <div class="hero-content container">
+            <h1 data-i18n="hero_title">Khám phá hành trình hoàn hảo của bạn.</h1>
+            <p data-i18n="hero_desc">AI gợi ý phương tiện di chuyển tối ưu dựa trên ngân sách, thời gian và sở thích của bạn.</p>
+            
+            <div class="hero-buttons">
+                <a href="#" class="btn btn-primary" data-i18n="btn_start">Bắt đầu tìm lộ trình</a>
+                <div class="sub-buttons">
+                    <a href="#" class="btn btn-secondary" data-i18n="btn_signup">Tạo tài khoản</a>
+                    <a href="#" class="btn btn-secondary" data-i18n="btn_login">Đăng nhập</a>
+                </div>
             </div>
         </div>
     </section>
+
+    <section id="featured" class="section-pad">
+        <div class="container">
+            <h2 class="section-title" data-i18n="featured_title">Khám phá thành phố Hồ Chí Minh</h2>
+            <p class="section-desc" data-i18n="featured_desc">Thành phố lớn nhất Việt Nam với lịch sử phong phú và văn hoá sôi nổi.</p>
+            
+            <div class="grid-layout">
+                <div class="card">
+                    <div class="card-img-wrap">
+                        <img src="../static/image/cho_ben_thanh.jpg" alt="Chợ Bến Thành">
+                    </div>
+                    <div class="card-body">
+                        <h3 data-i18n="card_benthanh">Chợ Bến Thành</h3>
+                        <p data-i18n="card_benthanh_desc">Biểu tượng Sài Gòn, chợ lâu đời, sầm uất.</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-img-wrap">
+                        <img src="../static/image/bao-tang_chung-tich_chien-tranh.jpg" alt="Bảo tàng Chứng tích Chiến tranh">
+                    </div>
+                    <div class="card-body">
+                        <h3 data-i18n="war_rem">Bảo tàng Chứng tích Chiến tranh</h3>
+                        <p data-i18n="war_rem_desc">Trưng bày hậu quả chiến tranh, nhắc nhở giá trị hòa bình.</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-img-wrap">
+                        <img src="../static/image/notre-dame-2.jpg" alt="Nhà thờ Đức Bà Sài Gòn">
+                    </div>
+                    <div class="card-body">
+                        <h3 data-i18n="notre_dame">Nhà thờ Đức bà Sài Gòn</h3>
+                        <p data-i18n="notre_dame_desc">Biểu tượng trung tâm, nơi check-in kiến trúc Châu Âu.</p>
+                    </div>
+                </div>
     
-    <section id="testimonials">
-        <h2>Đánh giá từ cộng đồng</h2>
-        
-        <div class="testimonial-list">
-            <div class="testimonial-card">
-                <p>"Just used this app for recommending my best route around
-                   District 1, and somehow it actually worked better..."</p>
-                <strong>- James Stewart</strong>
-            </div>
-    
-            <div class="testimonial-card">
-                <p>"Mình ở Hà Nội đến, và cũng chưa nghĩ đến sẽ đi như thế nào.
-                   Khá may mắn là ứng dụng hỗ trợ rất tốt..."</p>
-                <strong>- Lê Phạm Hải Anh</strong>
+                <div class="card hidden-card">
+                    <div class="card-img-wrap">
+                        <img src="../static/image/metro-1-2.jpg" alt="Tuyến Metro số 1">
+                    </div>
+                    <div class="card-body">
+                        <h3 data-i18n="first_metro">Tuyến Metro số 1</h3>
+                        <p data-i18n="first_metro_desc">Tàu điện hiện đại, kết nối nhanh các điểm tham quan.</p>
+                    </div>
+                </div>
+            
+                <div class="card hidden-card">
+                    <div class="card-img-wrap">
+                        <img src="../static/image/landmark-81-2.jpg" alt="Landmark 81">
+                    </div>
+                    <div class="card-body">
+                        <h3 data-i18n="landmark">Landmark 81</h3> 
+                        <p data-i18n="landmark_desc">Tòa nhà cao nhất Việt Nam, ngắm Sài Gòn trên mây.</p>
+                    </div>
+                </div>
+            
+                <div class="card hidden-card">
+                    <div class="card-img-wrap">
+                        <img src="../static/image/buu-dien_sai-gon-2.jpg" alt="Bưu điện Sài Gòn">
+                    </div>
+                    <div class="card-body">
+                        <h3 data-i18n="sg_post">Bưu điện Sài Gòn</h3>
+                        <p data-i18n="sg_post_desc">Kiến trúc Pháp cổ, hoạt động, gửi thư vượt thời gian.</p>
+                    </div>
+                </div>
+                
+                </div>
+            <a href="#" class="view-more" id="view-more-btn">View more</a>
+        </div>
+    </section>
+
+    <section id="why-us" class="section-pad bg-alt">
+        <div class="container">
+            <h2 class="section-title" data-i18n="why_us">Tại sao chọn chúng tôi?</h2>
+            <p class="section-desc" data-i18n="why_us_desc">Nền tảng AI tiên tiến giúp bạn tìm kiếm phương tiện di chuyển hoàn hảo.</p>
+
+            <div class="grid-layout icons-grid">
+                <div class="feature-box">
+                    <div class="icon-circle">
+                        <img src="../static/icons/cost.png" alt="Tối ưu chi phí">
+                    </div>
+                    <h3 data-i18n="cost">Tối ưu chi phí</h3>
+                    <p data-i18n="cost_desc">So sánh giá cả từ nhiều nhà cung cấp để tìm ra lựa chọn phù hợp nhất.</p>
+                </div>
+
+                <div class="feature-box">
+                    <div class="icon-circle">
+                        <img src="../static/icons/personalise.png" alt="Trải nghiệm cá nhân">
+                    </div>
+                    <h3 data-i18n="personalise">Trải nghiệm cá nhân</h3>
+                    <p data-i18n="personalise_desc">Tùy chỉnh gợi ý dựa trên sở thích cá nhân và lịch sử di chuyển.</p>
+                </div>
+                
+                <div class="feature-box">
+                    <div class="icon-circle">
+                        <img src="../static/icons/map.png" alt="Bản đồ tương tác">
+                    </div>
+                    <h3 data-i18n="interactive">Bản đồ tương tác</h3>
+                    <p data-i18n="interactive_desc">Khám phá lộ trình với bản đồ tương tác, xem trước các điểm dừng và địa điểm thú vị trên đường đi.</p>
+                </div>
+
+                <div class="feature-box">
+                    <div class="icon-circle">
+                        <img src="../static/icons/time.png" alt="Tiết kiệm thời gian">
+                    </div>
+                    <h3 data-i18n="time">Tiết kiệm thời gian</h3>
+                    <p data-i18n="time_desc">Tính toán thời gian di chuyển chính xác, bao gồm cả thời gian chờ đợi và kết nối giữa các phương tiện.</p>
+                </div>
+
+                <div class="feature-box">
+                    <div class="icon-circle">
+                        <img src="../static/icons/safe.png" alt="An toàn">
+                    </div>
+                    <h3 data-i18n="safety">Đảm bảo an toàn</h3>
+                    <p data-i18n="safety_desc">Đánh giá mức độ an toàn của từng phương tiện dựa trên dữ liệu thống kê và đánh giá người dùng.</p>
+                </div>
+
+                <div class="feature-box">
+                    <div class="icon-circle">
+                        <img src="../static/icons/ai.png" alt="AI">
+                    </div>
+                    <h3 data-i18n="ai">AI thông minh</h3>
+                    <p data-i18n="ai_desc">Thuật toán AI tiên tiến phân tích hàng triệu dữ liệu để đưa ra gợi ý tối ưu nhất cho hành trình của bạn.</p>
+                </div>
+
+                </div>
+        </div>
+    </section>
+
+    <section id="testimonials" class="section-pad">
+        <div class="container">
+            <h2 class="section-title" data-i18n="reviews_title">Đánh giá từ cộng đồng</h2>
+            
+            <div class="grid-layout">
+                <div class="review-card">
+                    <p class="review-text">"Just used this app for recommending my best route around District 1, and somehow it actually worked better than I expected. Much recommended for every single international traveller who actually wants a trip to this city."</p>
+                    <div class="review-author">- James Stewart</div>
+                </div>
+
+                <div class="review-card">
+                    <p class="review-text">"Mình ở Hà Nội đến, và cũng chưa nghĩ đến sẽ đi như thế nào. Khá may mắn là ứng dụng hỗ trợ rất tốt, nhờ vậy mình đỡ phải tốn tiền đi lại hơn :)))"</p>
+                    <div class="review-author">- Lê Phạm Hải Anh</div>
+                </div>
             </div>
         </div>
     </section>
-    
-    <footer>
-        <div class="footer-content">
-            <div class="footer-column">
-                <h3>Dịch vụ</h3>
+
+    <footer class="main-footer">
+        <div class="container footer-grid">
+            <div class="footer-col">
+                <h4 data-i18n="footer_about_title">GOpamine</h4>
+                <p data-i18n="footer_about_desc">Nền tảng AI giúp bạn tìm kiếm phương tiện di chuyển tối ưu cho mọi hành trình.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Dịch vụ</h4>
                 <ul>
-                    <li><a href="#">Tìm kiếm phương tiện</a></li>
-                    <li><a href="#">Lập kế hoạch hành trình</a></li>
-                    <li><a href="#">So sánh giá cả</a></li>
+                    <li><a href="#" data-i18n="footer_search">Tìm kiếm phương tiện</a></li>
+                    <li><a href="#" data-i18n="footer_plan">Lập kế hoạch hành trình</a></li>
+                    <li><a href="#" data-i18n="footer_compare">So sánh giá cả</a></li>
                 </ul>
             </div>
-            <div class="footer-column">
-                <h3>Hỗ trợ</h3>
+            <div class="footer-col">
+                <h4 data-i18n="footer_connect">Kết nối</h4>
                 <ul>
-                    <li><a href="#">Trung tâm trợ giúp</a></li>
-                    <li><a href="#">Liên hệ</a></li>
+                    <li>Email: info@sgtravel.com</li>
+                    <li>ĐT: 0123 456 789</li>
+                    <li data-i18n="footer_address">Địa chỉ: 227 Nguyễn Văn Cừ, phường Chợ Quán, Thành phố Hồ Chí Minh</li>
                 </ul>
-            </div>
-            <div class="footer-column">
-                <h3>Kết nối</h3>
-                <p>Email: info@sgtravel.com</p>
-                <p>ĐT: 0123 456 789</p>
-                <p>Địa chỉ: 227 Nguyễn Văn Cừ...</p>
             </div>
         </div>
         <div class="footer-bottom">
-            <p>© 2025 SGTravel Corporation.</p>
-            <a href="#">Chính sách bảo mật</a>
-            <a href="#">Điều khoản dịch vụ</a>
+            <p data-i18n="rights_reserved">© 2025 SGTravel Corporation. Mọi quyền được bảo lưu.</p>
+            <div class="footer-links"><a href="#" data-i18n="privacy">Chính sách bảo mật</a>
+                <a href="#" data-i18n="terms">Điều khoản dịch vụ</a>
+            </div>
         </div>
     </footer>
-{% endblock %}
+    
+    {% endblock %}
 
-{% block extra_js %}
-    <script src="{{ url_for('static', filename='js/home.js') }}"></script>
-{% endblock %}
+    {% block extra_js %}
+        <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+    {% endblock %}
