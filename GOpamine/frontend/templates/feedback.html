@@ -1,51 +1,80 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đánh giá từ cộng đồng</title>
-    <link rel="stylesheet" href="../static/css/feedback.css">
-</head>
-<body>
-    <div class="container">
-        <h1>Đánh giá từ cộng đồng</h1>
+{% extends "base.html" %}
 
-        <div class="review-form-card">
-            <h2>Chia sẻ trải nghiệm của bạn</h2>
-            <form id="reviewForm">
-                <div class="form-group">
-                    <label for="userName">Tên của bạn</label>
-                    <input type="text" id="userName" placeholder="Nhập tên của bạn" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>Đánh giá của bạn</label>
-                    <div class="star-rating" id="starRating">
-                        <span class="star-input" data-value="1">☆</span>
-                        <span class="star-input" data-value="2">☆</span>
-                        <span class="star-input" data-value="3">☆</span>
-                        <span class="star-input" data-value="4">☆</span>
-                        <span class="star-input" data-value="5">☆</span>
-                    </div>
-                    <input type="hidden" id="ratingValue" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="reviewText">Nhận xét của bạn</label>
-                    <textarea id="reviewText" rows="4" placeholder="Chia sẻ trải nghiệm của bạn..." required></textarea>
-                </div>
-                
-                <button type="submit" class="submit-button">Gửi đánh giá</button>
-            </form>
-        </div>
+{% block title %}Gửi đánh giá - GOpamine{% endblock %}
 
-        <div class="reviews-card">
-            <h2 class="reviews-title">Đánh giá gần đây</h2>
-            <div id="reviewsList">
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/feedback.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="feedback_container">
+    <h1>Đánh giá từ cộng đồng</h1>
+
+    <div class="review-form-card">
+        <h2>Chia sẻ trải nghiệm của bạn</h2>
+        <form id="reviewForm">
+            <div class="form-group">
+                <label for="userName">Tên của bạn</label>
+                <input type="text" id="userName" placeholder="Nhập tên của bạn" required>
             </div>
-        </div>
+            
+            <div class="form-group">
+                <label>Đánh giá của bạn</label>
+                <div class="star-rating" id="starRating">
+                    <span class="star-input" data-value="1">☆</span>
+                    <span class="star-input" data-value="2">☆</span>
+                    <span class="star-input" data-value="3">☆</span>
+                    <span class="star-input" data-value="4">☆</span>
+                    <span class="star-input" data-value="5">☆</span>
+                </div>
+                <input type="hidden" id="ratingValue" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="reviewText">Nhận xét của bạn</label>
+                <textarea id="reviewText" rows="4" placeholder="Chia sẻ trải nghiệm của bạn..." required></textarea>
+            </div>
+            
+            <button type="submit" class="submit-button">Gửi đánh giá</button>
+        </form>
     </div>
 
-    <script src="../static/js/feedback.js"></script>
-</body>
-</html>
+    <div class="reviews-card">
+        <h2 class="reviews-title">Đánh giá gần đây</h2>
+        
+        <div id="reviewsList">
+            {% if reviews %}
+                {% for review in reviews %}
+                <div class="review-item">
+                    <div class="review-header">
+                        <div class="reviewer-info">
+                            <div class="reviewer-name">{{ review.name }}</div>
+                            <div class="review-date">{{ review.date }}</div>
+                        </div>
+                        <div class="stars">
+                            {% for i in range(review.rating) %}
+                                <span class="star">★</span>
+                            {% endfor %}
+                            {% for i in range(5 - review.rating) %}
+                                <span class="star empty">★</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="review-text">
+                        "{{ review.text }}"
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="review-item" style="text-align:center; color:#666;">
+                    <p>Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{{ url_for('static', filename='js/feedback.js') }}"></script>
+{% endblock %}

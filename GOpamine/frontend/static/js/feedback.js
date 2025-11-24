@@ -1,91 +1,36 @@
+// Biến toàn cục để theo dõi số sao đã chọn
 let selectedRating = 0;
 const starInputs = document.querySelectorAll('.star-input');
 const ratingValue = document.getElementById('ratingValue');
 
 document.addEventListener('DOMContentLoaded', function() {
-    loadReviews();
+    // Chỉ cần thêm hiệu ứng hover cho các review đã được Python render sẵn
     addHoverEffectToReviews();
 });
 
-function loadReviews() {
-    const reviews = getReviewsFromMemory();
-    const reviewsList = document.getElementById('reviewsList');
-    
-    const defaultReviews = reviewsList.innerHTML;
-    reviewsList.innerHTML = '';
-
-    reviews.forEach(review => {
-        const reviewHTML = createReviewHTML(
-            review.name, 
-            review.rating, 
-            review.text, 
-            review.date
-        );
-        reviewsList.insertAdjacentHTML('beforeend', reviewHTML);
-    });
-    
-    if (reviews.length === 0) {
-        reviewsList.innerHTML = defaultReviews;
-    }
-}
-
-function getReviewsFromMemory() {
-    const reviews = [];
-    let index = 0;
-    
-    while (true) {
-        const name = localStorage.getItem(`review_${index}_name`);
-        if (!name) break;
-        
-        reviews.push({
-            name: name,
-            rating: parseInt(localStorage.getItem(`review_${index}_rating`)),
-            text: localStorage.getItem(`review_${index}_text`),
-            date: localStorage.getItem(`review_${index}_date`)
-        });
-        index++;
-    }
-    
-    return reviews;
-}
-
-function saveReviewToMemory(name, rating, text) {
-    const reviews = getReviewsFromMemory();
-    const date = new Date().toLocaleString('vi-VN');
-
-    reviews.unshift({ name, rating, text, date });
-
-    const maxReviews = 20;
-    if (reviews.length > maxReviews) {
-        reviews.splice(maxReviews);
-    }
-
-    localStorage.clear();
-
-    reviews.forEach((review, index) => {
-        localStorage.setItem(`review_${index}_name`, review.name);
-        localStorage.setItem(`review_${index}_rating`, review.rating);
-        localStorage.setItem(`review_${index}_text`, review.text);
-        localStorage.setItem(`review_${index}_date`, review.date);
-    });
-}
+// --- 1. XỬ LÝ CHỌN SAO (STAR RATING) ---
 
 starInputs.forEach((star, index) => {
+    // Khi di chuột vào: Sáng sao tạm thời
     star.addEventListener('mouseenter', function() {
         highlightStars(index + 1);
     });
     
+    // Khi bấm chuột: Lưu số sao đã chọn
     star.addEventListener('click', function() {
         selectedRating = index + 1;
-        ratingValue.value = selectedRating;
+        ratingValue.value = selectedRating; // Cập nhật vào input ẩn nếu cần submit form truyền thống
         selectStars(selectedRating);
     });
 });
 
+// Khi chuột rời khỏi vùng chọn sao
 document.getElementById('starRating').addEventListener('mouseleave', function() {
     if (selectedRating > 0) {
+        // Nếu đã chọn rồi thì hiển thị lại số sao đã chọn
         selectStars(selectedRating);
     } else {
+        // Nếu chưa chọn thì tắt hết
         clearStars();
     }
 });
@@ -93,11 +38,11 @@ document.getElementById('starRating').addEventListener('mouseleave', function() 
 function highlightStars(count) {
     starInputs.forEach((star, index) => {
         if (index < count) {
-            star.classList.add('hover');
             star.textContent = '★';
+            star.classList.add('hover');
         } else {
-            star.classList.remove('hover');
             star.textContent = '☆';
+            star.classList.remove('hover');
         }
     });
 }
@@ -105,98 +50,97 @@ function highlightStars(count) {
 function selectStars(count) {
     starInputs.forEach((star, index) => {
         if (index < count) {
-            star.classList.add('selected');
             star.textContent = '★';
+            star.classList.add('selected');
         } else {
-            star.classList.remove('selected');
             star.textContent = '☆';
+            star.classList.remove('selected');
         }
     });
 }
 
 function clearStars() {
     starInputs.forEach(star => {
-        star.classList.remove('hover', 'selected');
         star.textContent = '☆';
+        star.classList.remove('hover', 'selected');
     });
 }
 
+// --- 2. XỬ LÝ GỬI FORM VỀ PYTHON (BACKEND) ---
+
 document.getElementById('reviewForm').addEventListener('submit', function(e) {
-    e.preventDefault();
+    e.preventDefault(); // Chặn hành động load lại trang mặc định
 
     const userName = document.getElementById('userName').value;
     const reviewText = document.getElementById('reviewText').value;
     const rating = selectedRating;
     
+    // Validate cơ bản
     if (rating === 0) {
         alert('Vui lòng chọn số sao đánh giá!');
         return;
     }
+
+    // Hiệu ứng nút bấm để người dùng biết đang xử lý
+    const submitBtn = document.querySelector('.submit-button');
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.textContent = "Đang gửi...";
+    submitBtn.disabled = true;
     
-    saveReviewToMemory(userName, rating, reviewText);
-    
-    loadReviews();
-
-    showSuccessMessage();
-
-    this.reset();
-    selectedRating = 0;
-    ratingValue.value = '';
-    clearStars();
-
-    setTimeout(() => {
-        document.querySelector('.reviews-card').scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-        });
-    }, 100);
-
-    setTimeout(() => {
-        addHoverEffectToReviews();
-    }, 200);
+    // Gửi dữ liệu bằng Fetch API
+    fetch('/api/submit-review', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: userName,
+            rating: rating,
+            text: reviewText
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Hiển thị thông báo thành công
+            showSuccessMessage();
+            
+            // Reset form
+            document.getElementById('reviewForm').reset();
+            selectedRating = 0;
+            clearStars();
+            
+            // Chờ 1.5 giây rồi chuyển hướng về Trang chủ để xem kết quả
+            setTimeout(() => {
+                window.location.href = "/"; 
+            }, 1500);
+        } else {
+            alert('Có lỗi xảy ra: ' + (data.message || 'Không thể lưu đánh giá'));
+            submitBtn.textContent = originalBtnText;
+            submitBtn.disabled = false;
+        }
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        alert("Có lỗi kết nối đến server.");
+        submitBtn.textContent = originalBtnText;
+        submitBtn.disabled = false;
+    });
 });
 
-function createReviewHTML(name, rating, text, date) {
-    let starsHTML = '';
-    for (let i = 1; i <= 5; i++) {
-        if (i <= rating) {
-            starsHTML += '<span class="star">★</span>';
-        } else {
-            starsHTML += '<span class="star empty">★</span>';
-        }
-    }
-    
-    const dateDisplay = date ? `<div class="review-date">${date}</div>` : '';
-    
-    return `
-        <div class="review-item">
-            <div class="review-header">
-                <div class="reviewer-info">
-                    <div class="reviewer-name">${name}</div>
-                    ${dateDisplay}
-                </div>
-                <div class="stars">
-                    ${starsHTML}
-                </div>
-            </div>
-            <div class="review-text">
-                ${text}
-            </div>
-        </div>
-    `;
-}
+// --- 3. CÁC HÀM TIỆN ÍCH GIAO DIỆN ---
 
 function showSuccessMessage() {
+    // Tạo thông báo
     const message = document.createElement('div');
     message.className = 'success-message';
-    message.textContent = '✓ Cảm ơn bạn đã đánh giá! Nhận xét của bạn đã được lưu thành công.';
+    message.textContent = '✓ Cảm ơn bạn! Đang chuyển về trang chủ...';
     
+    // Chèn thông báo vào sau form
     const formCard = document.querySelector('.review-form-card');
-    formCard.insertAdjacentElement('afterend', message);
-
-    setTimeout(() => {
-        message.remove();
-    }, 5000);
+    if (formCard) {
+        formCard.insertAdjacentElement('afterend', message);
+    }
 }
 
 function addHoverEffectToReviews() {
@@ -212,12 +156,4 @@ function addHoverEffectToReviews() {
             this.style.transform = 'translateX(0)';
         });
     });
-}
-
-function clearAllReviews() {
-    if (confirm('Bạn có chắc muốn xóa tất cả đánh giá?')) {
-        localStorage.clear();
-        loadReviews();
-        alert('Đã xóa tất cả đánh giá!');
-    }
 }
