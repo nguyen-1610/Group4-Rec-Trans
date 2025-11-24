@@ -379,7 +379,7 @@ submitBtn.addEventListener('click', async () => {
         
         // 6. Chuyển sang trang bản đồ để hiển thị kết quả
         console.log('🗺️ Mở bản đồ hiển thị lộ trình...');
-        window.location.href = 'map-trans';
+        window.location.href = 'map_trans';
         
     } catch (error) {
         console.error('❌ Error:', error);
