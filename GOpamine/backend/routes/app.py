@@ -7,6 +7,9 @@ import sys
 # (Đảm bảo file feedback.py nằm cùng thư mục với app.py)
 from feedback import feedback_bp, get_all_reviews
 
+# 2. IMPORT TỪ CHATBOT.PY
+from chatbot import chatbot_bp
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -24,13 +27,18 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, 'frontend', 'static')
 )
 
-# 2. ĐĂNG KÝ BLUEPRINT
+# Cho phép frontend chạy trên domain/port khác gọi được API backend
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# 3. ĐĂNG KÝ BLUEPRINT
 # Bước này giúp app nhận diện các đường dẫn '/feedback' và '/api/submit-review'
 app.register_blueprint(feedback_bp)
+app.register_blueprint(chatbot_bp)
 
+# ========== ROUTES HTML ==========
 @app.route('/')
 def index():
-    # 3. LẤY DỮ LIỆU VÀ TRUYỀN VÀO HOME
+    # LẤY DỮ LIỆU VÀ TRUYỀN VÀO HOME
     # Lấy tất cả review từ file json
     all_reviews = get_all_reviews()
     

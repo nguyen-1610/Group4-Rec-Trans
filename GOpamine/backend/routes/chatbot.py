@@ -1,22 +1,19 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from config import Config
+from flask import Blueprint, request, jsonify
 from gemini_handler import GeminiBot
 import uuid
 
-app = Flask(__name__)
-CORS(app)
-app.config.from_object(Config)
+# Tạo Blueprint cho chatbot
+chatbot_bp = Blueprint('chatbot', __name__)
 
 # Lưu session chat - mỗi session có 1 GeminiBot riêng
 chat_sessions = {}
 
-@app.route('/api/health', methods=['GET'])
+@chatbot_bp.route('/api/health', methods=['GET'])
 def health_check():
     """Kiểm tra server có hoạt động không"""
-    return jsonify({"status": "ok", "message": "Server is running"})
+    return jsonify({"status": "ok", "message": "Chatbot is running"})
 
-@app.route('/api/session', methods=['POST'])
+@chatbot_bp.route('/api/session', methods=['POST'])
 def create_session():
     """Tạo session mới cho user"""
     session_id = str(uuid.uuid4())
@@ -31,7 +28,7 @@ def create_session():
     
     return jsonify({"session_id": session_id})
 
-@app.route('/api/chat', methods=['POST'])
+@chatbot_bp.route('/api/chat', methods=['POST'])
 def chat():
     """Endpoint xử lý chat"""
     try:
@@ -78,7 +75,7 @@ def chat():
         print(f"Error in chat endpoint: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/api/form', methods=['POST'])
+@chatbot_bp.route('/api/form', methods=['POST'])
 def submit_form():
     """Nhận dữ liệu từ form"""
     try:
@@ -107,7 +104,7 @@ def submit_form():
         print(f"Error in form endpoint: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/api/reset', methods=['POST'])
+@chatbot_bp.route('/api/reset', methods=['POST'])
 def reset_session():
     """Reset chat session"""
     try:
@@ -157,6 +154,3 @@ def format_form_context(form_data):
         context_parts.append(f"⭐ Ưu tiên: {prefs}")
     
     return "\n".join(context_parts) if context_parts else None
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
