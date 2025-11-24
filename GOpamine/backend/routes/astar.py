@@ -3,6 +3,7 @@ import math
 import sqlite3
 from typing import List, Dict, Tuple, Optional
 import json
+from flask import Blueprint, request, jsonify
 
 class AStarRouter:
     """
@@ -333,3 +334,75 @@ if __name__ == "__main__":
         print(f"📍 Waypoints: {data['total_waypoints']}")
     else:
         print(f"\n❌ Error: {result['error']}")
+
+
+def create_api_blueprint(db_path: str) -> Blueprint:
+    """
+    Tạo blueprint chứa toàn bộ API liên quan tới A* để tách khỏi app.py
+    """
+    router = AStarRouter(db_path=db_path)
+    api_bp = Blueprint('astar_api', __name__, url_prefix='/api')
+
+    @api_bp.route('/places', methods=['GET'])
+    def get_places():
+        try:
+            places = router.get_all_places()
+            return jsonify({
+                'success': True,
+                'data': places,
+                'total': len(places)
+            })
+        except Exception as e:
+            print(f"❌ Error in /api/places: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api_bp.route('/find-route', methods=['POST'])
+    def find_route():
+        try:
+            data = request.get_json()
+
+            if not data or 'start_id' not in data or 'end_id' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Missing start_id or end_id'
+                }), 400
+
+            start_id = int(data['start_id'])
+            end_id = int(data['end_id'])
+            vehicle_type = data.get('vehicle_type', 'car')
+            vehicle_speed = data.get('vehicle_speed')
+            vehicle_speed = float(vehicle_speed) if vehicle_speed else None
+
+            print(f"📡 Nhận request: start={start_id}, end={end_id}")
+
+            result = router.find_optimal_route(
+                start_id,
+                end_id,
+                vehicle_type=vehicle_type,
+                vehicle_speed=vehicle_speed
+            )
+
+            print(f"✅ Kết quả: {result['success']}")
+
+            if result['success']:
+                return jsonify(result)
+            return jsonify(result), 404
+
+        except Exception as e:
+            print(f"❌ Error in /api/find-route: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @api_bp.route('/test', methods=['GET'])
+    def health_check():
+        return jsonify({
+            'success': True,
+            'message': 'Server is running!',
+            'db_path': db_path
+        })
+
+    return api_bp
