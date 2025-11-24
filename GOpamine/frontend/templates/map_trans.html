@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chỉ đường - Bản đồ</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" />
+    
+    <link rel="stylesheet" href="../static/css/map_trans.css">
+</head>
+<body>
+    <div class="container">
+        <div id="map">
+            <button class="back-btn" onclick="goToPreviousPage()">←</button>
+
+            <div class="ai-chat-btn">
+                <button class="tab-btn active" onclick="switchTab('map')">Map</button>
+                <button class="tab-btn" onclick="switchTab('ai')">AI</button>
+            </div>
+        </div>
+
+        <div class="vehicle-options">
+            <div class="vehicle-scroll-container">
+                <div class="option-card selected" data-vehicle="motorbike" data-price="15000" data-stars="3">
+                    <div class="option-left">
+                        <div class="vehicle-icon">🏍️</div>
+                        <div class="vehicle-info">
+                            <h4>Xe máy</h4>
+                            <p>9 phút</p>
+                        </div>
+                    </div>
+                    <div class="option-right">
+                        <div class="price">15.000đ</div>
+                        <div class="stars">★★★☆☆</div>
+                    </div>
+                </div>
+
+                <div class="option-card" data-vehicle="car" data-price="30000" data-stars="3">
+                    <div class="option-left">
+                        <div class="vehicle-icon">🚗</div>
+                        <div class="vehicle-info">
+                            <h4>Ô tô điện</h4>
+                            <p>9 phút</p>
+                        </div>
+                    </div>
+                    <div class="option-right">
+                        <div class="price">30.000đ</div>
+                        <div class="stars">★★★☆☆</div>
+                    </div>
+                </div>
+
+                <div class="option-card" data-vehicle="bus" data-price="7000" data-stars="3">
+                    <div class="option-left">
+                        <div class="vehicle-icon">🚌</div>
+                        <div class="vehicle-info">
+                            <h4>Xe buýt</h4>
+                            <p>15 phút</p>
+                        </div>
+                    </div>
+                    <div class="option-right">
+                        <div class="price">7.000đ</div>
+                        <div class="stars">★★★☆☆</div>
+                    </div>
+                </div>
+
+                <div class="option-card" data-vehicle="walk" data-price="0" data-stars="0">
+                    <div class="option-left">
+                        <div class="vehicle-icon">🚶</div>
+                        <div class="vehicle-info">
+                            <h4>Đi bộ</h4>
+                            <p>25 phút</p>
+                        </div>
+                    </div>
+                    <div class="option-right">
+                        <div class="price">Miễn phí</div>
+                        <div class="stars">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="goBack()">
+                    💬 Tư Vấn
+                </button>
+                <button class="btn btn-primary" onclick="confirmRoute()">
+                    Chọn
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
+    
+    <script src="../static/js/map_trans.js"></script>
+</body>
+</html>

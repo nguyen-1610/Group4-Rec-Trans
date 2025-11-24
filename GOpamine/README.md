@@ -9,65 +9,18 @@ GOPamine/
 ├── assets/              # Hình ảnh, icons, fonts
 ├── backend/
 │   ├── BE/             # Business Logic
-│   │   ├── AI.py                  # Chatbot Gemini
-│   │   ├── app.py                 # Flask app chính
-│   │   ├── feedback.py            # Xử lý feedback
-│   │   ├── form.py                # Form validation
-│   │   ├── home.py                # Routes trang chủ
-│   │   ├── login.py               # Authentication
-│   │   ├── Map_Trans.py           # Bản đồ OpenStreetMap
-│   │   └── weather.py             # API thời tiết
 │   ├── data/
 │   │   └── gopamine.db            # SQLite database
 │   └── utils/
 │       ├── ai_utils.py            # AI helpers
 │       └── database.py            # Database CRUD
 ├── frontend/
-│   ├── pages/                     # HTML pages
 │   ├── static/                    # CSS, JS, images
 │   └── templates/                 # templates (menu, header, footer)
-├── .gitignore						# để các file thực thi kh lên
+├── .gitignore						# Không push các file quan trọng bí mật lên git
 ├── README.md						
 └── requirements.txt				# thư viện cần tải
 ```
-
----
-
-## 📂 Giải thích Files
-
-### Backend (BE)
-
-| File 			| Chức năng |
-|------			|-----------|
-| `AI.py` 		| Chatbot dùng Gemini API, xử lý NLP |
-| `app.py` 		| Flask app chính, đăng ký routes, config |
-| `feedback.py` | Nhận và xử lý feedback người dùng |
-| `form.py` 	| Validation forms với WTForms |
-| `home.py` 	| Routes cho trang chủ, danh sách tuyến |
-| `login.py` 	| Đăng nhập, đăng ký, session |
-| `Map_Trans.py`| Render bản đồ OSM, tính tuyến đường |
-| `weather.py` 	| Lấy thông tin thời tiết TP.HCM |
-
-### Data
-
-| File | Chức năng |
-|------|-----------|
-| `gopamine.db` | SQLite database chứa: routes, stops, users, feedbacks |
-
-### Utils
-
-| File | Chức năng |
-|------|-----------|
-| `ai_utils.py` | Helper functions cho AI (format response, extract data) |
-| `database.py` | CRUD operations, queries, init database |
-
-### Frontend
-
-| Folder | Chức năng |
-|--------|-----------|
-| `pages/` | HTML tĩnh (about, guide, faq) |
-| `static/` | CSS, JS, images |
-| `templates/` | Jinja2 templates (base, home, login, map, v.v.) |
 
 ---
 

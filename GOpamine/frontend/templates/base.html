@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GOpamine{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% block extra_css %}{% endblock %}
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #dfe9e4;
+            color: #2f4f3d;
+        }
+
+        .container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Styles */
+        .header {
+            background: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+            padding: 18px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 8px 24px rgba(31, 74, 58, 0.12);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(40, 72, 57, 0.08);
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-circle {
+            width: 44px;
+            height: 44px;
+            background-color: #3C7363;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 20px;
+            box-shadow: 0 6px 18px rgba(36, 76, 56, 0.35);
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: #254033;
+            letter-spacing: 0.3px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Language Toggle */
+        .lang-switch {
+            display: flex;
+            background-color: #f0f4f2;
+            border-radius: 999px;
+            padding: 4px;
+            position: relative;
+            cursor: pointer;
+            width: 72px;
+            height: 32px;
+            align-items: center;
+        }
+
+        .lang-switch-text {
+            flex: 1;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.3s;
+            min-width: 32px;
+            height: 24px;
+            position: relative;
+            line-height: 1;
+        }
+
+        .lang-switch-text.vi {
+            color: #666;
+        }
+
+        .lang-switch-text.en {
+            color: #666;
+        }
+
+        .lang-switch.active .lang-switch-text.vi {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .lang-switch:not(.active) .lang-switch-text.en {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .lang-switch-slider {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 32px;
+            height: 24px;
+            background-color: #3C7363;
+            border-radius: 999px;
+            transition: transform 0.3s ease;
+            z-index: 1;
+        }
+
+        .lang-switch:not(.active) .lang-switch-slider {
+            transform: translateX(32px);
+        }
+
+        /* Menu Icon (Mobile) */
+        .menu-icon {
+            font-size: 24px;
+            cursor: pointer;
+            color: #314e3f;
+            display: block;
+        }
+
+        /* Desktop Navigation */
+        .desktop-nav {
+            display: none;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .desktop-nav .nav-link {
+            text-decoration: none;
+            color: #2c4a3a;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 10px 16px;
+            border-radius: 999px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .desktop-nav .nav-link:hover {
+            background-color: rgba(36, 76, 56, 0.12);
+            color: #1f362b;
+        }
+
+        .desktop-nav .nav-link.active {
+            background-color: #d8e6de;
+            color: #204432;
+        }
+
+        .desktop-nav .login-btn {
+            background-color: #3C7363;
+            color: #fff;
+            padding: 10px 22px;
+            border-radius: 999px;
+            margin-left: 4px;
+            box-shadow: 0 6px 12px rgba(36, 76, 56, 0.25);
+        }
+
+        .desktop-nav .login-btn:hover {
+            background-color: #1e3f2e;
+        }
+
+        /* Mobile Menu Dropdown */
+        .menu-dropdown {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(20, 35, 28, 0.55);
+            z-index: 999;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .menu-dropdown.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .menu-sidebar {
+            position: absolute;
+            top: 70px;
+            right: 0;
+            width: 78%;
+            max-width: 320px;
+            background-color: #fff;
+            box-shadow: -8px 0 24px rgba(22, 38, 31, 0.2);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            border-radius: 0 0 0 24px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .menu-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 20px;
+            border-bottom: 1px solid #eef2f0;
+        }
+
+        .menu-dropdown.active .menu-sidebar {
+            transform: translateX(0);
+        }
+
+        .menu-items {
+            flex: 1;
+        }
+
+        .menu-item {
+            display: block;
+            padding: 16px 28px;
+            text-decoration: none;
+            color: #2d4c3a;
+            font-size: 17px;
+            font-weight: 600;
+            transition: background-color 0.25s;
+        }
+
+        .menu-item:hover {
+            background-color: #f4f7f5;
+        }
+
+        .menu-item.active {
+            background-color: #e5efe9;
+            color: #1f3a2d;
+        }
+
+        .menu-login-btn {
+            margin: 24px;
+            padding: 16px;
+            background-color: #3C7363;
+            color: #fff;
+            border: none;
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            transition: background-color 0.3s, transform 0.2s;
+            box-shadow: 0 12px 24px rgba(36, 76, 56, 0.3);
+        }
+
+        .menu-login-btn:hover {
+            background-color: #1e3f2e;
+            transform: translateY(-1px);
+        }
+
+        /* Content Area */
+        .content-wrapper {
+            flex: 1;
+            padding: 20px;
+        }
+
+        /* Responsive Design */
+        @media (min-width: 992px) {
+            .menu-icon {
+                display: none;
+            }
+
+            .desktop-nav {
+                display: flex;
+            }
+
+            .menu-dropdown {
+                display: none !important;
+            }
+
+            .header {
+                padding: 18px 48px;
+            }
+        }
+
+        @media (max-width: 991px) {
+            .desktop-nav {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-section">
+                <div class="logo-circle">
+                    <i class="fas fa-building"></i>
+                </div>
+                <span class="logo-text">GOpamine</span>
+            </div>
+            <div class="header-right">
+                <div class="lang-switch active" id="langSwitch">
+                    <span class="lang-switch-text vi">VI</span>
+                    <span class="lang-switch-text en">EN</span>
+                    <div class="lang-switch-slider"></div>
+                </div>
+                <i class="fas fa-bars menu-icon" id="menuIcon"></i>
+                
+                <!-- Desktop Navigation -->
+                <nav class="desktop-nav">
+                    <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
+                    <a href="/ai-assistant" class="nav-link {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
+                    <a href="/suggestions" class="nav-link {% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
+                    <a href="/about" class="nav-link {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
+                    <a href="/guide" class="nav-link {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
+                    <a href="/auth" class="nav-link login-btn">Đăng nhập/ Đăng ký</a>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Mobile Menu Dropdown -->
+        <div class="menu-dropdown" id="menuDropdown">
+            <div class="menu-sidebar">
+                <nav class="menu-items">
+                    <a href="/" class="menu-item {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
+                    <a href="/ai-assistant" class="menu-item {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
+                    <a href="/suggestions" class="menu-item {% if request.endpoint == 'suggestions' %}active{% endif %}">Gợi ý</a>
+                    <a href="/about" class="menu-item {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
+                    <a href="/guide" class="menu-item {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
+                </nav>
+                <a href="/register" class="menu-login-btn" data-i18n="loginRegister">Đăng nhập/ Đăng ký</a>
+            </div>
+        </div>
+
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <script>
+        // Initialize translations object (only navigation, register pages handled by auth.js)
+        if (!window.translations) {
+            window.translations = {
+                vi: {
+                    // Navigation
+                    home: "Trang chủ",
+                    aiAssistant: "Trợ lý AI",
+                    suggestions: "Gợi ý",
+                    about: "Về chúng tôi",
+                    guide: "Hướng dẫn",
+                    loginRegister: "Đăng nhập/ Đăng ký"
+                },
+                en: {
+                    // Navigation
+                    home: "Home",
+                    aiAssistant: "AI Assistant",
+                    suggestions: "Suggestions",
+                    about: "About Us",
+                    guide: "Guide",
+                    loginRegister: "Login/ Register"
+                }
+            };
+        } else {
+            // Extend existing translations with navigation if needed
+            window.translations.vi = window.translations.vi || {};
+            window.translations.en = window.translations.en || {};
+            Object.assign(window.translations.vi, {
+                home: "Trang chủ",
+                aiAssistant: "Trợ lý AI",
+                suggestions: "Gợi ý",
+                about: "Về chúng tôi",
+                guide: "Hướng dẫn",
+                loginRegister: "Đăng nhập/ Đăng ký"
+            });
+            Object.assign(window.translations.en, {
+                home: "Home",
+                aiAssistant: "AI Assistant",
+                suggestions: "Suggestions",
+                about: "About Us",
+                guide: "Guide",
+                loginRegister: "Login/ Register"
+            });
+        }
+
+        // Get current language from localStorage or default to 'vi'
+        function getCurrentLanguage() {
+            return localStorage.getItem('language') || 'vi';
+        }
+
+        // Save language to localStorage
+        function setLanguage(lang) {
+            localStorage.setItem('language', lang);
+        }
+
+        // Change language function
+        function changeLanguage(lang) {
+            if (!window.translations || !window.translations[lang]) {
+                return;
+            }
+
+            const translations = window.translations[lang];
+            
+            // Update all elements with data-i18n attribute
+            document.querySelectorAll('[data-i18n]').forEach(function(element) {
+                const key = element.getAttribute('data-i18n');
+                if (translations[key]) {
+                    element.textContent = translations[key];
+                }
+            });
+
+            // Update all elements with data-i18n-placeholder attribute
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(function(element) {
+                const key = element.getAttribute('data-i18n-placeholder');
+                if (translations[key]) {
+                    element.placeholder = translations[key];
+                }
+            });
+
+            // Update language switch state
+            const langSwitch = document.getElementById('langSwitch');
+            if (langSwitch) {
+                if (lang === 'vi') {
+                    langSwitch.classList.add('active');
+                } else {
+                    langSwitch.classList.remove('active');
+                }
+            }
+        }
+
+        // Language Toggle Functionality
+        const langSwitch = document.getElementById('langSwitch');
+        if (langSwitch) {
+            // Initialize language switch state based on saved language
+            const currentLang = getCurrentLanguage();
+            if (currentLang === 'vi') {
+                langSwitch.classList.add('active');
+            } else {
+                langSwitch.classList.remove('active');
+            }
+
+            langSwitch.addEventListener('click', function() {
+                this.classList.toggle('active');
+                const isVI = this.classList.contains('active');
+                const newLang = isVI ? 'vi' : 'en';
+                setLanguage(newLang);
+                changeLanguage(newLang);
+            });
+        }
+
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentLang = getCurrentLanguage();
+            changeLanguage(currentLang);
+        });
+
+        // Mobile Menu Toggle
+        const menuIcon = document.getElementById('menuIcon');
+        const menuDropdown = document.getElementById('menuDropdown');
+
+        if (menuIcon && menuDropdown) {
+            menuIcon.addEventListener('click', function(e) {
+                e.stopPropagation();
+                menuDropdown.classList.toggle('active');
+            });
+
+            // Close menu when clicking outside
+            document.addEventListener('click', function(e) {
+                if (menuDropdown.classList.contains('active')) {
+                    if (!menuDropdown.contains(e.target) && e.target !== menuIcon) {
+                        menuDropdown.classList.remove('active');
+                    }
+                }
+            });
+
+            // Close menu when clicking on menu item
+            const menuItems = menuDropdown.querySelectorAll('.menu-item');
+            menuItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    menuDropdown.classList.remove('active');
+                });
+            });
+
+            // Close menu when clicking on login button
+            const menuLoginBtn = menuDropdown.querySelector('.menu-login-btn');
+            if (menuLoginBtn) {
+                menuLoginBtn.addEventListener('click', function() {
+                    menuDropdown.classList.remove('active');
+                });
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 768) {
+                menuDropdown.classList.remove('active');
+            }
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
