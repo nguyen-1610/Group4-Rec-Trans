@@ -1,5 +1,5 @@
 import google.generativeai as genai
-from GOpamine.backend.utils.config import Config
+from config import Config 
 import json
 
 class GeminiBot:
@@ -43,7 +43,7 @@ Bạn là trợ lý AI chuyên về lập kế hoạch di chuyển và giao thô
 
         # Khởi tạo model với system instruction
         self.model = genai.GenerativeModel(
-            'gemini-2.5-pro',
+            'gemini-2.0-flash-exp',
             system_instruction=self.system_instruction
         )
         

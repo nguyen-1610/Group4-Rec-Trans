@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from utils.config import Config
-from utils.gemini_handler import GeminiBot
+from config import Config
+from gemini_handler import GeminiBot
 import uuid
 
 app = Flask(__name__)
