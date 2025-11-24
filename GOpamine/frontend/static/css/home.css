@@ -12,7 +12,6 @@
 body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--black); line-height: 1.6; background-color: var(--white); }
 img { width: 100%; display: block; }
 a { text-decoration: none; color: inherit; transition: 0.3s; }
-.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
 
 /* === 2. HEADER (STYLE TỪ BASE) === */
 .main-header {
