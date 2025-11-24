@@ -34,15 +34,56 @@ a { text-decoration: none; color: inherit; transition: 0.3s; }
 .header-actions { display: flex; align-items: center; gap: 15px; }
 
 /* Nút chuyển ngôn ngữ */
+/* === NÚT CHUYỂN NGÔN NGỮ (LANG SWITCH) === */
 .lang-switch {
-    display: flex; background: #e0e0e0; border-radius: 20px; padding: 4px; 
-    width: 70px; position: relative; cursor: pointer; font-size: 12px; font-weight: bold;
+    display: flex; 
+    background: #e0e0e0; 
+    border-radius: 20px; 
+    padding: 4px; 
+    width: 70px; 
+    position: relative; 
+    cursor: pointer; 
+    font-size: 12px; 
+    font-weight: bold;
+    user-select: none; /* Ngăn bôi đen text khi bấm nhanh */
 }
-.lang-switch-text { flex: 1; text-align: center; z-index: 2; color: #666; }
-.lang-switch.active .vi { color: var(--white); }
+
+.lang-switch-text { 
+    flex: 1; 
+    text-align: center; 
+    z-index: 2; 
+    color: #666; /* Màu chữ mặc định (khi không được chọn) */
+    transition: color 0.3s;
+    line-height: 24px; /* Căn giữa chiều dọc */
+}
+
+/* Thanh trượt (Cục màu xanh) */
 .lang-switch-slider {
-    position: absolute; top: 4px; left: 4px; width: 50%; height: calc(100% - 8px);
-    background: var(--primary-green); border-radius: 16px; transition: 0.3s;
+    position: absolute; 
+    top: 4px; 
+    left: 4px; 
+    width: calc(50% - 4px); /* Trừ đi padding */
+    height: calc(100% - 8px);
+    background: var(--primary-green); 
+    border-radius: 16px; 
+    transition: transform 0.3s ease; /* Hiệu ứng trượt mượt mà */
+    z-index: 1;
+}
+
+/* --- TRẠNG THÁI 1: TIẾNG VIỆT (Có class .active) --- */
+.lang-switch.active .vi { 
+    color: var(--white); /* Chữ VI sáng lên */
+}
+.lang-switch.active .lang-switch-slider {
+    transform: translateX(0); /* Thanh trượt nằm bên trái */
+}
+
+/* --- TRẠNG THÁI 2: TIẾNG ANH (Không có class .active) --- */
+.lang-switch:not(.active) .en { 
+    color: var(--white); /* Chữ EN sáng lên */
+}
+.lang-switch:not(.active) .lang-switch-slider {
+    transform: translateX(100%); /* Thanh trượt chạy sang phải */
 }
 
 .menu-btn { font-size: 24px; background: none; border: none; color: var(--black); cursor: pointer; display: none; }
@@ -86,14 +127,83 @@ a { text-decoration: none; color: inherit; transition: 0.3s; }
 #hero h1 { font-size: 2.5rem; margin-bottom: 15px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
 #hero p { font-size: 1.1rem; margin-bottom: 30px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 
-.hero-buttons { display: flex; flex-direction: column; gap: 15px; align-items: center; }
-.sub-buttons { display: flex; gap: 15px; width: 100%; justify-content: center; }
+/* === CẬP NHẬT TRONG FILE home.css === */
 
-.btn { padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; display: inline-block; width: 100%; max-width: 300px; border: none; }
-.btn-primary { background: var(--primary-green); color: var(--white); font-size: 18px; }
-.btn-primary:hover { background: #2d574b; transform: translateY(-2px); }
-.btn-secondary { background: var(--gray-light); color: var(--black); }
-.btn-secondary:hover { background: #c0c0c0; }
+/* 1. Căn chỉnh khối chứa nút */
+.hero-buttons {
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column; /* Xếp chồng dọc */
+    align-items: center;    /* Căn giữa */
+    gap: 15px;              /* Khoảng cách giữa các nút */
+    width: 100%;
+}
+
+/* 2. Định dạng chung cho nút to */
+.btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 12px 24px;
+    border-radius: 30px; /* Bo tròn nhiều hơn cho hiện đại */
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    max-width: 280px; /* Giới hạn chiều rộng để nút không quá dài */
+    transition: all 0.3s ease;
+    text-transform: uppercase; /* Chữ in hoa cho mạnh mẽ */
+    font-size: 16px;
+    letter-spacing: 0.5px;
+}
+
+/* 3. Nút Chính (Bắt đầu tìm lộ trình) */
+.btn-primary {
+    background-color: #3C7363; /* Màu xanh chủ đạo */
+    color: #FFFFFF;
+    border: 2px solid #3C7363;
+    box-shadow: 0 4px 15px rgba(60, 115, 99, 0.4); /* Đổ bóng xanh */
+}
+
+.btn-primary:hover {
+    background-color: #2e5a4d;
+    transform: translateY(-2px);
+}
+
+/* 4. Nút Phụ (Tạo tài khoản) - Dạng Outline */
+.btn-outline {
+    background-color: rgba(255, 255, 255, 0.1); /* Nền hơi mờ */
+    color: #FFFFFF;
+    border: 2px solid #FFFFFF; /* Viền trắng */
+    backdrop-filter: blur(5px); /* Hiệu ứng kính mờ (nếu trình duyệt hỗ trợ) */
+}
+
+.btn-outline:hover {
+    background-color: #FFFFFF;
+    color: #3C7363; /* Hover thì đổi nền trắng, chữ xanh */
+}
+
+/* 5. Nút Text (Đăng nhập) */
+.login-text-wrapper {
+    margin-top: 5px;
+    font-size: 14px;
+    color: #FFFFFF; /* Màu chữ trắng vì nền Hero tối */
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.btn-text-link {
+    color: #FFFFFF;
+    font-weight: bold;
+    text-decoration: underline;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0 5px;
+    transition: color 0.2s;
+}
+
+.btn-text-link:hover {
+    color: #D9D9D9; /* Màu xám nhạt khi hover */
+}
 
 /* === 5. CÁC SECTION CHUNG === */
 .section-pad { padding: 60px 0; }
@@ -160,7 +270,6 @@ a { text-decoration: none; color: inherit; transition: 0.3s; }
     .desktop-nav { display: flex; } /* Hiện menu ngang */
     
     .grid-layout { grid-template-columns: repeat(2, 1fr); } /* Tablet: 2 cột */
-    .hero-buttons { flex-direction: row; justify-content: center; }
     .btn { width: auto; }
 }
 

@@ -1,4 +1,4 @@
-// --- TỪ ĐIỂN NGÔN NGỮ (VI <-> EN-GB) ---
+// --- 1. TỪ ĐIỂN NGÔN NGỮ (VI <-> EN-GB) ---
 const translations = {
     "vi": {
         "home": "Trang chủ",
@@ -11,6 +11,7 @@ const translations = {
         "hero_desc": "AI gợi ý phương tiện di chuyển tối ưu dựa trên ngân sách, thời gian và sở thích của bạn.",
         "btn_start": "Bắt đầu tìm lộ trình",
         "btn_signup": "Tạo tài khoản",
+        "acc_exist": "Đã có tài khoản?",
         "btn_login": "Đăng nhập",
         "featured_title": "Khám phá thành phố Hồ Chí Minh",
         "featured_desc": "Thành phố lớn nhất Việt Nam với lịch sử phong phú và văn hoá sôi nổi.",
@@ -34,13 +35,13 @@ const translations = {
         "personalise": "Trải nghiệm cá nhân",
         "personalise_desc": "Tùy chỉnh gợi ý dựa trên sở thích cá nhân và lịch sử di chuyển.",
         "interactive": "Bản đồ tương tác",
-"interactive_desc": "Khám phá lộ trình với bản đồ tương tác, xem trước các điểm dừng và địa điểm thú vị trên đường đi.",
-"time":"Tiết kiệm thời gian",
-"time_desc":"Tính toán thời gian di chuyển chính xác, bao gồm cả thời gian chờ đợi và kết nối giữa các phương tiện.",
-"safety": "Đảm bảo an toàn",
-"safety_desc": "Đánh giá mức độ an toàn của từng phương tiện dựa trên dữ liệu thống kê và đánh giá người dùng.",
-"ai": "AI thông minh",
-"ai_desc": "Thuật toán AI tiên tiến phân tích hàng triệu dữ liệu để đưa ra gợi ý tối ưu nhất cho hành trình của bạn.",
+        "interactive_desc": "Khám phá lộ trình với bản đồ tương tác, xem trước các điểm dừng và địa điểm thú vị trên đường đi.",
+        "time":"Tiết kiệm thời gian",
+        "time_desc":"Tính toán thời gian di chuyển chính xác, bao gồm cả thời gian chờ đợi và kết nối giữa các phương tiện.",
+        "safety": "Đảm bảo an toàn",
+        "safety_desc": "Đánh giá mức độ an toàn của từng phương tiện dựa trên dữ liệu thống kê và đánh giá người dùng.",
+        "ai": "AI thông minh",
+        "ai_desc": "Thuật toán AI tiên tiến phân tích hàng triệu dữ liệu để đưa ra gợi ý tối ưu nhất cho hành trình của bạn.",
         "reviews_title": "Đánh giá từ cộng đồng",
         "footer_about_title": "GOpamine",
         "footer_about_desc": "Nền tảng AI giúp bạn tìm kiếm phương tiện di chuyển tối ưu cho mọi hành trình.",
@@ -64,6 +65,7 @@ const translations = {
         "hero_desc": "AI recommends optimal transport modes based on your budget, time, and preferences.",
         "btn_start": "Start Planning Route",
         "btn_signup": "Create Account",
+        "acc_exist": "Already have an account?",
         "btn_login": "Log In",
         "featured_title": "Explore Ho Chi Minh City",
         "featured_desc": "Vietnam's largest city with rich history and vibrant culture.",
@@ -87,13 +89,13 @@ const translations = {
         "personalise": "Personalised experience",
         "personalise_desc": "Customise suggestions based on personal preferences and travel history.",
         "interactive": "Interactive maps",
-"interactive_desc": "Explore the route with the interactive map, preview interludes and interesting landmarks on your way.",
-"time":"Time saving",
-"time_desc":"Calculate exact moving time, including waiting time and connections between vehicles.",
-"safety": "Safety assuring",
-"safety_desc": "Rate vehicle's level based on statistics and users' rating.",
-"ai": "Intelligent AI",
-"ai_desc": "Up-to-date AI algorithms is utilised to analyse millions of information to give the most efficient recommendations to your journey.",
+        "interactive_desc": "Explore the route with the interactive map, preview interludes and interesting landmarks on your way.",
+        "time":"Time saving",
+        "time_desc":"Calculate exact moving time, including waiting time and connections between vehicles.",
+        "safety": "Safety assuring",
+        "safety_desc": "Rate vehicle's level based on statistics and users' rating.",
+        "ai": "Intelligent AI",
+        "ai_desc": "Up-to-date AI algorithms is utilised to analyse millions of information to give the most efficient recommendations to your journey.",
         "reviews_title": "Community Reviews",
         "footer_about_title": "GOpamine",
         "footer_about_desc": "AI platform helping you find optimal transport for every journey.",
@@ -109,67 +111,95 @@ const translations = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log(">>> JS đã được tải thành công!"); // Log kiểm tra 1
+    console.log(">>> JS LOADER: Đã tải thành công (Phiên bản sửa lỗi Case-Sensitive)");
 
-    // --- 1. LOGIC MENU MOBILE ---
+    // --- KHỞI TẠO BIẾN NGÔN NGỮ ---
+    // Lấy từ LocalStorage, nếu không có thì mặc định là 'vi' (viết thường)
+    // QUAN TRỌNG: Luôn ép về chữ thường (.toLowerCase()) để tránh lỗi "VI"
+    let currentLang = (localStorage.getItem('userLang') || 'vi').toLowerCase();
+    
+    console.log(">>> Ngôn ngữ khởi tạo:", currentLang);
+
+    // --- CÁC PHẦN TỬ DOM ---
+    const langSwitch = document.getElementById('langSwitch');
     const menuBtn = document.getElementById('menu-toggle');
     const closeBtn = document.getElementById('menu-close');
     const mobileMenu = document.getElementById('mobile-menu');
+    const viewMoreBtn = document.getElementById('view-more-btn');
 
-    if (menuBtn) menuBtn.addEventListener('click', () => mobileMenu.classList.add('active'));
-    if (closeBtn) closeBtn.addEventListener('click', () => mobileMenu.classList.remove('active'));
-    if (mobileMenu) mobileMenu.addEventListener('click', (e) => {
-        if (e.target === mobileMenu) mobileMenu.classList.remove('active');
-    });
+    // --- HÀM CẬP NHẬT GIAO DIỆN (UI) ---
+    function updateUI(lang) {
+        // 1. Cập nhật nút gạt (Toggle)
+        if (langSwitch) {
+            if (lang === 'vi') {
+                langSwitch.classList.add('active');
+            } else {
+                langSwitch.classList.remove('active');
+            }
+        }
 
-    // --- 2. LOGIC CHUYỂN NGÔN NGỮ ---
-    const langSwitch = document.getElementById('langSwitch');
-    
-    if (langSwitch) {
-        console.log(">>> Đã tìm thấy nút chuyển ngôn ngữ"); // Log kiểm tra 2
-        
-        langSwitch.addEventListener('click', function() {
-            console.log(">>> Đã bấm nút chuyển ngữ!"); // Log kiểm tra 3
-            
-            // Đổi giao diện nút
-            this.classList.toggle('active');
-            
-            // Xác định ngôn ngữ: Có class 'active' là VI, không có là EN
-            // (Lưu ý: Logic CSS của bạn có thể ngược lại, hãy thử bấm để kiểm tra)
-            const currentLang = this.classList.contains('active') ? 'vi' : 'en';
-            console.log(">>> Ngôn ngữ mục tiêu: " + currentLang);
-            
-            // Gọi hàm cập nhật
-            updateContent(currentLang);
-        });
-    } else {
-        console.error(">>> LỖI: Không tìm thấy nút có ID 'langSwitch'");
-    }
-
-    function updateContent(lang) {
-        // Tìm tất cả thẻ có data-i18n
+        // 2. Cập nhật nội dung chữ (Content)
         const elements = document.querySelectorAll('[data-i18n]');
-        
+        let count = 0;
+        let missing = 0;
+
         elements.forEach(element => {
             const key = element.getAttribute('data-i18n');
+            
+            // Kiểm tra an toàn:
+            // 1. translations[lang] có tồn tại không? (ví dụ 'vi')
+            // 2. Key có tồn tại trong ngôn ngữ đó không?
             if (translations[lang] && translations[lang][key]) {
                 element.textContent = translations[lang][key];
+                count++;
+            } else {
+                console.warn(`⚠️ Thiếu key: "${key}" trong ngôn ngữ "${lang}"`);
+                missing++;
             }
         });
+        console.log(`>>> Đã dịch: ${count} mục. Thiếu: ${missing} mục.`);
     }
-    
-    // --- 3. LOGIC VIEW MORE ---
-    const viewMoreBtn = document.getElementById('view-more-btn');
+
+    // --- CHẠY LẦN ĐẦU TIÊN ---
+    // Đảm bảo giao diện đúng với ngôn ngữ đã lưu
+    updateUI(currentLang);
+
+    // --- SỰ KIỆN CHUYỂN ĐỔI NGÔN NGỮ ---
+    if (langSwitch) {
+        langSwitch.addEventListener('click', function() {
+            // Logic đảo ngược ngôn ngữ đơn giản và an toàn
+            // Nếu đang là 'vi' thì đổi sang 'en', ngược lại thì về 'vi'
+            currentLang = (currentLang === 'vi') ? 'en' : 'vi';
+            
+            console.log(">>> Người dùng đổi sang:", currentLang);
+
+            // Lưu lại (Luôn lưu chữ thường)
+            localStorage.setItem('userLang', currentLang);
+
+            // Cập nhật giao diện
+            updateUI(currentLang);
+        });
+    } else {
+        console.error("❌ LỖI: Không tìm thấy nút ID 'langSwitch' trong HTML");
+    }
+
+    // --- LOGIC VIEW MORE (Lazy Load) ---
     if (viewMoreBtn) {
         viewMoreBtn.addEventListener('click', function(e) {
             e.preventDefault();
             const hiddenCards = document.querySelectorAll('.hidden-card');
             hiddenCards.forEach(card => {
                 card.classList.remove('hidden-card');
-                card.style.display = 'block'; 
-                // Animation đơn giản
-                card.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, fill: 'forwards' });
+                card.style.display = 'block'; // Đảm bảo hiện ra
+                card.animate([
+                    { opacity: 0, transform: 'translateY(20px)' },
+                    { opacity: 1, transform: 'translateY(0)' }
+                ], { duration: 500, fill: 'forwards' });
             });
+            
+            // Sau khi hiện thẻ mới, chạy lại hàm dịch để đảm bảo thẻ mới cũng đúng ngôn ngữ
+            updateUI(currentLang);
+            
             viewMoreBtn.style.display = 'none';
         });
     }
