@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from astar import AStarRouter
 
 # Khởi tạo router với đường dẫn tuyệt đối
-DB_PATH = os.path.join(BASE_DIR, 'data', 'D:\PROJECT\rec_trans\Group4-Rec-Trans\GOpamine\backend\data\tourism-landmarks.db')
+DB_PATH = os.path.join(BASE_DIR, 'data', 'tourism-landmarks.db')
 
 router = AStarRouter(db_path=DB_PATH)
 
@@ -74,11 +74,19 @@ def find_route():
         
         start_id = int(data['start_id'])
         end_id = int(data['end_id'])
+        vehicle_type = data.get('vehicle_type', 'car')
+        vehicle_speed = data.get('vehicle_speed')
+        vehicle_speed = float(vehicle_speed) if vehicle_speed else None
         
         print(f"📡 Nhận request: start={start_id}, end={end_id}")
         
         # Gọi hàm trong astar.py
-        result = router.find_optimal_route(start_id, end_id)
+        result = router.find_optimal_route(
+            start_id,
+            end_id,
+            vehicle_type=vehicle_type,
+            vehicle_speed=vehicle_speed
+        )
         
         print(f"✅ Kết quả: {result['success']}")
         

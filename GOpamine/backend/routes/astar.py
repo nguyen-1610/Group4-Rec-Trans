@@ -9,8 +9,14 @@ class AStarRouter:
     Tìm đường đi tối ưu sử dụng A* kết hợp OSRM để lấy đường đi thực tế
     """
     
+    PROFILE_MAP = {
+        'car': 'driving',
+        'moto': 'bike',
+        'bus': 'driving'
+    }
+    
     def __init__(self, db_path=r'D:\PROJECT\rec_trans\Group4-Rec-Trans\GOpamine\backend\data\tourism-landmarks.db'):
-        self.osrm_base = "http://router.project-osrm.org/route/v1/driving"
+        self.osrm_base = "http://router.project-osrm.org/route/v1"
         self.db_path = db_path
         
     # ========== DATABASE ==========
@@ -162,7 +168,8 @@ class AStarRouter:
     # ========== OSRM API ==========
     
     def get_real_route(self, start: Dict, end: Dict, 
-                       waypoints: Optional[List[Dict]] = None) -> Optional[Dict]:
+                       waypoints: Optional[List[Dict]] = None,
+                       profile: str = 'driving') -> Optional[Dict]:
         """
         Lấy đường đi thực tế từ OSRM API
         """
@@ -175,7 +182,7 @@ class AStarRouter:
             
             coords.append(f"{end['lon']},{end['lat']}")
             
-            url = f"{self.osrm_base}/{';'.join(coords)}"
+            url = f"{self.osrm_base}/{profile}/{';'.join(coords)}"
             params = {
                 'overview': 'full',
                 'geometries': 'geojson',
@@ -205,7 +212,9 @@ class AStarRouter:
     
     # ========== MAIN FUNCTION ==========
     
-    def find_optimal_route(self, start_id: int, end_id: int) -> Optional[Dict]:
+    def find_optimal_route(self, start_id: int, end_id: int,
+                           vehicle_type: str = 'car',
+                           vehicle_speed: Optional[float] = None) -> Optional[Dict]:
         """
         Hàm chính: Tìm đường đi tối ưu từ start_id đến end_id
         
@@ -252,15 +261,22 @@ class AStarRouter:
                     'error': 'No route found'
                 }
             
+            osrm_profile = self.PROFILE_MAP.get(vehicle_type, 'driving')
+            
             # Lấy đường đi thực tế từ OSRM
             if len(waypoints) <= 10:
                 real_route = self.get_real_route(
                     waypoints[0], 
                     waypoints[-1], 
-                    waypoints[1:-1] if len(waypoints) > 2 else None
+                    waypoints[1:-1] if len(waypoints) > 2 else None,
+                    profile=osrm_profile
                 )
             else:
-                real_route = self.get_real_route(waypoints[0], waypoints[-1])
+                real_route = self.get_real_route(
+                    waypoints[0], 
+                    waypoints[-1],
+                    profile=osrm_profile
+                )
             
             if not real_route:
                 return {
@@ -268,14 +284,26 @@ class AStarRouter:
                     'error': 'Cannot get real route from OSRM'
                 }
             
+            duration_min = round(real_route['duration'], 0)
+            if vehicle_speed:
+                try:
+                    duration_min = round(
+                        (real_route['distance'] / vehicle_speed) * 60,
+                        0
+                    )
+                except ZeroDivisionError:
+                    pass
+            
             return {
                 'success': True,
                 'data': {
                     'waypoints': waypoints,
                     'route_coordinates': real_route['coordinates'],
                     'distance_km': round(real_route['distance'], 2),
-                    'duration_min': round(real_route['duration'], 0),
-                    'total_waypoints': len(waypoints)
+                    'duration_min': duration_min,
+                    'total_waypoints': len(waypoints),
+                    'vehicle_type': vehicle_type,
+                    'osrm_profile': osrm_profile
                 }
             }
             
