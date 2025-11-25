@@ -80,8 +80,11 @@ Bạn là trợ lý AI chuyên về lập kế hoạch di chuyển và giao thô
             if not self.chat_session:
                 self.start_session(context)
             
-            # Gửi message
-            response = self.chat_session.send_message(message)
+            final_message = message
+            if context:
+                final_message = f"{context}\n\nNgười dùng: {message}"
+
+            response = self.chat_session.send_message(final_message)
             
             if response and hasattr(response, 'text'):
                 return response.text

@@ -1,6 +1,33 @@
+import math
+import os
+from importlib import util as importlib_util
+
 from flask import Blueprint, request, jsonify
 from gemini_handler import GeminiBot
 import uuid
+
+from pricing_score import UserRequest, WeatherContext, calculate_adaptive_scores
+
+
+def _load_realtime_module():
+    """
+    File real-times.py có dấu gạch ngang nên không import trực tiếp được.
+    Hàm này giúp load module đó để tái sử dụng hàm build_realtime_snapshot.
+    """
+    module_path = os.path.join(os.path.dirname(__file__), "real-times.py")
+    if not os.path.exists(module_path):
+        return None
+
+    spec = importlib_util.spec_from_file_location("routes.real_times_module", module_path)
+    if spec and spec.loader:
+        module = importlib_util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    return None
+
+
+REALTIME_MODULE = _load_realtime_module()
+BUILD_REALTIME_SNAPSHOT = getattr(REALTIME_MODULE, "build_realtime_snapshot", None)
 
 # Tạo Blueprint cho chatbot
 chatbot_bp = Blueprint('chatbot', __name__)
@@ -58,7 +85,33 @@ def chat():
             session["session_started"] = True
         
         # Gọi Gemini chat
-        response_text = bot.chat(message)
+        context_blocks = []
+        realtime_weather = None
+        realtime_traffic = None
+
+        if BUILD_REALTIME_SNAPSHOT:
+            try:
+                realtime_snapshot = BUILD_REALTIME_SNAPSHOT()
+                context_blocks.append(realtime_snapshot.get("context"))
+                realtime_weather = realtime_snapshot.get("weather")
+                realtime_traffic = realtime_snapshot.get("traffic")
+            except Exception as realtime_err:
+                print(f"[Realtime] Lỗi khi lấy dữ liệu: {realtime_err}")
+        else:
+            print("[Realtime] Không thể load module real-times.py")
+
+        if session.get("form_data"):
+            pricing_context = build_pricing_context(
+                session["form_data"],
+                realtime_weather,
+                realtime_traffic
+            )
+            if pricing_context:
+                context_blocks.append(pricing_context)
+
+        combined_context = "\n\n".join([c for c in context_blocks if c]) or None
+
+        response_text = bot.chat(message, context=combined_context)
         
         # Lưu lịch sử
         session["history"].append({
@@ -154,3 +207,142 @@ def format_form_context(form_data):
         context_parts.append(f"⭐ Ưu tiên: {prefs}")
     
     return "\n".join(context_parts) if context_parts else None
+
+
+def build_pricing_context(form_data, weather_payload, traffic_payload):
+    """Tạo đoạn context ngắn gọn từ thuật toán pricing_score."""
+    try:
+        distance_km = estimate_trip_distance(form_data)
+        if distance_km is None:
+            return None
+
+        normalized_priorities = normalize_priorities(form_data.get("preferences", []))
+        user = UserRequest(
+            is_student=is_student(form_data),
+            priorities=normalized_priorities
+        )
+
+        weather_ctx = build_weather_context(weather_payload)
+        traffic_level = derive_traffic_level(traffic_payload)
+
+        scores = calculate_adaptive_scores(
+            user=user,
+            trip_distance=distance_km,
+            weather_ctx=weather_ctx,
+            traffic_level=traffic_level
+        )
+
+        if not scores:
+            return None
+
+        top_choices = scores[:3]
+        readable_priorities = describe_priorities(normalized_priorities)
+        lines = [
+            "[GỢI Ý PHƯƠNG TIỆN TỪ DỮ LIỆU GOpamine]",
+            f"- Quãng đường ước tính: ~{round(distance_km, 1)} km, "
+            f"ưu tiên: {', '.join(readable_priorities) or 'cân bằng'}."
+        ]
+
+        for option in top_choices:
+            label = f" ({', '.join(option['labels'])})" if option.get("labels") else ""
+            lines.append(
+                f"- {option['mode_name']}: ~{option['price']:,}đ | "
+                f"{option['duration']} phút | Điểm {option['score']}{label}"
+            )
+
+        return "\n".join(lines)
+    except Exception as exc:
+        print(f"[Pricing] Lỗi tạo context: {exc}")
+        return None
+
+
+def is_student(form_data):
+    marker = str(form_data.get("passengers", "")).strip().lower()
+    return "sinh viên" in marker
+
+
+def normalize_priorities(preferences):
+    mapping = {
+        "tốc độ": "speed",
+        "speed": "speed",
+        "tiết kiệm": "saving",
+        "tiết kiệm chi phí": "saving",
+        "saving": "saving",
+        "thoải mái": "comfort",
+        "comfort": "comfort",
+        "an toàn": "safety",
+        "safety": "safety",
+        "cân bằng": "balance"
+    }
+    normalized = []
+    for pref in preferences or []:
+        key = mapping.get(str(pref).strip().lower())
+        if key and key not in normalized:
+            normalized.append(key)
+    return normalized or ["speed", "safety"]
+
+
+def describe_priorities(priorities):
+    labels = {
+        "speed": "tốc độ",
+        "saving": "tiết kiệm",
+        "comfort": "thoải mái",
+        "safety": "an toàn",
+        "balance": "cân bằng"
+    }
+    return [labels.get(item, item) for item in priorities]
+
+
+def estimate_trip_distance(form_data):
+    origin = form_data.get("origin")
+    destinations = form_data.get("destinations") or []
+    if not origin or not destinations:
+        return None
+
+    points = [origin] + destinations
+    total = 0.0
+    for idx in range(len(points) - 1):
+        start = _to_coordinates(points[idx])
+        end = _to_coordinates(points[idx + 1])
+        if not start or not end:
+            continue
+        total += haversine_distance_km(start, end)
+    return total if total > 0 else None
+
+
+def _to_coordinates(point):
+    try:
+        lat = float(point.get("lat"))
+        lon = float(point.get("lon"))
+        return (lat, lon)
+    except (TypeError, ValueError):
+        return None
+
+
+def haversine_distance_km(start, end):
+    R = 6371.0
+    lat1, lon1 = map(math.radians, start)
+    lat2, lon2 = map(math.radians, end)
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+
+def build_weather_context(weather_payload):
+    if not weather_payload or not weather_payload.get("success"):
+        return WeatherContext(False, False, "Không rõ")
+
+    is_raining = bool(weather_payload.get("dang_mua"))
+    is_hot = weather_payload.get("nhiet_do", 0) > 34
+    desc = weather_payload.get("mo_ta", "Không rõ")
+    return WeatherContext(is_raining, is_hot, desc)
+
+
+def derive_traffic_level(traffic_payload):
+    if not traffic_payload or not traffic_payload.get("success"):
+        return 0.4
+    return 0.8 if traffic_payload.get("co_ket_xe") else 0.4
