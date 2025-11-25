@@ -115,14 +115,7 @@ async function sendAutoPrompt() {
         
         // Gửi prompt như tin nhắn của user
         if (sessionId) {
-            // Hiển thị tin nhắn như user đã gửi
-            const userMessage = document.createElement('div');
-            userMessage.className = 'user-message';
-            userMessage.innerHTML = `<div class="user-bubble">${escapeHtml(autoPrompt)}</div>`;
-            chatContainer.appendChild(userMessage);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            
-            // Gửi đến backend
+            // Gửi prompt ngầm đến backend để bot phản hồi chủ động
             await sendMessageToBackend(autoPrompt);
         }
     } catch (error) {
