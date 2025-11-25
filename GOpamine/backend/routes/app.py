@@ -67,11 +67,6 @@ def map_trans():
 def chatbot():
 	return render_template('chatbot.html')
 
-
-@app.route('/astar')
-def astar_demo():
-	return render_template('astar.html')
-
 # ========== ERROR HANDLERS ==========
 
 @app.errorhandler(404)
