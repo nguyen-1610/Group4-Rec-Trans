@@ -1,6 +1,7 @@
 import requests
 import math
 import sqlite3
+import os
 from typing import List, Dict, Tuple, Optional
 import json
 from flask import Blueprint, request, jsonify
@@ -16,17 +17,42 @@ class AStarRouter:
         'bus': 'driving'
     }
     
-    def __init__(self, db_path=r'D:\PROJECT\rec_trans\Group4-Rec-Trans\GOpamine\backend\data\tourism-landmarks.db'):
+    def __init__(self, db_path=None):
         self.osrm_base = "http://router.project-osrm.org/route/v1"
-        self.db_path = db_path
+        # Nếu không có db_path, tính toán đường dẫn mặc định
+        if db_path is None:
+            # Tính toán đường dẫn tương đối từ file hiện tại
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            base_dir = os.path.join(current_dir, '..', '..')
+            db_path = os.path.join(base_dir, 'data', 'tourism-landmarks.db')
+        # Đảm bảo đường dẫn là tuyệt đối và normalize
+        self.db_path = os.path.abspath(os.path.normpath(db_path))
+        print(f"📂 Database path: {self.db_path}")
+        # Kiểm tra file có tồn tại không
+        if not os.path.exists(self.db_path):
+            print(f"⚠️  Warning: Database file not found at {self.db_path}")
         
     # ========== DATABASE ==========
     
     def get_db_connection(self):
         """Kết nối đến database"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            # Tạo thư mục nếu chưa tồn tại
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            return conn
+        except sqlite3.Error as e:
+            print(f"❌ SQLite Error: {e}")
+            print(f"   Database path: {self.db_path}")
+            raise
+        except Exception as e:
+            print(f"❌ Unexpected error connecting to database: {e}")
+            print(f"   Database path: {self.db_path}")
+            raise
     
     def get_all_places(self):
         """Lấy tất cả địa điểm từ database"""

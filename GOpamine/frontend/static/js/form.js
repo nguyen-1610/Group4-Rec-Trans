@@ -377,9 +377,12 @@ submitBtn.addEventListener('click', async () => {
         const routeData = await requestAStarRoute(startPlace, endPlace, DEFAULT_VEHICLE);
         persistRouteSelection(routeData, startPlace, endPlace, DEFAULT_VEHICLE);
         
-        // 6. Chuyển sang trang bản đồ để hiển thị kết quả
-        console.log('🗺️ Mở bản đồ hiển thị lộ trình...');
-        window.location.href = 'map_trans';
+        // 6. Lưu form data để chatbot có thể tự động tạo prompt
+        localStorage.setItem('pendingFormData', JSON.stringify(formData));
+        
+        // 7. Chuyển sang trang chatbot để tư vấn
+        console.log('🤖 Chuyển sang chatbot...');
+        window.location.href = '/chatbot';
         
     } catch (error) {
         console.error('❌ Error:', error);
