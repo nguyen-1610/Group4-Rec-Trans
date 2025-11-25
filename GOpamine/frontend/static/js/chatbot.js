@@ -11,10 +11,10 @@ let sessionId = null;
 // ========================================
 // QUAN TRỌNG: Lấy session ID từ form
 // ========================================
-async function initSession() {
+async function initSession(forceNew = false) {
     try {
         // Kiểm tra xem có session từ form không
-        const existingSessionId = localStorage.getItem('sessionId');
+        const existingSessionId = !forceNew ? localStorage.getItem('sessionId') : null;
         
         if (existingSessionId) {
             // Dùng session có sẵn từ form
@@ -41,6 +41,13 @@ async function initSession() {
         alert('Không thể kết nối đến server. Vui lòng kiểm tra backend!');
         return false;
     }
+}
+
+async function recreateSession() {
+    localStorage.removeItem('sessionId');
+    sessionId = null;
+    console.warn('⚠️ Session invalid, creating a fresh one...');
+    return initSession(true);
 }
 
 // Hiển thị message chào mừng khi có form data
@@ -124,7 +131,7 @@ async function sendAutoPrompt() {
 }
 
 // Hàm gửi message đến backend (tách riêng để tái sử dụng)
-async function sendMessageToBackend(message) {
+async function sendMessageToBackend(message, allowRetry = true) {
     if (!sessionId || !message) return;
     
     // Hiển thị typing indicator
@@ -155,7 +162,28 @@ async function sendMessageToBackend(message) {
         typingIndicator.remove();
         
         if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
+            let errorDetails = null;
+            try {
+                errorDetails = await response.json();
+            } catch (_) {
+                // ignore JSON parsing errors
+            }
+
+            // Nếu server báo session không hợp lệ (ví dụ backend restart) thì tạo session mới và thử lại
+            if (
+                allowRetry &&
+                response.status === 400 &&
+                errorDetails &&
+                errorDetails.error === 'Invalid session'
+            ) {
+                const recreated = await recreateSession();
+                if (recreated) {
+                    return sendMessageToBackend(message, false);
+                }
+            }
+
+            const serverMsg = errorDetails?.error ? ` - ${errorDetails.error}` : '';
+            throw new Error(`Server error: ${response.status}${serverMsg}`);
         }
         
         const data = await response.json();

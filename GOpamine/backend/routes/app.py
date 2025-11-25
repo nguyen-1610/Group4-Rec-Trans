@@ -4,6 +4,7 @@ import os
 import sys
 from feedback import feedback_bp, get_all_reviews
 from astar import create_api_blueprint
+from form import form_bp
 
 # 2. IMPORT TỪ CHATBOT.PY
 from chatbot import chatbot_bp
@@ -29,6 +30,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 app.register_blueprint(feedback_bp)
 app.register_blueprint(chatbot_bp)
 app.register_blueprint(create_api_blueprint(DB_PATH))
+app.register_blueprint(form_bp)
 
 
 # ========== ROUTES HTML ==========

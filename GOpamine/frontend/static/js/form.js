@@ -7,43 +7,218 @@ const submitBtn = document.querySelector('.submit-btn');
 const addDestinationBtn = document.getElementById('add-destination-btn');
 const destinationsList = document.querySelector('.destinations-list');
 const API_BASE = `${window.location.origin}/api`;
+
 const DEFAULT_VEHICLE = {
     type: 'car',
     speed: 45,
     name: 'Ô tô',
     icon: '🚗'
 };
-let cachedPlaces = null;
-const PLACE_DATALIST_ID = 'places-list';
 
-// Hàm format số tiền
+// Cấu hình Nominatim API
+const NOMINATIM_CONFIG = {
+    baseUrl: 'https://nominatim.openstreetmap.org/search',
+    // Giới hạn tìm kiếm trong khu vực TP.HCM và lân cận
+    viewbox: '106.3,10.35,107.0,11.2', // [minLon,minLat,maxLon,maxLat]
+    bounded: 1, // Chỉ tìm trong viewbox
+    limit: 8,
+    format: 'json',
+    addressdetails: 1
+};
+
+let debounceTimer = null;
+let cachedPlaces = null; // Vẫn giữ cache cho database cũ (nếu cần)
+
+// ===== PHẦN MỚI: TÌM KIẾM VỚI NOMINATIM =====
+
+/**
+ * Tìm kiếm địa điểm qua Nominatim API
+ */
+async function searchPlacesNominatim(query) {
+    if (!query || query.length < 3) return [];
+    
+    try {
+        const params = new URLSearchParams({
+            q: query,
+            format: NOMINATIM_CONFIG.format,
+            addressdetails: NOMINATIM_CONFIG.addressdetails,
+            limit: NOMINATIM_CONFIG.limit,
+            viewbox: NOMINATIM_CONFIG.viewbox,
+            bounded: NOMINATIM_CONFIG.bounded,
+            'accept-language': 'vi'
+        });
+        
+        const response = await fetch(`${NOMINATIM_CONFIG.baseUrl}?${params}`, {
+            headers: {
+                'User-Agent': 'RouteOptimizer/1.0' // Bắt buộc theo quy định Nominatim
+            }
+        });
+        
+        if (!response.ok) throw new Error('Nominatim API error');
+        
+        const results = await response.json();
+        
+        // Chuyển đổi format Nominatim sang format app của bạn
+        return results.map(place => ({
+            id: place.place_id,
+            osm_id: place.osm_id,
+            name: place.display_name,
+            lat: parseFloat(place.lat),
+            lon: parseFloat(place.lon),
+            type: place.type,
+            category: place.class,
+            address: place.address,
+            source: 'nominatim' // Đánh dấu nguồn
+        }));
+    } catch (error) {
+        console.error('Lỗi tìm kiếm Nominatim:', error);
+        return [];
+    }
+}
+
+/**
+ * Hiển thị gợi ý tự động (autocomplete)
+ */
+function setupAutocomplete(inputElement) {
+    let suggestionsDiv = inputElement.nextElementSibling;
+    
+    // Tạo div gợi ý nếu chưa có
+    if (!suggestionsDiv || !suggestionsDiv.classList.contains('autocomplete-suggestions')) {
+        suggestionsDiv = document.createElement('div');
+        suggestionsDiv.className = 'autocomplete-suggestions';
+        inputElement.parentNode.insertBefore(suggestionsDiv, inputElement.nextSibling);
+    }
+    
+    inputElement.addEventListener('input', async (e) => {
+        const query = e.target.value.trim();
+        
+        // Clear debounce cũ
+        clearTimeout(debounceTimer);
+        
+        if (query.length < 3) {
+            suggestionsDiv.innerHTML = '';
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Debounce 300ms để tránh gọi API liên tục
+        debounceTimer = setTimeout(async () => {
+            const places = await searchPlacesNominatim(query);
+            displaySuggestions(suggestionsDiv, places, inputElement);
+        }, 300);
+    });
+    
+    // Ẩn gợi ý khi click ra ngoài
+    document.addEventListener('click', (e) => {
+        if (!inputElement.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+            suggestionsDiv.style.display = 'none';
+        }
+    });
+}
+
+/**
+ * Hiển thị danh sách gợi ý
+ */
+function displaySuggestions(container, places, inputElement) {
+    if (places.length === 0) {
+        container.innerHTML = '<div class="suggestion-item no-results">Không tìm thấy kết quả</div>';
+        container.style.display = 'block';
+        return;
+    }
+    
+    container.innerHTML = places.map(place => {
+        // Tách địa chỉ ngắn gọn hơn
+        const shortName = place.name.split(',').slice(0, 2).join(',');
+        const icon = getPlaceIcon(place.type);
+        
+        return `
+            <div class="suggestion-item" data-place='${JSON.stringify(place)}'>
+                <span class="suggestion-icon">${icon}</span>
+                <div class="suggestion-content">
+                    <div class="suggestion-name">${shortName}</div>
+                    <div class="suggestion-address">${place.type}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    container.style.display = 'block';
+    
+    // Xử lý click vào suggestion
+    container.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const placeData = JSON.parse(item.dataset.place);
+            inputElement.value = placeData.name.split(',').slice(0, 2).join(',');
+            inputElement.dataset.placeData = JSON.stringify(placeData);
+            container.style.display = 'none';
+        });
+    });
+}
+
+/**
+ * Lấy icon theo loại địa điểm
+ */
+function getPlaceIcon(type) {
+    const iconMap = {
+        'cafe': '☕',
+        'restaurant': '🍽️',
+        'school': '🏫',
+        'hospital': '🏥',
+        'park': '🌳',
+        'hotel': '🏨',
+        'shop': '🛒',
+        'mall': '🏬',
+        'museum': '🏛️',
+        'theatre': '🎭',
+        'bus_stop': '🚏',
+        'railway': '🚉',
+        'airport': '✈️'
+    };
+    return iconMap[type] || '📍';
+}
+
+/**
+ * Lấy thông tin địa điểm từ input (data attribute)
+ */
+function getPlaceFromInput(inputElement) {
+    const placeData = inputElement.dataset.placeData;
+    if (!placeData) return null;
+    
+    try {
+        return JSON.parse(placeData);
+    } catch (error) {
+        console.error('Lỗi parse place data:', error);
+        return null;
+    }
+}
+
+// ===== FORMAT VÀ SLIDER =====
+
 function formatCurrency(value) {
     return 'đ0-' + value.toLocaleString('vi-VN');
 }
 
-// Cập nhật giá trị khi kéo slider
 rangeSlider.addEventListener('input', (e) => {
     const value = parseInt(e.target.value);
     budgetValue.textContent = formatCurrency(value);
 });
 
-// Set giá trị ban đầu
 budgetValue.textContent = formatCurrency(parseInt(rangeSlider.value));
 
-// Toggle dropdown (thu/mở)
 dropdownHeader.addEventListener('click', () => {
     dropdownContent.classList.toggle('hidden');
     dropdownHeader.classList.toggle('collapsed');
 });
 
-// Thêm điểm đến mới
+// ===== THÊM ĐIỂM ĐẾN =====
+
 addDestinationBtn.addEventListener('click', () => {
     const newDestination = document.createElement('div');
     newDestination.className = 'destination-item';
     newDestination.draggable = true;
     newDestination.innerHTML = `
         <div class="destination-input-wrapper">
-            <input type="text" placeholder="Tìm kiếm" class="destination-input" list="${PLACE_DATALIST_ID}" autocomplete="off">
+            <input type="text" placeholder="Tìm kiếm địa điểm" class="destination-input" autocomplete="off">
             <div class="destination-controls">
                 <div class="drag-handle">
                     <span></span>
@@ -58,10 +233,12 @@ addDestinationBtn.addEventListener('click', () => {
     destinationsList.appendChild(newDestination);
     initDestinationItem(newDestination);
     updateDestinationVisibility();
-    newDestination.querySelector('.destination-input').focus();
+    
+    const newInput = newDestination.querySelector('.destination-input');
+    setupAutocomplete(newInput);
+    newInput.focus();
 });
 
-// Hàm cập nhật hiển thị nút xóa
 function updateDestinationVisibility() {
     const items = destinationsList.querySelectorAll('.destination-item');
     items.forEach((item) => {
@@ -72,153 +249,6 @@ function updateDestinationVisibility() {
     });
 }
 
-function normalizeText(value) {
-    return value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-}
-
-async function loadPlaces() {
-    if (cachedPlaces) return cachedPlaces;
-    
-    const response = await fetch(`${API_BASE}/places`);
-    const result = await response.json();
-    
-    if (!result.success) {
-        throw new Error(result.error || 'Không thể tải danh sách địa điểm');
-    }
-    
-    cachedPlaces = result.data;
-    return cachedPlaces;
-}
-
-async function resolvePlaceByInput(inputValue) {
-    if (!inputValue) return null;
-    
-    const numericId = parseInt(inputValue, 10);
-    if (!Number.isNaN(numericId)) {
-        const places = await loadPlaces();
-        return places.find(place => place.id === numericId) || null;
-    }
-    
-    const normalizedTarget = normalizeText(inputValue);
-    const places = await loadPlaces();
-    
-    return (
-        places.find(place => normalizeText(place.name) === normalizedTarget) ||
-        places.find(place => normalizeText(place.name).includes(normalizedTarget)) ||
-        null
-    );
-}
-
-async function requestAStarRoute(startPlace, endPlace, vehicle = DEFAULT_VEHICLE) {
-    const response = await fetch(`${API_BASE}/find-route`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            start_id: startPlace.id,
-            end_id: endPlace.id,
-            vehicle_type: vehicle.type,
-            vehicle_speed: vehicle.speed
-        })
-    });
-    
-    const result = await response.json();
-    if (!result.success) {
-        throw new Error(result.error || 'Không tìm được tuyến đường phù hợp');
-    }
-    
-    return result.data;
-}
-
-function persistRouteSelection(routeData, startPlace, endPlace, vehicle) {
-    const payload = {
-        timestamp: Date.now(),
-        start_place: startPlace,
-        end_place: endPlace,
-        route_coordinates: routeData.route_coordinates,
-        waypoints: routeData.waypoints,
-        distance_km: routeData.distance_km,
-        duration_min: routeData.duration_min,
-        total_waypoints: routeData.total_waypoints,
-        vehicle
-    };
-    
-    localStorage.setItem('selectedRoute', JSON.stringify(payload));
-}
-
-async function tryCreateSession() {
-    try {
-        const response = await fetch(`${API_BASE}/session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`status ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data?.session_id) {
-            localStorage.setItem('sessionId', data.session_id);
-            return data.session_id;
-        }
-    } catch (error) {
-        console.warn('Không thể tạo session (bỏ qua bước này):', error);
-    }
-    return null;
-}
-
-async function trySubmitFormData(sessionId, formData) {
-    if (!sessionId) {
-        return false;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/form`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                session_id: sessionId,
-                form_data: formData
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`status ${response.status}`);
-        }
-
-        await response.json();
-        return true;
-    } catch (error) {
-        console.warn('Không thể gửi dữ liệu form (bỏ qua bước này):', error);
-        return false;
-    }
-}
-
-async function initPlaceSuggestions() {
-    try {
-        const places = await loadPlaces();
-        const datalist = document.getElementById(PLACE_DATALIST_ID);
-        if (!datalist) return;
-        
-        datalist.innerHTML = places
-            .map(place => `<option value="${place.name}"></option>`)
-            .join('');
-    } catch (error) {
-        console.error('Không thể tải gợi ý địa điểm:', error);
-    }
-}
-
-// Hàm khởi tạo 1 destination-item
 function initDestinationItem(item) {
     if (!item) return;
 
@@ -233,7 +263,8 @@ function initDestinationItem(item) {
     addDragAndDropEvents(item);
 }
 
-// Drag & drop
+// ===== DRAG & DROP =====
+
 let draggedItem = null;
 
 function addDragAndDropEvents(item) {
@@ -285,13 +316,8 @@ function getDragAfterElement(container, y) {
     }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
-// Khởi tạo item đầu tiên
-const firstDestination = destinationsList.querySelector('.destination-item');
-initDestinationItem(firstDestination);
-updateDestinationVisibility();
-initPlaceSuggestions();
+// ===== ƯU TIÊN =====
 
-// Thêm ưu tiên mới
 addPreferenceBtn.addEventListener('click', () => {
     const preferenceName = prompt('Nhập tên ưu tiên mới:');
     
@@ -306,90 +332,153 @@ addPreferenceBtn.addEventListener('click', () => {
     }
 });
 
-// ========================================
-// PHẦN QUAN TRỌNG: Submit form và chuyển trang
-// ========================================
+// ===== SUBMIT FORM =====
+
+async function tryCreateSession() {
+    try {
+        const response = await fetch(`${API_BASE}/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) throw new Error(`status ${response.status}`);
+        const data = await response.json();
+        
+        if (data?.session_id) {
+            localStorage.setItem('sessionId', data.session_id);
+            return data.session_id;
+        }
+    } catch (error) {
+        console.warn('Không thể tạo session:', error);
+    }
+    return null;
+}
+
+async function requestRouteFromBackend(startPlace, endPlace, vehicle = DEFAULT_VEHICLE) {
+    const response = await fetch(`${API_BASE}/find-route-osm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            start: { lat: startPlace.lat, lon: startPlace.lon, name: startPlace.name },
+            end: { lat: endPlace.lat, lon: endPlace.lon, name: endPlace.name },
+            vehicle_type: vehicle.type,
+            vehicle_speed: vehicle.speed
+        })
+    });
+    
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.error || 'Không tìm được tuyến đường');
+    }
+    
+    return result.data;
+}
 
 submitBtn.addEventListener('click', async () => {
-    // Hiển thị loading (optional)
     submitBtn.disabled = true;
     submitBtn.textContent = 'Đang xử lý...';
     
     try {
-        // 1. Thu thập tất cả điểm đến
+        // 1. Lấy điểm xuất phát
+        const originInput = document.getElementById('origin-input');
+        const startPlace = getPlaceFromInput(originInput);
+        
+        if (!startPlace) {
+            alert('Vui lòng chọn điểm xuất phát từ danh sách gợi ý!');
+            throw new Error('No origin selected');
+        }
+        
+        // 2. Lấy điểm đến
         const destinationInputs = document.querySelectorAll('.destination-input');
         const destinations = Array.from(destinationInputs)
-            .map(input => input.value.trim())
-            .filter(value => value !== '');
+            .map(input => getPlaceFromInput(input))
+            .filter(place => place !== null);
         
-        // 2. Thu thập dữ liệu form
+        if (destinations.length === 0) {
+            alert('Vui lòng chọn ít nhất một điểm đến từ danh sách gợi ý!');
+            throw new Error('No destinations selected');
+        }
+        
+        // 3. Thu thập dữ liệu form
         const formData = {
-            origin: document.getElementById('origin-input').value.trim(),
-            destinations: destinations,
+            origin: {
+                name: startPlace.name,
+                lat: startPlace.lat,
+                lon: startPlace.lon
+            },
+            destinations: destinations.map(d => ({
+                name: d.name,
+                lat: d.lat,
+                lon: d.lon
+            })),
             budget: rangeSlider.value,
             passengers: document.querySelector('input[placeholder="Số hành khách"]').value.trim(),
-            age: document.querySelector('input[placeholder="Tuổi"]')?.value.trim() || '',
             preferences: Array.from(document.querySelectorAll('.checkbox-item input:checked'))
                 .map(cb => cb.parentElement.querySelector('span').textContent)
         };
         
         console.log('📋 Form Data:', formData);
         
-        // Validate dữ liệu cơ bản
-        if (!formData.origin) {
-            alert('Vui lòng nhập điểm xuất phát!');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Hoàn tất';
-            return;
-        }
-        
-        if (destinations.length === 0) {
-            alert('Vui lòng nhập ít nhất một điểm đến!');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Hoàn tất';
-            return;
-        }
-        
-        // 3. Lấy hoặc tạo session ID (nếu API chatbot đang chạy)
+        // 4. Tạo session (nếu có API)
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
-            console.log('🆕 Tạo session mới (nếu API có sẵn)...');
             sessionId = await tryCreateSession();
-        } else {
-            console.log('♻️ Sử dụng session có sẵn:', sessionId);
         }
         
-        if (sessionId) {
-            console.log('📤 Gửi form data đến backend (nếu chatbot API hoạt động)...');
-            await trySubmitFormData(sessionId, formData);
-        }
-        
-        // 5. Gọi A* backend để lấy lộ trình
+        // 5. Gọi backend để tính route (OSM routing)
         const primaryDestination = destinations[0];
-        const startPlace = await resolvePlaceByInput(formData.origin);
-        const endPlace = await resolvePlaceByInput(primaryDestination);
+        console.log('🧭 Đang tính toán đường đi...');
         
-        if (!startPlace || !endPlace) {
-            throw new Error('Không tìm thấy địa điểm phù hợp trong cơ sở dữ liệu');
-        }
+        const routeData = await requestRouteFromBackend(startPlace, primaryDestination, DEFAULT_VEHICLE);
         
-        console.log('🧭 Đang tính toán đường đi với A* ...');
-        const routeData = await requestAStarRoute(startPlace, endPlace, DEFAULT_VEHICLE);
-        persistRouteSelection(routeData, startPlace, endPlace, DEFAULT_VEHICLE);
+        // 6. Lưu route vào localStorage
+        const routePayload = {
+            timestamp: Date.now(),
+            start_place: startPlace,
+            end_place: primaryDestination,
+            route_coordinates: routeData.route_coordinates,
+            waypoints: routeData.waypoints,
+            distance_km: routeData.distance_km,
+            duration_min: routeData.duration_min,
+            vehicle: DEFAULT_VEHICLE
+        };
         
-        // 6. Lưu form data để chatbot có thể tự động tạo prompt
+        localStorage.setItem('selectedRoute', JSON.stringify(routePayload));
         localStorage.setItem('pendingFormData', JSON.stringify(formData));
         
-        // 7. Chuyển sang trang chatbot để tư vấn
+        // 7. Chuyển sang chatbot
         console.log('🤖 Chuyển sang chatbot...');
         window.location.href = '/chatbot';
         
     } catch (error) {
         console.error('❌ Error:', error);
-        alert('Có lỗi xảy ra: ' + error.message + '\nVui lòng thử lại!');
+        if (error.message !== 'No origin selected' && error.message !== 'No destinations selected') {
+            alert('Có lỗi xảy ra: ' + error.message);
+        }
         
-        // Reset button
         submitBtn.disabled = false;
         submitBtn.textContent = 'Hoàn tất';
     }
+});
+
+// ===== KHỞI TẠO =====
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Setup autocomplete cho input xuất phát
+    const originInput = document.getElementById('origin-input');
+    if (originInput) {
+        setupAutocomplete(originInput);
+    }
+    
+    // Setup autocomplete cho destination đầu tiên
+    const firstDestination = destinationsList.querySelector('.destination-item');
+    if (firstDestination) {
+        initDestinationItem(firstDestination);
+        const firstInput = firstDestination.querySelector('.destination-input');
+        if (firstInput) {
+            setupAutocomplete(firstInput);
+        }
+    }
+    
+    updateDestinationVisibility();
 });
