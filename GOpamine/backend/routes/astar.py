@@ -60,23 +60,30 @@ class AStarRouter:
             conn = self.get_db_connection()
             cursor = conn.cursor()
             
-            # SỬA LẠI query này theo cấu trúc DB thực tế của bạn
-            # Giả sử table tên là 'landmarks' với columns: id, name, latitude, longitude
+            # Query theo cấu trúc DB thực tế: id, name, address, lat, lng
             cursor.execute("""
-                SELECT id, name, latitude as lat, longitude as lon 
+                SELECT id, name, lat, lng 
                 FROM locations
             """)
             
             places = []
             for row in cursor.fetchall():
+                # Chuyển đổi lat và lng từ TEXT sang float
                 lat_str = str(row['lat']).replace(',', '.')
-                lon_str = str(row['lon']).replace(',', '.')
+                lng_str = str(row['lng']).replace(',', '.')  # Sửa từ 'lon' thành 'lng'
+                
+                try:
+                    lat = float(lat_str)
+                    lng = float(lng_str)
+                except (ValueError, TypeError):
+                    print(f"⚠️  Warning: Invalid coordinates for {row['name']}: lat={lat_str}, lng={lng_str}")
+                    continue  # Bỏ qua địa điểm có tọa độ không hợp lệ
                 
                 places.append({
                     'id': row['id'],
                     'name': row['name'],
-                    'lat': float(lat_str),
-                    'lon': float(lon_str)
+                    'lat': lat,
+                    'lon': lng  # Sử dụng 'lon' để nhất quán với code còn lại
                 })
                 
             conn.close()
