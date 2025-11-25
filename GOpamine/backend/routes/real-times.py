@@ -106,51 +106,59 @@ def fetch_traffic_realtime(api_key, lat=10.7769, lon=106.7009):
 # ==============================================================================
 # 3. THUẬT TOÁN TƯ VẤN (CORE ALGORITHM)
 # ==============================================================================
-def get_advising_context():
+def build_realtime_snapshot(city="Ho Chi Minh City", lat=10.7769, lon=106.7009):
     """
-    Hàm chính: Tổng hợp dữ liệu API thật -> Tạo lời khuyên (Prompt Context).
+    Trả về dict chứa dữ liệu thời gian thực + context string.
     """
     print("\n>>> BẮT ĐẦU CHẠY THUẬT TOÁN REAL-TIME <<<\n")
 
-    # --- BƯỚC 1: Lấy dữ liệu ---
-    weather_data = fetch_weather_realtime(WEATHER_KEY)
-    traffic_data = fetch_traffic_realtime(TRAFFIC_KEY)
+    weather_data = fetch_weather_realtime(WEATHER_KEY, city=city)
+    traffic_data = fetch_traffic_realtime(TRAFFIC_KEY, lat=lat, lon=lon)
 
-    # --- BƯỚC 2: Xử lý Logic (Rules) ---
     advices = []
     info_lines = []
 
-    # Xử lý Thời tiết
-    if weather_data["success"]:
+    if weather_data.get("success"):
         info_lines.append(f"- Thời tiết: {weather_data['mo_ta']}, {weather_data['nhiet_do']}°C.")
-        
-        if weather_data['dang_mua']:
+
+        if weather_data.get('dang_mua'):
             advices.append("🌧️ [LUẬT MƯA]: Trời đang mưa. Ưu tiên gợi ý Taxi/Grab/Bus. Cảnh báo khách sẽ bị ướt nếu đi xe máy.")
-        elif weather_data['nhiet_do'] > 34:
+        elif weather_data.get('nhiet_do', 0) > 34:
             advices.append("☀️ [LUẬT NẮNG]: Trời nắng nóng. Nhắc khách hạn chế đi bộ đường dài.")
     else:
         info_lines.append(f"- Thời tiết: Không lấy được dữ liệu ({weather_data.get('error')}).")
 
-    # Xử lý Giao thông
-    if traffic_data["success"]:
+    if traffic_data.get("success"):
         info_lines.append(f"- Giao thông: {traffic_data['trang_thai']} (Tốc độ: {traffic_data['toc_do']} km/h).")
-        
-        if traffic_data['co_ket_xe']:
+
+        if traffic_data.get('co_ket_xe'):
             advices.append("🚗 [LUẬT KẸT XE]: Đang kẹt xe. Khuyên khách dự trù thêm thời gian hoặc đi xe máy để linh hoạt hơn ô tô.")
     else:
         info_lines.append(f"- Giao thông: Không lấy được dữ liệu ({traffic_data.get('error')}).")
 
-    # --- BƯỚC 3: Tạo Context String ---
-    # Đây là chuỗi văn bản cuối cùng bạn sẽ gửi cho Gemini
     final_context = f"""
     [DỮ LIỆU THỜI GIAN THỰC - {datetime.now().strftime('%H:%M %d/%m/%Y')}]
     {chr(10).join(info_lines)}
 
     [CHỈ THỊ HỆ THỐNG]:
     {chr(10).join(advices) if advices else "Mọi thứ ổn định, tư vấn lộ trình bình thường."}
+    """.strip()
+
+    return {
+        "context": final_context,
+        "info_lines": info_lines,
+        "advices": advices,
+        "weather": weather_data,
+        "traffic": traffic_data,
+    }
+
+
+def get_advising_context():
     """
-    
-    return final_context
+    Hàm giữ nguyên để tương thích ngược - trả về context string.
+    """
+    snapshot = build_realtime_snapshot()
+    return snapshot["context"]
 
 # ==============================================================================
 # TEST TRỰC TIẾP (Khi chạy file này)

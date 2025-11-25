@@ -374,6 +374,22 @@ async function requestRouteFromBackend(startPlace, endPlace, vehicle = DEFAULT_V
     return result.data;
 }
 
+async function syncFormDataWithChatbot(sessionId, formData) {
+    if (!sessionId) return;
+    try {
+        await fetch(`${API_BASE}/form`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                form_data: formData
+            })
+        });
+    } catch (error) {
+        console.warn('Không thể đồng bộ dữ liệu form tới chatbot:', error);
+    }
+}
+
 submitBtn.addEventListener('click', async () => {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Đang xử lý...';
@@ -424,6 +440,7 @@ submitBtn.addEventListener('click', async () => {
         if (!sessionId) {
             sessionId = await tryCreateSession();
         }
+        await syncFormDataWithChatbot(sessionId, formData);
         
         // 5. Gọi backend để tính route (OSM routing)
         const primaryDestination = destinations[0];
