@@ -187,7 +187,7 @@ async function sendMessageToBackend(message, allowRetry = true) {
         botMessage.className = 'bot-message';
         botMessage.innerHTML = `
             <div class="bot-avatar">🤖</div>
-            <div class="message-bubble">${escapeHtml(data.response)}</div>
+            <div class="message-bubble">${formatBotResponse(data.response)}</div>
         `;
         chatContainer.appendChild(botMessage);
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -269,6 +269,55 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Format bot response để xuống dòng, in đậm, bullet…
+function formatBotResponse(rawText) {
+    if (!rawText) return '';
+    
+    const escaped = escapeHtml(rawText.trim());
+    const lines = escaped.split('\n');
+    let html = '';
+    let listBuffer = [];
+    
+    const flushList = () => {
+        if (listBuffer.length === 0) return;
+        html += '<ul>';
+        listBuffer.forEach(item => {
+            html += `<li>${formatInlineMarkdown(item)}</li>`;
+        });
+        html += '</ul>';
+        listBuffer = [];
+    };
+    
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        
+        if (trimmed === '') {
+            flushList();
+            html += '<br>';
+            return;
+        }
+        
+        if (/^[-*]\s+/.test(trimmed)) {
+            listBuffer.push(trimmed.replace(/^[-*]\s+/, ''));
+            return;
+        }
+        
+        flushList();
+        html += `<p>${formatInlineMarkdown(trimmed)}</p>`;
+    });
+    
+    flushList();
+    return html || escaped;
+}
+
+// Chỉ xử lý một số Markdown cơ bản (bold/italic)
+function formatInlineMarkdown(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
 
 sendBtn.addEventListener('click', sendMessage);
