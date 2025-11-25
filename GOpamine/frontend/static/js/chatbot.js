@@ -337,3 +337,34 @@ chatInput.addEventListener('keypress', (e) => {
         sendMessage();
     }
 });
+
+// Điều hướng giữa chatbot và map, nút back
+function setupHeaderNavigation() {
+    const backBtn = document.querySelector('.back-btn');
+    const toggleBtns = document.querySelectorAll('.toggle-btn');
+    
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/form';
+            }
+        });
+    }
+    
+    if (toggleBtns.length > 0) {
+        toggleBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                toggleBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                if (btn.dataset.target === 'map') {
+                    window.location.href = '/map_trans';
+                }
+            });
+        });
+    }
+}
+
+setupHeaderNavigation();
