@@ -348,16 +348,18 @@ function goToPreviousPage() {
     window.history.back();
 }
 
-function switchTab(tabName) {
+function switchTab(evt, tabName) {
     const tabs = document.querySelectorAll('.tab-btn');
     tabs.forEach(btn => btn.classList.remove('active'));
     
-    if (event && event.target) {
-        event.target.classList.add('active');
+    if (evt && evt.target) {
+        evt.target.classList.add('active');
     }
 
     if (tabName === 'ai') {
         window.location.href = '/chatbot';
+    } else if (tabName === 'map') {
+        window.location.href = '/map_trans';
     }
 }
 

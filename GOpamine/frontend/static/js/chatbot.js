@@ -7,6 +7,56 @@ const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
 // Lưu session ID
 let sessionId = null;
+const CHAT_HISTORY_PREFIX = 'chatHistory:';
+let historyKey = null;
+
+function getHistoryKey(session) {
+    return session ? `${CHAT_HISTORY_PREFIX}${session}` : null;
+}
+
+function prepareChatHistory(session, reset = false) {
+    historyKey = getHistoryKey(session);
+    if (!historyKey) return;
+    
+    if (reset) {
+        localStorage.removeItem(historyKey);
+    }
+    
+    restoreChatHistory();
+}
+
+function restoreChatHistory() {
+    if (!historyKey) return;
+    
+    try {
+        const historyRaw = localStorage.getItem(historyKey);
+        if (!historyRaw) return;
+        
+        const history = JSON.parse(historyRaw);
+        history.forEach(entry => {
+            if (!entry?.role || !entry?.content) return;
+            if (entry.role === 'user') {
+                appendUserMessage(entry.content, false);
+            } else if (entry.role === 'bot') {
+                appendBotMessage(entry.content, false);
+            }
+        });
+    } catch (error) {
+        console.warn('Không thể khôi phục lịch sử chat:', error);
+    }
+}
+
+function persistMessage(role, content) {
+    if (!historyKey || !role || typeof content !== 'string') return;
+    
+    try {
+        const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+        history.push({ role, content });
+        localStorage.setItem(historyKey, JSON.stringify(history));
+    } catch (error) {
+        console.warn('Không thể lưu lịch sử chat:', error);
+    }
+}
 
 // ========================================
 // QUAN TRỌNG: Lấy session ID từ form
@@ -21,6 +71,8 @@ async function initSession(forceNew = false) {
             sessionId = existingSessionId;
             console.log('✅ Sử dụng session từ form:', sessionId);
             
+            prepareChatHistory(sessionId);
+            
             // Hiển thị message chào mừng với context
             showWelcomeMessage();
             return true;
@@ -33,6 +85,7 @@ async function initSession(forceNew = false) {
             const data = await response.json();
             sessionId = data.session_id;
             localStorage.setItem('sessionId', sessionId);
+            prepareChatHistory(sessionId, true);
             console.log('✅ Session created:', sessionId);
             return true;
         }
@@ -44,8 +97,12 @@ async function initSession(forceNew = false) {
 }
 
 async function recreateSession() {
+    if (historyKey) {
+        localStorage.removeItem(historyKey);
+    }
     localStorage.removeItem('sessionId');
     sessionId = null;
+    historyKey = null;
     console.warn('⚠️ Session invalid, creating a fresh one...');
     return initSession(true);
 }
@@ -61,14 +118,25 @@ function generateAutoPrompt(formData) {
     let prompt = "Tôi muốn được tư vấn về lộ trình di chuyển. ";
     
     if (formData.origin) {
-        prompt += `Điểm xuất phát của tôi là ${formData.origin}. `;
+        const originName = typeof formData.origin === 'string'
+            ? formData.origin
+            : formData.origin.name || '';
+        if (originName) {
+            prompt += `Điểm xuất phát của tôi là ${originName}. `;
+        }
     }
     
     if (formData.destinations && formData.destinations.length > 0) {
-        if (formData.destinations.length === 1) {
-            prompt += `Tôi muốn đi đến ${formData.destinations[0]}. `;
+        const destNames = formData.destinations
+            .map(dest => typeof dest === 'string' ? dest : dest.name)
+            .filter(Boolean);
+        
+        if (destNames.length === 1) {
+            prompt += `Tôi muốn đi đến ${destNames[0]}. `;
+        } else if (destNames.length > 1) {
+            prompt += `Tôi muốn đi đến các điểm sau: ${destNames.join(', ')}. `;
         } else {
-            prompt += `Tôi muốn đi đến các điểm sau: ${formData.destinations.join(', ')}. `;
+            prompt += `Tôi chưa xác định điểm đến cụ thể. `;
         }
     }
     
@@ -115,14 +183,7 @@ async function sendAutoPrompt() {
         
         // Gửi prompt như tin nhắn của user
         if (sessionId) {
-            // Hiển thị tin nhắn như user đã gửi
-            const userMessage = document.createElement('div');
-            userMessage.className = 'user-message';
-            userMessage.innerHTML = `<div class="user-bubble">${escapeHtml(autoPrompt)}</div>`;
-            chatContainer.appendChild(userMessage);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            
-            // Gửi đến backend
+            // Gửi prompt ngầm đến backend để bot phản hồi chủ động
             await sendMessageToBackend(autoPrompt);
         }
     } catch (error) {
@@ -189,15 +250,7 @@ async function sendMessageToBackend(message, allowRetry = true) {
         const data = await response.json();
         console.log('✅ Received response:', data);
         
-        // Hiển thị response từ bot
-        const botMessage = document.createElement('div');
-        botMessage.className = 'bot-message';
-        botMessage.innerHTML = `
-            <div class="bot-avatar">🤖</div>
-            <div class="message-bubble">${escapeHtml(data.response)}</div>
-        `;
-        chatContainer.appendChild(botMessage);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        appendBotMessage(data.response);
         
     } catch (error) {
         console.error('❌ Error sending message:', error);
@@ -242,6 +295,37 @@ suggestionBtns.forEach(btn => {
     });
 });
 
+function scrollChatToBottom() {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function appendUserMessage(message, persist = true) {
+    const userMessage = document.createElement('div');
+    userMessage.className = 'user-message';
+    userMessage.innerHTML = `<div class="user-bubble">${escapeHtml(message)}</div>`;
+    chatContainer.appendChild(userMessage);
+    scrollChatToBottom();
+    
+    if (persist) {
+        persistMessage('user', message);
+    }
+}
+
+function appendBotMessage(message, persist = true) {
+    const botMessage = document.createElement('div');
+    botMessage.className = 'bot-message';
+    botMessage.innerHTML = `
+        <div class="bot-avatar">🤖</div>
+        <div class="message-bubble">${formatBotResponse(message)}</div>
+    `;
+    chatContainer.appendChild(botMessage);
+    scrollChatToBottom();
+    
+    if (persist) {
+        persistMessage('bot', message);
+    }
+}
+
 async function sendMessage() {
     const message = chatInput.value.trim();
     if (message === '' || !sessionId) {
@@ -252,17 +336,11 @@ async function sendMessage() {
     }
 
     // Thêm tin nhắn người dùng
-    const userMessage = document.createElement('div');
-    userMessage.className = 'user-message';
-    userMessage.innerHTML = `<div class="user-bubble">${escapeHtml(message)}</div>`;
-    chatContainer.appendChild(userMessage);
+    appendUserMessage(message);
 
     // Xóa nội dung input
     chatInput.value = '';
 
-    // Cuộn xuống cuối
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-    
     // Ẩn suggestions nếu đang mở
     suggestionsContainer.classList.remove('active');
     addBtn.classList.remove('active');
@@ -278,9 +356,89 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Format bot response để xuống dòng, in đậm, bullet…
+function formatBotResponse(rawText) {
+    if (!rawText) return '';
+    
+    const escaped = escapeHtml(rawText.trim());
+    const lines = escaped.split('\n');
+    let html = '';
+    let listBuffer = [];
+    
+    const flushList = () => {
+        if (listBuffer.length === 0) return;
+        html += '<ul>';
+        listBuffer.forEach(item => {
+            html += `<li>${formatInlineMarkdown(item)}</li>`;
+        });
+        html += '</ul>';
+        listBuffer = [];
+    };
+    
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        
+        if (trimmed === '') {
+            flushList();
+            html += '<br>';
+            return;
+        }
+        
+        if (/^[-*]\s+/.test(trimmed)) {
+            listBuffer.push(trimmed.replace(/^[-*]\s+/, ''));
+            return;
+        }
+        
+        flushList();
+        html += `<p>${formatInlineMarkdown(trimmed)}</p>`;
+    });
+    
+    flushList();
+    return html || escaped;
+}
+
+// Chỉ xử lý một số Markdown cơ bản (bold/italic)
+function formatInlineMarkdown(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
 sendBtn.addEventListener('click', sendMessage);
 chatInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         sendMessage();
     }
 });
+
+// Điều hướng giữa chatbot và map, nút back
+function setupHeaderNavigation() {
+    const backBtn = document.querySelector('.back-btn');
+    const toggleBtns = document.querySelectorAll('.toggle-btn');
+    
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/form';
+            }
+        });
+    }
+    
+    if (toggleBtns.length > 0) {
+        toggleBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                toggleBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                if (btn.dataset.target === 'map') {
+                    window.location.href = '/map_trans';
+                }
+            });
+        });
+    }
+}
+
+setupHeaderNavigation();

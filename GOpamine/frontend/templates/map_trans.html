@@ -16,8 +16,8 @@
             <button class="back-btn" onclick="goToPreviousPage()">←</button>
 
             <div class="ai-chat-btn">
-                <button class="tab-btn active" onclick="switchTab('map')">Map</button>
-                <button class="tab-btn" onclick="switchTab('ai')">AI</button>
+                <button class="tab-btn active" onclick="switchTab(event, 'map')" data-target="map">Map</button>
+                <button class="tab-btn" onclick="switchTab(event, 'ai')" data-target="chatbot">AI</button>
             </div>
         </div>
 
