@@ -61,14 +61,25 @@ function generateAutoPrompt(formData) {
     let prompt = "Tôi muốn được tư vấn về lộ trình di chuyển. ";
     
     if (formData.origin) {
-        prompt += `Điểm xuất phát của tôi là ${formData.origin}. `;
+        const originName = typeof formData.origin === 'string'
+            ? formData.origin
+            : formData.origin.name || '';
+        if (originName) {
+            prompt += `Điểm xuất phát của tôi là ${originName}. `;
+        }
     }
     
     if (formData.destinations && formData.destinations.length > 0) {
-        if (formData.destinations.length === 1) {
-            prompt += `Tôi muốn đi đến ${formData.destinations[0]}. `;
+        const destNames = formData.destinations
+            .map(dest => typeof dest === 'string' ? dest : dest.name)
+            .filter(Boolean);
+        
+        if (destNames.length === 1) {
+            prompt += `Tôi muốn đi đến ${destNames[0]}. `;
+        } else if (destNames.length > 1) {
+            prompt += `Tôi muốn đi đến các điểm sau: ${destNames.join(', ')}. `;
         } else {
-            prompt += `Tôi muốn đi đến các điểm sau: ${formData.destinations.join(', ')}. `;
+            prompt += `Tôi chưa xác định điểm đến cụ thể. `;
         }
     }
     
