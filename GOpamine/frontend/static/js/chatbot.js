@@ -425,8 +425,8 @@ function setupHeaderNavigation() {
     
     if (backBtn) {
         backBtn.addEventListener('click', () => {
-            // Luôn quay về trang form
-            window.location.href = '/form';
+            // Quay về trang trước đó trong lịch sử trình duyệt
+            window.history.back();
         });
     }
     

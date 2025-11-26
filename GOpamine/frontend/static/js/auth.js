@@ -3,7 +3,12 @@ const API_BASE = 'http://127.0.0.1:5000';
 document.addEventListener('DOMContentLoaded', function() {
     console.log(">>> AUTH JS LOADED. TARGET:", API_BASE);
 
-    // ... (Giữ Translation và Toggle Password) ...
+    // Initialize language
+    setTimeout(function() {
+        if (typeof changeLanguage === 'function' && typeof getCurrentLanguage === 'function') {
+            changeLanguage(getCurrentLanguage());
+        }
+    }, 100);
 
     // --- HÀM GỌI API CHUNG (ĐỂ TRÁNH LẶP CODE & BẮT LỖI TỐT HƠN) ---
     async function callAuthAPI(url, data, btn, successMsg) {
@@ -56,7 +61,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const password = document.getElementById('password').value;
             const confirm = document.getElementById('confirmPassword').value;
             
-            if (password !== confirm) { alert("Mật khẩu không khớp!"); return; }
+            if (password !== confirm) { 
+                alert("Mật khẩu không khớp!"); 
+                return; 
+            }
 
             callAuthAPI(
                 `${API_BASE}/api/register`, 
@@ -100,4 +108,75 @@ document.addEventListener('DOMContentLoaded', function() {
             );
         });
     }
+
+    // Password toggle functionality
+    document.querySelectorAll('.toggle-password').forEach(function(toggle) {
+        toggle.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            let passwordInput = null;
+            
+            if (targetId) {
+                passwordInput = document.getElementById(targetId);
+            } else {
+                const inputWrapper = this.closest('.input-wrapper');
+                if (inputWrapper) {
+                    passwordInput = inputWrapper.querySelector('input[type="password"], input[type="text"]');
+                }
+            }
+            
+            if (passwordInput) {
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    this.classList.remove('fa-eye-slash');
+                    this.classList.add('fa-eye');
+                } else {
+                    passwordInput.type = 'password';
+                    this.classList.remove('fa-eye');
+                    this.classList.add('fa-eye-slash');
+                }
+            }
+        });
+    });
 });
+
+// Login page specific translations
+if (window.translations) {
+    window.translations.vi = window.translations.vi || {};
+    window.translations.en = window.translations.en || {};
+    
+    Object.assign(window.translations.vi, {
+        title: "Khám phá hành trình",
+        subtitle: "hoàn hảo của bạn.",
+        fullName: "Họ và Tên",
+        fullNamePlaceholder: "Nhập họ và tên",
+        email: "Email",
+        emailPlaceholder: "Nhập email",
+        password: "Mật Khẩu",
+        passwordPlaceholder: "Nhập mật khẩu",
+        confirmPassword: "Nhập lại mật khẩu",
+        confirmPasswordPlaceholder: "Nhập lại mật khẩu",
+        or: "Hoặc",
+        guestLogin: "Đăng nhập với tài khoản khách",
+        signUp: "Đăng Ký",
+        login: "Đăng Nhập",
+        haveAccount: "Đã có tài khoản."
+    });
+    
+    Object.assign(window.translations.en, {
+        title: "Discover Your",
+        subtitle: "Perfect Journey.",
+        fullName: "Full Name",
+        fullNamePlaceholder: "Enter your full name",
+        email: "Email",
+        emailPlaceholder: "Enter your email",
+        password: "Password",
+        passwordPlaceholder: "Enter your password",
+        confirmPassword: "Confirm Password",
+        confirmPasswordPlaceholder: "Confirm your password",
+        or: "Or",
+        guestLogin: "Login as guest",
+        signUp: "Sign Up",
+        login: "Login",
+        haveAccount: "Already have an account."
+    });
+}

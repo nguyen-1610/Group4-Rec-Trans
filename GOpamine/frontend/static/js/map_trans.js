@@ -471,5 +471,5 @@ window.confirmRoute = function() {
     alert(`💰 Giá dự kiến: ${choice.price}\n(Tính năng đặt xe đang phát triển)`);
 };
 
-window.goToPreviousPage = () => window.location.href = '/form';
+window.goToPreviousPage = () => window.history.back();
 window.goBack = () => window.location.href = '/chatbot';
