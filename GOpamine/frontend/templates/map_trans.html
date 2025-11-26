@@ -16,9 +16,25 @@
             <button class="back-btn" onclick="goToPreviousPage()">←</button>
 
             <div class="ai-chat-btn">
-                <button class="tab-btn active" onclick="switchTab(event, 'map')" data-target="map">Map</button>
-                <button class="tab-btn" onclick="switchTab(event, 'ai')" data-target="chatbot">AI</button>
+                <button class="tab-btn active" onclick="switchTab('map')">Map</button>
+                <button class="tab-btn" onclick="switchTab('ai')">AI</button>
             </div>
+        </div>
+
+        <div class="map-search-overlay">
+            <div class="search-inputs">
+                <div class="input-group">
+                    <i class="fas fa-circle start-icon"></i>
+                    <input type="text" id="map-origin" placeholder="Điểm đi của bạn" autocomplete="off">
+                </div>
+                <div class="divider-line"></div>
+                <div class="input-group">
+                    <i class="fas fa-location-dot end-icon"></i>
+                    <input type="text" id="map-destination" placeholder="Chọn điểm đến" autocomplete="off">
+                </div>
+            </div>
+            
+            <div id="map-suggestions" class="map-suggestions hidden"></div>
         </div>
 
         <div class="vehicle-options">
@@ -33,7 +49,6 @@
                     </div>
                     <div class="option-right">
                         <div class="price">15.000đ</div>
-                        <div class="stars">★★★☆☆</div>
                     </div>
                 </div>
 
@@ -47,7 +62,6 @@
                     </div>
                     <div class="option-right">
                         <div class="price">30.000đ</div>
-                        <div class="stars">★★★☆☆</div>
                     </div>
                 </div>
 
@@ -61,7 +75,6 @@
                     </div>
                     <div class="option-right">
                         <div class="price">7.000đ</div>
-                        <div class="stars">★★★☆☆</div>
                     </div>
                 </div>
 
@@ -82,7 +95,7 @@
 
             <div class="action-buttons">
                 <button class="btn btn-secondary" onclick="goBack()">
-                    💬 Tư Vấn
+                    Tư Vấn Với AI
                 </button>
                 <button class="btn btn-primary" onclick="confirmRoute()">
                     Chọn

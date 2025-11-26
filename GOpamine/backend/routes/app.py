@@ -11,6 +11,8 @@ from chatbot import chatbot_bp
 from flask_login import LoginManager
 from auth import auth_bp, User, get_db_connection
 
+from transport_routes import transport_bp
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -61,6 +63,7 @@ app.register_blueprint(create_api_blueprint(DB_PATH))
 app.register_blueprint(form_bp)
 app.register_blueprint(auth_bp)
 
+app.register_blueprint(transport_bp)
 
 # ========== ROUTES HTML ==========
 @app.route('/')

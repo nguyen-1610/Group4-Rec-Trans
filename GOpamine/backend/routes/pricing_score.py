@@ -1,244 +1,280 @@
-import sqlite3
 import os
 import sys
-import requests
-from types import ModuleType # <--- Cần cái này để tạo module giả
+import math
 
 # ==============================================================================
-# 1. VÁ LỖI (HOTFIX) CHO MODULE ĐỒNG ĐỘI
+# 1. SETUP & IMPORT
 # ==============================================================================
-# Mục tiêu: Đánh lừa cost_estimation.py rằng 'utils.database' đang tồn tại.
-# Nếu không làm bước này, dòng 'from utils.database...' bên kia sẽ gây crash.
-
-# 1. Tạo module cha 'utils' giả
-if 'utils' not in sys.modules:
-    mock_utils = ModuleType('utils')
-    sys.modules['utils'] = mock_utils
-
-# 2. Tạo module con 'utils.database' giả
-if 'utils.database' not in sys.modules:
-    mock_database = ModuleType('utils.database')
-    
-    # Tạo hàm giả trả về None -> Để cost_estimation dùng giá mặc định (backup)
-    def mock_get_price_config():
-        print("⚠️ [System] Đang dùng hàm giả lập cho get_price_config")
-        return None 
-    
-    mock_database.get_price_config = mock_get_price_config
-    
-    # Gắn vào hệ thống
-    sys.modules['utils.database'] = mock_database
-    # Gắn vào module cha
-    sys.modules['utils'].database = mock_database
-
-# ==============================================================================
-# 2. IMPORT MODULE ĐỒNG ĐỘI
-# ==============================================================================
-# Lấy đường dẫn thư mục hiện tại (routes)
-CURRENT_ROUTES_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Thêm vào sys.path để ưu tiên tìm file ở đây
-if CURRENT_ROUTES_DIR not in sys.path:
-    sys.path.insert(0, CURRENT_ROUTES_DIR)
-
 try:
     import cost_estimation
-    print(f"✅ [System] Đã kết nối module đồng đội: cost_estimation")
-except ImportError as e:
-    print(f"❌ [CRITICAL ERROR] Không thể import 'cost_estimation': {e}")
-    cost_estimation = None
+    import real_times
+except ImportError:
+    from . import cost_estimation
+    from . import real_times
 
 # ==============================================================================
-# 3. CẤU HÌNH ĐƯỜNG DẪN DB (FIXED CHO CẤU TRÚC ẢNH CŨ)
+# 2. CẤU HÌNH & HẰNG SỐ
 # ==============================================================================
-
-# Logic: .../backend/routes/pricing_score.py -> Lùi 2 cấp -> data/vehicle.db
-BACKEND_DIR = os.path.dirname(CURRENT_ROUTES_DIR)   # Lùi 1 cấp
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)         # Lùi 2 cấp
-DATA_DIR = os.path.join(PROJECT_ROOT, 'data')       # Vào thư mục data
-VEHICLE_DB_PATH = os.path.join(DATA_DIR, 'vehicle.db')
-
-# Kiểm tra
-if os.path.exists(VEHICLE_DB_PATH):
-    print(f"✅ [System] Đã tìm thấy DB tại: {VEHICLE_DB_PATH}")
-else:
-    print(f"❌ [Lỗi] Không tìm thấy DB tại: {VEHICLE_DB_PATH}")
-    # Fallback: Thử tìm ngay cạnh file này (nếu bạn đã copy db vào đây)
-    VEHICLE_DB_PATH = os.path.join(CURRENT_ROUTES_DIR, 'vehicle.db')
-
-# ==============================================================================
-# 4. CLASS DỮ LIỆU
-# ==============================================================================
+BENCHMARK_CAR_BASE_FARE = 20000        
+BENCHMARK_CAR_4_KM = 14000             
+BENCHMARK_CAR_7_KM = 17000             
+REF_TIME_MIN = 30           
+WALKING_MAX_KM = 5.0        
 
 class UserRequest:
-    def __init__(self, is_student, priorities):
+    def __init__(self, is_student, priorities, budget=None, passenger_count=1):
         self.is_student = is_student
-        self.priorities = priorities
+        self.priorities = priorities 
+        self.budget = float(budget) if budget else float('inf')
+        self.passenger_count = int(passenger_count)
 
 class WeatherContext:
-    def __init__(self, is_raining, is_hot, description):
+    def __init__(self, is_raining=False, is_hot=False):
         self.is_raining = is_raining
         self.is_hot = is_hot
-        self.description = description
 
 # ==============================================================================
-# 5. MODULE DB (LẤY DỮ LIỆU & MAPPING)
+# 3. HELPER FUNCTIONS
 # ==============================================================================
 
-def get_modes_with_mapping():
-    """Đọc DB và map ID sang từ khóa cho cost_estimation"""
-    modes = []
-    try:
-        if not os.path.exists(VEHICLE_DB_PATH): return []
+def get_real_weather_context():
+    ctx = WeatherContext()
+    if 'real_times' in sys.modules and real_times:
+        api_key = os.getenv("OPENWEATHER_API_KEY") 
+        try:
+            data = real_times.fetch_weather_realtime(api_key)
+            if data.get("success"):
+                ctx.is_raining = data.get("dang_mua", False)
+                ctx.is_hot = data.get("nhiet_do", 30) > 35
+        except Exception as e:
+            print(f"⚠️ Weather API Error: {e}")
+    return ctx
 
-        conn = sqlite3.connect(VEHICLE_DB_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+def get_benchmark_car_cost(distance_km, passengers):
+    base_cost_4 = BENCHMARK_CAR_BASE_FARE + (distance_km * BENCHMARK_CAR_4_KM)
+    base_cost_7 = BENCHMARK_CAR_BASE_FARE + (distance_km * BENCHMARK_CAR_7_KM)
+    if passengers <= 4: return base_cost_4
+    elif passengers <= 7: return base_cost_7
+    else: return base_cost_4 * math.ceil(passengers / 4)
 
-        # Query lấy thông tin cơ bản + hiệu suất
-        query = """
-        SELECT 
-            v.type_key as id, 
-            v.display_name_vi as name, 
-            v.has_roof,
-            perf.avg_speed_kmh
-        FROM vehicle_types v
-        LEFT JOIN performance_profiles perf ON v.type_id = perf.type_id
-        """
-        cursor.execute(query)
-        
-        for row in cursor.fetchall():
-            mode = dict(row)
-            
-            # --- MAPPING LOGIC QUAN TRỌNG ---
-            # Phải khớp với logic trong cost_estimation.py
-            if mode['id'] == 'walking':
-                mode['mapping_key'] = 'walking'
-            elif 'bus' in mode['id']:
-                mode['mapping_key'] = 'bus'
-            elif 'bike' in mode['id']: 
-                mode['mapping_key'] = 'ride_hailing_bike'
-            elif 'car' in mode['id'] or 'taxi' in mode['id']:
-                mode['mapping_key'] = 'ride_hailing_car'
-            else:
-                mode['mapping_key'] = None 
-            
-            modes.append(mode)
-        conn.close()
-    except Exception as e:
-        print(f"❌ Lỗi đọc DB: {e}")
-        return []
+def calculate_adaptive_weights(priorities, passenger_count):
+    """
+    [LOGIC MỚI] Điều chỉnh trọng số thông minh theo số lượng khách.
+    """
+    points = {'cost': 1.0, 'time': 1.0, 'comfort': 1.0, 'safety': 1.0}
+
+    # 1. User Priority: Cộng 3 điểm (như cũ)
+    if 'saving' in priorities:  points['cost'] += 3.0
+    if 'speed' in priorities:   points['time'] += 3.0
+    if 'safety' in priorities:  points['safety'] += 3.0
+    if 'comfort' in priorities: points['comfort'] += 3.0
+
+    # 2. [THAY ĐỔI] Ngữ cảnh Số lượng khách
+    if passenger_count == 1:
+        # Đi 1 mình: Giá và Tốc độ quan trọng hơn Tiện nghi
+        points['cost'] += 1.5
+        points['time'] += 1.5
+        # Giảm bớt sự quan trọng của Comfort/Safety (trừ khi user chọn ưu tiên)
+        # Vì đi 1 mình thường chấp nhận cực chút để nhanh/rẻ
     
-    return modes
+    elif passenger_count >= 3:
+        # Đi đông: Tiện nghi & An toàn cực quan trọng
+        points['comfort'] += 2.0 
+        points['safety'] += 1.0
+        points['cost'] -= 0.5 # Chấp nhận đắt chút để đi chung
+
+    total_points = sum(points.values())
+    return {k: v / total_points for k, v in points.items()}
 
 # ==============================================================================
-# 6. API THỜI TIẾT & HELPERS
+# 4. SCORING FUNCTIONS
 # ==============================================================================
 
-def fetch_weather_context(lat, lon, api_key):
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=vi"
-    try:
-        response = requests.get(url, timeout=3)
-        data = response.json()
-        if response.status_code != 200: return WeatherContext(False, False, "Không rõ")
+def calculate_price_score(actual_price, user_budget):
+    if actual_price == 0: return 10.0
+    ref_budget = user_budget if user_budget < float('inf') else 500000
 
-        weather_id = data['weather'][0]['id']
-        is_raining = True if (200 <= weather_id <= 531) else False
-        is_hot = True if data['main']['temp'] > 35 else False
-        desc = data['weather'][0]['description']
-        return WeatherContext(is_raining, is_hot, desc)
-    except:
-        return WeatherContext(False, False, "Lỗi kết nối")
+    if actual_price <= ref_budget * 0.5: return 10.0
+    elif actual_price <= ref_budget:
+        ratio = (actual_price - (ref_budget * 0.5)) / (ref_budget * 0.5)
+        return 10.0 - (ratio * 4.0) 
+    else:
+        over_ratio = (actual_price - ref_budget) / ref_budget
+        return max(0.0, 6.0 - (over_ratio * 10.0))
 
-def calculate_weights(priorities):
-    weights = {'cost': 0.25, 'time': 0.25, 'safety': 0.25, 'weather': 0.25}
-    BOOST = 0.3
-    if 'saving' in priorities: weights['cost'] += BOOST
-    if 'speed' in priorities: weights['time'] += BOOST
-    if 'safety' in priorities: weights['safety'] += BOOST
-    if 'comfort' in priorities: weights['weather'] += BOOST
+def calculate_time_score(duration_min):
+    if duration_min <= 15: return 10.0
+    if duration_min <= 45:
+        ratio = (duration_min - 15) / 30
+        return 10.0 - (ratio * 5.0)
+    return max(1.0, 5.0 - ((duration_min - 45) / 10))
+
+def calculate_comfort_score(mode, weather_ctx, vehicles_needed, distance_km, passenger_count):
+    """
+    [LOGIC MỚI] Tiện nghi phụ thuộc vào quãng đường và số người.
+    """
+    score = 10.0
     
-    total = sum(weights.values())
-    return {k: v/total for k, v in weights.items()}
+    # 1. Phạt thời tiết (giữ nguyên)
+    if weather_ctx.is_raining and not mode['has_roof']: score -= 6.0
+    if weather_ctx.is_hot and mode['map_key'] == 'walking': score -= 7.0
+    
+    # 2. Phạt số lượng xe (cho nhóm)
+    if vehicles_needed > 1 and mode['map_key'] != 'bus':
+        score -= (vehicles_needed - 1) * 3.0 # Phạt nặng hơn: book 2 xe rất phiền
+    
+    # 3. [MỚI] Phạt xe máy đi đường dài
+    if 'bike' in mode['map_key']:
+        if distance_km > 15: score -= 4.0 # Đi xe máy > 15km khá mệt
+        elif distance_km > 8: score -= 2.0
+        # Nếu đi < 8km thì xe máy vẫn thoải mái, không trừ điểm
+
+    # 4. [MỚI] Đi ô tô 1 mình cự ly ngắn -> Trừ nhẹ điểm "thừa thãi"
+    if 'car' in mode['map_key'] and passenger_count == 1 and distance_km < 3:
+        score -= 1.0 
+
+    return max(0.0, score)
+
+def calculate_safety_score(mode, user_passengers, mode_capacity, distance_km):
+    """
+    [LOGIC MỚI] Xe máy chỉ bị trừ điểm an toàn nặng nếu đi xa.
+    """
+    score = 10.0
+    
+    # Xe máy
+    if 'bike' in mode['map_key']:
+        if distance_km > 10: 
+            score -= 3.0 # Đi xa mới sợ nguy hiểm
+        else:
+            score -= 1.0 # Đi gần trong phố thì xe máy chấp nhận được, chỉ trừ nhẹ
+            
+    # Quá tải
+    if user_passengers > mode_capacity: score -= 5.0
+    
+    return max(0.0, score)
 
 # ==============================================================================
-# 7. THUẬT TOÁN GỢI Ý (CORE)
+# 5. MAIN LOGIC
 # ==============================================================================
 
 def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.5):
     
-    # 1. Lấy dữ liệu từ DB
-    modes = get_modes_with_mapping()
-    if not modes: 
-        print("⚠️ Không lấy được dữ liệu xe từ DB.")
-        return []
+    # --- BƯỚC 1: TẠO DANH SÁCH MODE XE ---
+    modes = []
+    if trip_distance < 3.0: 
+        modes.append({'name': 'Đi bộ', 'map_key': 'walking', 'speed': 5, 'has_roof': False, 'brand': None, 'capacity': 1})
+    modes.append({'name': 'Xe buýt', 'map_key': 'bus', 'speed': 20, 'has_roof': True, 'brand': None, 'capacity': 50})
 
-    weights = calculate_weights(user.priorities)
-    
-    # Ngưỡng tâm lý (0-10)
-    ref_cost = 50000.0 if user.is_student else 100000.0
-    ref_time = 45.0
-    
+    if cost_estimation:
+        config = cost_estimation.PRICE_CONFIG
+        bike_brands = set(cfg['brand'] for cfg in config.get("motorbike", {}).values())
+        for brand in bike_brands:
+            clean_name = brand if "bike" in str(brand).lower() else f"{brand} Bike"
+            modes.append({'name': clean_name, 'map_key': 'ride_hailing_bike', 'speed': 30, 'has_roof': False, 'brand': brand, 'capacity': 1})
+
+        car_brands = set(cfg['brand'] for cfg in config.get("car", {}).values())
+        for brand in car_brands:
+            clean_name = brand if "car" in str(brand).lower() else f"{brand} Car"
+            modes.append({'name': f"{clean_name} (4 chỗ)", 'map_key': 'ride_hailing_car_4', 'speed': 35, 'has_roof': True, 'brand': brand, 'capacity': 4})
+            modes.append({'name': f"{clean_name} (7 chỗ)", 'map_key': 'ride_hailing_car_7', 'speed': 35, 'has_roof': True, 'brand': brand, 'capacity': 7})
+
+    # --- BƯỚC 2: CHUẨN BỊ ---
+    benchmark_cost = get_benchmark_car_cost(trip_distance, user.passenger_count)
+    weights = calculate_adaptive_weights(user.priorities, user.passenger_count)
     results = []
-    
+
+    # --- BƯỚC 3: TÍNH TOÁN ---
     for mode in modes:
-        if not mode.get('mapping_key'): continue 
+        is_public = mode['map_key'] in ['bus', 'walking']
+        vehicles_needed = 1 if is_public else math.ceil(user.passenger_count / mode['capacity'])
 
-        # --- A. TÍNH GIÁ (GỌI HÀM ĐỒNG ĐỘI) ---
-        try:
-            if cost_estimation:
-                # Gọi hàm từ module đồng đội
-                final_price = cost_estimation.calculate_transport_cost(
-                    mode=mode['mapping_key'],
-                    distance_km=trip_distance,
-                    is_student=user.is_student,
-                    is_raining=weather_ctx.is_raining
-                )
-            else:
-                final_price = 0
-        except Exception as e:
-            print(f"⚠️ Lỗi cost_estimation ({mode['name']}): {e}")
-            final_price = 0 
+        # Lấy giá
+        unit_price = 0
+        display_str = "0đ"
+        if cost_estimation:
+            res = cost_estimation.calculate_transport_cost(
+                mode=mode['map_key'],
+                distance_km=trip_distance,
+                is_student=user.is_student,
+                is_raining=weather_ctx.is_raining,
+                brand_name=mode.get('brand')
+            )
+            unit_price = res['value'] if isinstance(res, dict) else float(res)
+            display_str = res['display'] if isinstance(res, dict) else f"{int(res):,}đ"
 
-        # --- B. TÍNH THỜI GIAN (TỰ TÍNH) ---
-        avg_speed = mode.get('avg_speed_kmh') or 30.0
-        impact = traffic_level
-        if 'bike' in mode['id']: impact *= 0.6 
+        if is_public: total_cost = unit_price * user.passenger_count
+        else: total_cost = unit_price * vehicles_needed
         
-        real_speed = avg_speed * (1.0 - (impact * 0.5))
-        if real_speed <= 0: real_speed = 1.0
-        duration_min = (trip_distance / real_speed) * 60
+        price_per_person = total_cost / user.passenger_count if user.passenger_count > 0 else 0
 
-        # --- C. TÍNH ĐIỂM (LOGIC CỦA BẠN) ---
-        s_cost = 10 * (ref_cost / (ref_cost + final_price)) if final_price > 0 else 10
-        s_time = 10 * (ref_time / (ref_time + duration_min))
+        # Thời gian
+        real_speed = mode['speed']
+        traffic_penalty = 0.2 if 'bike' in mode['map_key'] else 0.5
+        real_speed *= (1 - traffic_level * traffic_penalty)
+        duration = int((trip_distance / max(real_speed, 1)) * 60)
+        if mode['map_key'] == 'walking': duration = int((trip_distance / 5.0) * 60)
+
+        # --- CHẤM ĐIỂM (UPDATED) ---
+        s_price = calculate_price_score(total_cost, user.budget)
         
-        s_weather = 10
-        if weather_ctx.is_raining and not mode['has_roof']: s_weather = 1.0
-        elif weather_ctx.is_hot and 'bike' in mode['id']: s_weather = 6.0
-            
-        s_safety = 10
-        if 'bike' in mode['id'] and traffic_level > 0.7: s_safety = 7.0
+        if mode['map_key'] == 'walking':
+            s_time = 10.0 if trip_distance <= 1.5 else (7.0 if trip_distance <= 3.0 else 1.0)
+        else:
+            s_time = calculate_time_score(duration)
+        
+        # [UPDATED] Truyền thêm distance và passenger_count
+        s_comfort = calculate_comfort_score(mode, weather_ctx, vehicles_needed, trip_distance, user.passenger_count)
+        s_safety = calculate_safety_score(mode, user.passenger_count, mode['capacity'], trip_distance)
 
-        final_score = (
-            (s_cost * weights['cost']) + 
-            (s_time * weights['time']) + 
-            (s_safety * weights['safety']) + 
-            (s_weather * weights['weather'])
+        # Weighted Sum
+        base_score = (
+            (s_price * weights['cost']) +
+            (s_time * weights['time']) +
+            (s_comfort * weights['comfort']) +
+            (s_safety * weights['safety'])
         )
-        
-        # --- D. NHÃN ---
+
+        # Penalty chéo (Chỉ phạt xe máy nếu đi nhóm > 1)
+        penalty = 0
+        if 'bike' in mode['map_key'] and user.passenger_count > 1:
+            if total_cost > benchmark_cost: penalty += 4.0
+            else: penalty += 1.5 # Phạt vì book nhiều xe
+
+        final_score = min(10.0, max(0.1, base_score - penalty))
+
+        # Labels
         labels = []
-        if s_cost > 8.5: labels.append("💰 Siêu Rẻ")
-        if s_weather > 8.5 and mode['has_roof']: labels.append("❄️ Mát mẻ")
-        
+        if s_price >= 9.0: labels.append("💰 Rẻ")
+        if s_time >= 9.0: labels.append("🚀 Nhanh")
+        if vehicles_needed > 1 and not is_public: labels.append(f"🚗 {vehicles_needed} xe")
+        if total_cost > user.budget: 
+            over = int(total_cost - user.budget)
+            labels.append(f"⚠️ Vượt {over//1000}k")
+        if mode.get('brand') and 'xanh' in str(mode.get('brand')).lower(): labels.append("🌱 Xe điện")
+        if user.passenger_count > mode['capacity'] and not is_public: labels.append("❌ Quá tải")
+
+        # Format Name
+        display_name = mode['name']
+        if vehicles_needed > 1 and not is_public:
+            display_name = f"{mode['name']} (x{vehicles_needed})"
+            display_str = f"{int(total_cost):,}đ"
+
         results.append({
-            "mode_name": mode['name'], 
-            "price": int(final_price),
-            "duration": int(duration_min),
+            "mode_name": display_name,
+            "total_price": int(total_cost),
+            "price_per_person": int(price_per_person),
+            "display_price": display_str,
+            "duration": duration,
+            "vehicles_needed": vehicles_needed,
             "score": round(final_score, 2),
-            "labels": labels,
-            "note": f"Map: {mode['mapping_key']}"
+            "details": {
+                "p_score": round(s_price, 2),
+                "t_score": round(s_time, 2),
+                "c_score": round(s_comfort, 2),
+                "s_score": round(s_safety, 2),
+                "weights": {k: round(v, 2) for k, v in weights.items()}
+            },
+            "labels": labels
         })
-        
+
     return sorted(results, key=lambda x: x['score'], reverse=True)
