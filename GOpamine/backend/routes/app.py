@@ -4,7 +4,7 @@ import os
 import sys
 from feedback import feedback_bp, get_all_reviews
 from astar import create_api_blueprint
-from form import form_bp
+from routing import form_bp
 
 # 2. IMPORT TỪ CHATBOT.PY
 from chatbot import chatbot_bp

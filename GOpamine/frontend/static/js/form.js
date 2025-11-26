@@ -18,18 +18,6 @@ const DEFAULT_VEHICLE = {
 // Key để lưu form data
 const FORM_DATA_KEY = 'savedFormData';
 
-// Cấu hình Nominatim API
-const NOMINATIM_CONFIG = {
-    baseUrl: 'https://nominatim.openstreetmap.org/search',
-    viewbox: '106.3,10.35,107.0,11.2', // TP.HCM
-    bounded: 1,
-    limit: 8,
-    format: 'json',
-    addressdetails: 1
-};
-
-let debounceTimer = null;
-
 // ===== PHẦN LƯU VÀ KHÔI PHỤC FORM DATA =====
 
 /**
@@ -231,152 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDestinationVisibility();
 });
 
-function handleGetUserLocation(inputElement, btnElement, dropdownElement) {
-    if (!navigator.geolocation) {
-        alert("Trình duyệt không hỗ trợ định vị.");
-        return;
-    }
-
-    // 1. UX Loading: Đổi giao diện nút bấm
-    const icon = btnElement.querySelector('.icon');
-    const mainText = btnElement.querySelector('.main');
-    const originalIcon = icon.innerText;
-
-    icon.innerText = '⏳';
-    icon.classList.add('spinning'); // Class xoay tròn
-    mainText.innerText = "Đang lấy tọa độ...";
-    
-    // Khóa input tạm thời
-    inputElement.placeholder = "Đang định vị...";
-
-    navigator.geolocation.getCurrentPosition(
-        // === A. LẤY GPS THÀNH CÔNG ===
-        async (position) => {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            console.log(`✅ GPS Raw: ${lat}, ${lng}`);
-
-            // Bước đệm: Báo cho user biết đang tìm tên đường
-            mainText.innerText = "Đang tìm địa chỉ...";
-            inputElement.value = `📍 Đang lấy tên đường...`;
-
-            try {
-                // === B. GỌI API NOMINATIM ĐỂ DỊCH TÊN ĐƯỜNG ===
-                // Sử dụng API Reverse Geocoding miễn phí
-                const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
-                
-                const response = await fetch(url, {
-                    headers: { 'User-Agent': 'GOpamine-App/1.0' } // Bắt buộc
-                });
-
-                if (!response.ok) throw new Error('Nominatim Error');
-                
-                const data = await response.json();
-                console.log("🏠 Address:", data);
-
-                // === C. XỬ LÝ TÊN HIỂN THỊ CHO ĐẸP ===
-                // Nominatim trả về rất dài, ta lọc lấy: Số nhà + Đường + Quận
-                const addr = data.address;
-                let displayName = "";
-                
-                // Ưu tiên lấy tên đường cụ thể
-                const road = addr.road || addr.pedestrian || addr.street || "";
-                const number = addr.house_number || "";
-                const district = addr.city_district || addr.district || addr.suburb || "";
-                
-                if (road) {
-                    displayName = number ? `${number} ${road}` : road;
-                    if (district) displayName += `, ${district}`;
-                } else {
-                    // Nếu ở nơi hẻo lánh không có tên đường, lấy tên hiển thị chung
-                    displayName = data.display_name.split(',').slice(0, 3).join(',');
-                }
-
-                // Thêm icon cho đẹp
-                const finalString = `📍 ${displayName}`;
-
-                // === D. CẬP NHẬT GIAO DIỆN ===
-                inputElement.value = finalString;
-
-                // QUAN TRỌNG: Tạo object dữ liệu chuẩn để Submit Form đọc được
-                // Phải khớp cấu trúc với hàm getPlaceFromInput
-                const placeData = {
-                    name: displayName, // Tên để hiển thị
-                    lat: lat,
-                    lon: lng,
-                    type: 'gps',       // Đánh dấu là GPS
-                    address: data.display_name
-                };
-                
-                // Lưu vào dataset
-                inputElement.dataset.placeData = JSON.stringify(placeData);
-
-            } catch (error) {
-                console.error("Lỗi lấy tên đường:", error);
-                // Fallback: Nếu lỗi mạng, đành hiện tọa độ số
-                inputElement.value = `📍 Vị trí hiện tại (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-                
-                // Vẫn phải lưu dataset để submit được
-                const backupData = { name: "Vị trí hiện tại", lat: lat, lon: lng, type: 'gps' };
-                inputElement.dataset.placeData = JSON.stringify(backupData);
-
-            } finally {
-                // === E. DỌN DẸP GIAO DIỆN ===
-                dropdownElement.classList.add('hidden'); // Ẩn menu
-                
-                // Reset nút bấm về trạng thái cũ
-                icon.innerText = originalIcon;
-                icon.classList.remove('spinning');
-                mainText.innerText = "Sử dụng vị trí hiện tại";
-                inputElement.placeholder = "Nhập điểm đi hoặc chọn bên dưới...";
-            }
-        },
-        // === F. LỖI GPS (Do người dùng chặn quyền) ===
-        (error) => {
-            console.error(error);
-            alert("Không thể lấy vị trí. Vui lòng cấp quyền truy cập vị trí trên trình duyệt.");
-            
-            // Reset nút
-            icon.innerText = originalIcon;
-            icon.classList.remove('spinning');
-            mainText.innerText = "Sử dụng vị trí hiện tại";
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-    );
-}
-async function searchPlacesNominatim(query) {
-    if (!query || query.length < 3) return [];
-    try {
-        const params = new URLSearchParams({
-            q: query,
-            format: NOMINATIM_CONFIG.format,
-            addressdetails: NOMINATIM_CONFIG.addressdetails,
-            limit: NOMINATIM_CONFIG.limit,
-            viewbox: NOMINATIM_CONFIG.viewbox,
-            bounded: NOMINATIM_CONFIG.bounded,
-            'accept-language': 'vi'
-        });
-        const response = await fetch(`${NOMINATIM_CONFIG.baseUrl}?${params}`, {
-            headers: { 'User-Agent': 'RouteOptimizer/1.0' }
-        });
-        if (!response.ok) throw new Error('Nominatim API error');
-        const results = await response.json();
-        return results.map(place => ({
-            id: place.place_id,
-            osm_id: place.osm_id,
-            name: place.display_name,
-            lat: parseFloat(place.lat),
-            lon: parseFloat(place.lon),
-            type: place.type,
-            category: place.class,
-            address: place.address,
-            source: 'nominatim'
-        }));
-    } catch (error) {
-        console.error('Lỗi tìm kiếm:', error);
-        return [];
-    }
-}
 
 function displaySuggestionsInContainer(container, divider, places, inputElement) {
     container.innerHTML = ''; 
@@ -413,37 +255,7 @@ function displaySuggestionsInContainer(container, divider, places, inputElement)
     });
 }
 
-function setupAutocomplete(inputElement) {
-    let suggestionsDiv = inputElement.nextElementSibling;
-    if (!suggestionsDiv || !suggestionsDiv.classList.contains('autocomplete-suggestions')) {
-        suggestionsDiv = document.createElement('div');
-        suggestionsDiv.className = 'autocomplete-suggestions';
-        inputElement.parentNode.insertBefore(suggestionsDiv, inputElement.nextSibling);
-    }
-    inputElement.addEventListener('input', async (e) => {
-        const query = e.target.value.trim();
-        
-        // Lưu form data mỗi khi có thay đổi
-        saveFormData();
 
-        // Clear debounce cũ
-        clearTimeout(debounceTimer);
-        if (query.length < 3) {
-            suggestionsDiv.innerHTML = '';
-            suggestionsDiv.style.display = 'none';
-            return;
-        }
-        debounceTimer = setTimeout(async () => {
-            const places = await searchPlacesNominatim(query);
-            displaySuggestions(suggestionsDiv, places, inputElement);
-        }, 300);
-    });
-    document.addEventListener('click', (e) => {
-        if (!inputElement.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-            suggestionsDiv.style.display = 'none';
-        }
-    });
-}
 
 function displaySuggestions(container, places, inputElement) {
     if (places.length === 0) {
@@ -478,17 +290,7 @@ function displaySuggestions(container, places, inputElement) {
     });
 }
 
-function getPlaceIcon(type) {
-    const iconMap = {'cafe': '☕','restaurant': '🍽️','school': '🏫','hospital': '🏥','park': '🌳','hotel': '🏨','shop': '🛒','mall': '🏬','museum': '🏛️','theatre': '🎭','bus_stop': '🚏','railway': '🚉','airport': '✈️'};
-    return iconMap[type] || '📍';
-}
 
-function getPlaceFromInput(inputElement) {
-    const placeData = inputElement.dataset.placeData;
-    if (!placeData) return null;
-    try { return JSON.parse(placeData); } 
-    catch (error) { console.error('Lỗi parse:', error); return null; }
-}
 
 // ===== FORMAT VÀ SLIDER =====
 
