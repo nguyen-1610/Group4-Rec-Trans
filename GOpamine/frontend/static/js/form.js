@@ -237,49 +237,113 @@ function handleGetUserLocation(inputElement, btnElement, dropdownElement) {
         return;
     }
 
-    // UX Loading
+    // 1. UX Loading: Đổi giao diện nút bấm
     const icon = btnElement.querySelector('.icon');
     const mainText = btnElement.querySelector('.main');
-    const subText = btnElement.querySelector('.sub');
     const originalIcon = icon.innerText;
 
     icon.innerText = '⏳';
-    icon.classList.add('spinning');
+    icon.classList.add('spinning'); // Class xoay tròn
     mainText.innerText = "Đang lấy tọa độ...";
     
+    // Khóa input tạm thời
+    inputElement.placeholder = "Đang định vị...";
+
     navigator.geolocation.getCurrentPosition(
+        // === A. LẤY GPS THÀNH CÔNG ===
         async (position) => {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
-            console.log(`✅ GPS: ${lat}, ${lng}`);
+            console.log(`✅ GPS Raw: ${lat}, ${lng}`);
 
-            inputElement.value = `📍 Vị trí hiện tại (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+            // Bước đệm: Báo cho user biết đang tìm tên đường
+            mainText.innerText = "Đang tìm địa chỉ...";
+            inputElement.value = `📍 Đang lấy tên đường...`;
 
-            const placeData = {
-                name: "Vị trí hiện tại",
-                lat: lat,
-                lon: lng,
-                type: 'gps',
-                address: 'GPS Coordinates'
-            };
-            inputElement.dataset.placeData = JSON.stringify(placeData);
+            try {
+                // === B. GỌI API NOMINATIM ĐỂ DỊCH TÊN ĐƯỜNG ===
+                // Sử dụng API Reverse Geocoding miễn phí
+                const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+                
+                const response = await fetch(url, {
+                    headers: { 'User-Agent': 'GOpamine-App/1.0' } // Bắt buộc
+                });
 
-            dropdownElement.classList.add('hidden');
-            icon.innerText = originalIcon;
-            icon.classList.remove('spinning');
-            mainText.innerText = "Sử dụng vị trí hiện tại";
+                if (!response.ok) throw new Error('Nominatim Error');
+                
+                const data = await response.json();
+                console.log("🏠 Address:", data);
+
+                // === C. XỬ LÝ TÊN HIỂN THỊ CHO ĐẸP ===
+                // Nominatim trả về rất dài, ta lọc lấy: Số nhà + Đường + Quận
+                const addr = data.address;
+                let displayName = "";
+                
+                // Ưu tiên lấy tên đường cụ thể
+                const road = addr.road || addr.pedestrian || addr.street || "";
+                const number = addr.house_number || "";
+                const district = addr.city_district || addr.district || addr.suburb || "";
+                
+                if (road) {
+                    displayName = number ? `${number} ${road}` : road;
+                    if (district) displayName += `, ${district}`;
+                } else {
+                    // Nếu ở nơi hẻo lánh không có tên đường, lấy tên hiển thị chung
+                    displayName = data.display_name.split(',').slice(0, 3).join(',');
+                }
+
+                // Thêm icon cho đẹp
+                const finalString = `📍 ${displayName}`;
+
+                // === D. CẬP NHẬT GIAO DIỆN ===
+                inputElement.value = finalString;
+
+                // QUAN TRỌNG: Tạo object dữ liệu chuẩn để Submit Form đọc được
+                // Phải khớp cấu trúc với hàm getPlaceFromInput
+                const placeData = {
+                    name: displayName, // Tên để hiển thị
+                    lat: lat,
+                    lon: lng,
+                    type: 'gps',       // Đánh dấu là GPS
+                    address: data.display_name
+                };
+                
+                // Lưu vào dataset
+                inputElement.dataset.placeData = JSON.stringify(placeData);
+
+            } catch (error) {
+                console.error("Lỗi lấy tên đường:", error);
+                // Fallback: Nếu lỗi mạng, đành hiện tọa độ số
+                inputElement.value = `📍 Vị trí hiện tại (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                
+                // Vẫn phải lưu dataset để submit được
+                const backupData = { name: "Vị trí hiện tại", lat: lat, lon: lng, type: 'gps' };
+                inputElement.dataset.placeData = JSON.stringify(backupData);
+
+            } finally {
+                // === E. DỌN DẸP GIAO DIỆN ===
+                dropdownElement.classList.add('hidden'); // Ẩn menu
+                
+                // Reset nút bấm về trạng thái cũ
+                icon.innerText = originalIcon;
+                icon.classList.remove('spinning');
+                mainText.innerText = "Sử dụng vị trí hiện tại";
+                inputElement.placeholder = "Nhập điểm đi hoặc chọn bên dưới...";
+            }
         },
+        // === F. LỖI GPS (Do người dùng chặn quyền) ===
         (error) => {
             console.error(error);
-            alert("Không thể lấy vị trí. Vui lòng cấp quyền.");
+            alert("Không thể lấy vị trí. Vui lòng cấp quyền truy cập vị trí trên trình duyệt.");
+            
+            // Reset nút
             icon.innerText = originalIcon;
             icon.classList.remove('spinning');
             mainText.innerText = "Sử dụng vị trí hiện tại";
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 10000 }
     );
 }
-
 async function searchPlacesNominatim(query) {
     if (!query || query.length < 3) return [];
     try {
