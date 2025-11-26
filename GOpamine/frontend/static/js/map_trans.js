@@ -1,69 +1,99 @@
+/**
+ * MAP TRANS - LOGIC XỬ LÝ BẢN ĐỒ & TÍNH TOÁN PHƯƠNG TIỆN
+ * --------------------------------------------------------
+ * Chức năng chính:
+ * 1. Vẽ bản đồ & lộ trình từ dữ liệu localStorage (do form.js gửi qua).
+ * 2. Gọi API Backend (/api/compare-transport) để lấy giá tiền & điểm số AI.
+ * 3. Cập nhật giao diện (Card phương tiện) với dữ liệu thực tế.
+ * 4. Xử lý các nút bấm (Back, Chọn xe, Chuyển tab).
+ */
+
 document.addEventListener('DOMContentLoaded', async function() {
+    
     // ================================================================
-    // 1. CẤU HÌNH & MAP (GIỮ NGUYÊN TỪ CODE GỐC)
+    // 1. CẤU HÌNH & DỮ LIỆU KHỞI TẠO
     // ================================================================
+    
+    // Cấu hình tốc độ giả định (fallback khi chưa có API)
     const TRAFFIC_CONFIG = {
         rush_hours: [[7, 9], [16.5, 19]], 
-        off_hours: [[22, 24], [0, 5]], 
         speeds: {
-            motorbike: { rush: 25, normal: 35, fast: 45 },
-            car:       { rush: 15, normal: 35, fast: 50 },
-            bus:       { rush: 12, normal: 20, fast: 35 },
-            walk:      { rush: 4,  normal: 5,  fast: 5 }
+            motorbike: { rush: 25, normal: 35 },
+            car:       { rush: 15, normal: 35 },
+            bus:       { rush: 12, normal: 20 },
+            walk:      { rush: 4,  normal: 5 }
         }
     };
 
-    // Lấy thông tin lộ trình
+    // Lấy dữ liệu lộ trình từ Storage
     const storedRoute = getStoredRouteFromStorage();
+    
+    // Dữ liệu mặc định nếu không có Storage (Dùng để test)
     const FALLBACK_ROUTE = {
         start: { lat: 10.7748, lng: 106.6937, name: 'Tao Đàn' },
-        end: { lat: 10.7626, lng: 106.6964, name: 'NYNA Coffee' },
+        end:   { lat: 10.7626, lng: 106.6964, name: 'NYNA Coffee' },
         distance_km: 2.5
     };
 
-    const mapStart = storedRoute ? storedRoute.waypoints[0] : FALLBACK_ROUTE.start;
-    const mapEnd = storedRoute ? storedRoute.waypoints[storedRoute.waypoints.length-1] : FALLBACK_ROUTE.end;
+    const mapStart   = storedRoute ? storedRoute.waypoints[0] : FALLBACK_ROUTE.start;
+    const mapEnd     = storedRoute ? storedRoute.waypoints[storedRoute.waypoints.length-1] : FALLBACK_ROUTE.end;
     const distanceKm = storedRoute ? storedRoute.distance_km : FALLBACK_ROUTE.distance_km;
 
-    console.log(`📍 Khoảng cách: ${distanceKm}km`);
+    console.log(`📍 Khởi tạo bản đồ với khoảng cách: ${distanceKm}km`);
 
-    // Vẽ Map
-    const map = L.map('map').setView([mapStart.lat, mapStart.lon || mapStart.lng], 14);
+    // ================================================================
+    // 2. KHỞI TẠO BẢN ĐỒ (LEAFLET)
+    // ================================================================
+
+    // Tắt zoom mặc định để custom vị trí
+    const map = L.map('map', {
+        zoomControl: false,
+        center: [mapStart.lat, mapStart.lon || mapStart.lng],
+        zoom: 14
+    });
+
+    // Thêm lớp bản đồ nền (OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap', maxZoom: 19
     }).addTo(map);
 
+    // Thêm nút Zoom ở góc dưới phải (UI đẹp hơn)
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Vẽ đường đi (Polyline) và Marker
     if (storedRoute) drawPolylineRoute(map, storedRoute);
     createCustomMarker(map, mapStart.lat, mapStart.lon || mapStart.lng, '#4285f4', 'A', mapStart.name);
     createCustomMarker(map, mapEnd.lat, mapEnd.lon || mapEnd.lng, '#ea4335', 'B', mapEnd.name);
 
     // ================================================================
-    // 2. KẾT NỐI BACKEND MỚI (PHẦN QUAN TRỌNG ⭐)
+    // 3. KẾT NỐI BACKEND (CALL API)
     // ================================================================
-    
-    // Reset giao diện trước khi load
+
+    // Bước 1: Reset giao diện về trạng thái "Đang tính..."
     updateAllVehicleCardsDefault(distanceKm);
 
-    // Gọi API Pricing Score từ Backend
+    // Bước 2: Gọi API tính toán giá tiền & điểm số
     await fetchAndUpdateTransportCosts(distanceKm);
 
-    // Sự kiện click chọn xe
+    // Bước 3: Kích hoạt sự kiện click chọn xe
     setupVehicleSelection();
     
-    // Active xe đã chọn trước đó
+    // Bước 4: Auto-select xe đã chọn ở trang trước (nếu có)
     if (storedRoute && storedRoute.vehicle) {
         const card = document.querySelector(`.option-card[data-vehicle="${storedRoute.vehicle.type}"]`);
         if (card) card.click();
     }
 
     // ================================================================
-    // 3. CÁC HÀM LOGIC (HỢP NHẤT)
+    // 4. CÁC HÀM LOGIC CHI TIẾT
     // ================================================================
 
-    // 🔥 HÀM GỌI API
+    /**
+     * Gọi API Backend để lấy dữ liệu so sánh các phương tiện
+     */
     async function fetchAndUpdateTransportCosts(distanceKm) {
         try {
-            // Lấy ưu tiên từ localStorage (do form.js đã lưu)
+            // Lấy ưu tiên người dùng (Tiết kiệm, Nhanh...)
             let priorities = ['saving', 'speed'];
             try {
                 const formData = JSON.parse(localStorage.getItem('formData'));
@@ -74,9 +104,9 @@ document.addEventListener('DOMContentLoaded', async function() {
                         p.toLowerCase().includes('an') ? 'safety' : 'comfort'
                     );
                 }
-            } catch (e) { console.log("Dùng priority mặc định"); }
+            } catch (e) { console.log("⚠️ Không đọc được preferences, dùng mặc định."); }
 
-            console.log(`📡 Gọi API compare-transport: ${distanceKm}km, ${priorities}`);
+            console.log(`📡 Gọi API compare-transport...`);
 
             const response = await fetch('/api/compare-transport', {
                 method: 'POST',
@@ -84,34 +114,40 @@ document.addEventListener('DOMContentLoaded', async function() {
                 body: JSON.stringify({
                     distance_km: distanceKm,
                     priorities: priorities,
-                    is_student: false // Có thể lấy từ formData nếu cần
+                    is_student: false 
                 })
             });
 
             const result = await response.json();
             if (result.success && result.data) {
-                console.log("✅ Data:", result.data);
+                console.log("✅ API trả về dữ liệu:", result.data);
                 updateCardsWithBackendData(result.data, distanceKm);
             }
         } catch (error) {
-            console.error("❌ Lỗi API:", error);
+            console.error("❌ Lỗi gọi API:", error);
         }
     }
 
-// 🔥 HÀM CẬP NHẬT GIAO DIỆN (ĐÃ FIX: Xóa sao cũ & Đặt điểm dưới giá)
+    /**
+     * Cập nhật giao diện thẻ Card dựa trên dữ liệu Backend trả về
+     */
     function updateCardsWithBackendData(backendResults, distanceKm) {
+        // Map dữ liệu trả về vào object để dễ truy xuất
         const resultMap = {};
         backendResults.forEach(res => {
             const name = res.mode_name.toLowerCase();
-            let vehicleType = null;
-            if (name.includes('bộ') || name.includes('walk')) vehicleType = 'walk';
-            else if (name.includes('buýt') || name.includes('bus')) vehicleType = 'bus';
-            else if (name.includes('máy') || name.includes('bike')) vehicleType = 'motorbike';
-            else if (name.includes('ô tô') || name.includes('car')) vehicleType = 'car';
+            let type = null;
             
-            if (vehicleType) resultMap[vehicleType] = res;
+            // Logic mapping tên lỏng lẻo (để bắt dính nhiều biến thể tên)
+            if (name.includes('bộ') || name.includes('walk')) type = 'walk';
+            else if (name.includes('buýt') || name.includes('bus')) type = 'bus';
+            else if (name.includes('máy') || name.includes('bike')) type = 'motorbike';
+            else if (name.includes('ô tô') || name.includes('car')) type = 'car';
+            
+            if (type) resultMap[type] = res;
         });
 
+        // Duyệt qua từng thẻ Card trên HTML để update
         ['motorbike', 'car', 'bus', 'walk'].forEach(type => {
             const card = document.querySelector(`.option-card[data-vehicle="${type}"]`);
             if (!card) return;
@@ -119,10 +155,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             const data = resultMap[type];
             const speedInfo = getVehicleSpeedByTime(type);
 
-            // 1. THỜI GIAN & QUÃNG ĐƯỜNG
+            // --- XỬ LÝ DỮ LIỆU HIỂN THỊ ---
             let timeText = "--";
-            let distanceText = `${distanceKm} km`; 
-            
+            let priceText = "---";
+            let scoreHtml = "";
+            let tagsHtml = "";
+
+            // 1. Thời gian
             if (speedInfo.speed > 0) {
                 const durationMin = data ? data.duration : Math.round((distanceKm / speedInfo.speed) * 60);
                 const h = Math.floor(durationMin / 60);
@@ -134,97 +173,76 @@ document.addEventListener('DOMContentLoaded', async function() {
                 card.classList.add("disabled-card");
             }
 
-            // 2. GIÁ TIỀN
-            let priceText = "---";
+            // 2. Giá tiền & Điểm số & Nhãn
             if (data) {
-                priceText = type === 'walk' ? "Miễn phí" : data.display_price || data.price_value.toLocaleString() + 'đ';
-            }
-
-            // 3. TẠO HTML ĐIỂM SỐ (1 Ngôi sao + Điểm)
-            let scoreHtml = "";
-            if (data && data.score) {
-                const color = data.score >= 8 ? "#4caf50" : data.score >= 6 ? "#ff9800" : "#f44336";
+                priceText = type === 'walk' ? "Miễn phí" : (data.display_price || data.price_value.toLocaleString() + 'đ');
                 
-                // Style: Flex canh phải, margin-top để nằm dưới giá
-                scoreHtml = `
-                    <div class="vehicle-score-new" style="
-                        display: flex; 
-                        align-items: center; 
-                        justify-content: flex-end; 
-                        gap: 4px; 
-                        margin-top: 4px; 
-                        font-size: 13px; 
-                        font-weight: bold; 
-                        color: ${color};
-                    ">
-                        <span style="color: #FFD700; font-size: 16px;">★</span>
-                        ${data.score}/10
-                    </div>
-                `;
+                // Tạo HTML ngôi sao điểm số
+                if (data.score) {
+                    const color = data.score >= 8 ? "#4caf50" : data.score >= 6 ? "#ff9800" : "#f44336";
+                    scoreHtml = `
+                        <div class="vehicle-score-new" style="display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 4px; font-size: 13px; font-weight: bold; color: ${color};">
+                            <span style="color: #FFD700; font-size: 16px;">★</span>${data.score}/10
+                        </div>`;
+                }
+
+                // Tạo HTML các nhãn (Tiết kiệm, Nhanh...)
+                if (data.labels) {
+                    tagsHtml = data.labels.map(l => 
+                        `<span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px; margin-right:3px; white-space: nowrap;">${l}</span>`
+                    ).join('');
+                }
             }
 
-            // 4. TẠO NHÃN (Tags)
-            let tagsHtml = "";
-            if (data && data.labels) {
-                tagsHtml = data.labels.map(l => 
-                    `<span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px; margin-right:3px; white-space: nowrap;">${l}</span>`
-                ).join('');
-            }
-
-            // --- CẬP NHẬT DOM ---
+            // --- UPDATE DOM ---
             
-            // A. Cập nhật thông tin bên trái (Thời gian + Tags)
+            // Cập nhật phần Thông tin (Trái)
             card.querySelector('.vehicle-info p').innerHTML = `
                 <span style="font-weight:600; color:#333;">${timeText}</span> 
                 <span style="color:#888; margin:0 4px;">•</span> 
-                <span style="color:#555;">${distanceText}</span>
+                <span style="color:#555;">${distanceKm} km</span>
                 <br>
                 <div style="margin-top:4px;">${tagsHtml}</div>
                 <small style="color:#d93025; font-size:11px; display:block; margin-top:2px;">${speedInfo.note}</small>
             `;
             
-            // B. Cập nhật bên phải (Giá + Điểm)
+            // Cập nhật phần Giá & Điểm (Phải)
             const optionRight = card.querySelector('.option-right');
             const priceEl = optionRight.querySelector('.price');
-            
-            // B1. Gán giá tiền mới
             priceEl.textContent = priceText;
 
-            // B2. TÌM VÀ XÓA 5 NGÔI SAO CŨ (QUAN TRỌNG)
-            const oldStars = optionRight.querySelector('.stars');
-            if (oldStars) oldStars.remove(); // Xóa vĩnh viễn khỏi HTML lúc chạy
-
-            // B3. Xóa điểm số cũ (nếu hàm chạy lại lần 2)
+            // Xóa các element cũ để tránh trùng lặp
             const oldScore = optionRight.querySelector('.vehicle-score-new');
             if (oldScore) oldScore.remove();
+            const oldStars = optionRight.querySelector('.stars');
+            if (oldStars) oldStars.remove();
 
-            // B4. Chèn điểm số mới XUỐNG DƯỚI giá tiền
-            if (scoreHtml) {
-                priceEl.insertAdjacentHTML('afterend', scoreHtml);
-            }
+            // Chèn điểm số mới
+            if (scoreHtml) priceEl.insertAdjacentHTML('afterend', scoreHtml);
             
-            // Lưu data vào thẻ
+            // Lưu data vào dataset để dùng khi click chọn
             card.dataset.price = priceText;
             card.dataset.time = timeText;
+            if (data) card.dataset.score = data.score;
         });
     }
 
-    // HÀM UPDATE MẶC ĐỊNH (KHI CHƯA CÓ DATA)
+    // --- CÁC HÀM HỖ TRỢ NHỎ ---
+
     function updateAllVehicleCardsDefault(distKm) {
         ['motorbike', 'car', 'bus', 'walk'].forEach(type => {
             const card = document.querySelector(`.option-card[data-vehicle="${type}"]`);
             if (card) {
                 card.querySelector('.price').textContent = "Đang tính...";
-                const status = getVehicleSpeedByTime(type);
-                if (status.speed === 0) card.classList.add("disabled-card");
+                if (getVehicleSpeedByTime(type).speed === 0) card.classList.add("disabled-card");
             }
         });
     }
 
-    // Helper Functions (Giữ nguyên)
     function getVehicleSpeedByTime(type) {
         const h = new Date().getHours();
         const cfg = TRAFFIC_CONFIG.speeds[type];
+        
         if (type === 'bus' && (h >= 21 || h < 5)) return { speed: 0, note: 'Ngưng hoạt động' };
         
         const isRush = TRAFFIC_CONFIG.rush_hours.some(([s, e]) => h >= s && h < e);
@@ -264,9 +282,61 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 });
 
-function confirmRoute() {
+// ================================================================
+// 5. CÁC HÀM GLOBAL (EXPOSED TO HTML)
+// ================================================================
+
+/**
+ * Xử lý chuyển Tab (Map <-> AI)
+ * Hỗ trợ 2 kiểu gọi: onclick="switchTab('ai')" hoặc onclick="switchTab(event, 'ai')"
+ */
+window.switchTab = function(arg1, arg2) {
+    let tabName = '';
+    if (typeof arg1 === 'string') tabName = arg1;
+    else if (typeof arg2 === 'string') tabName = arg2;
+
+    console.log("🖱️ Chuyển tab:", tabName);
+
+    if (tabName === 'ai' || tabName === 'chatbot') {
+        window.location.href = '/chatbot';
+    } else {
+        console.log("Đang ở trang Map");
+    }
+};
+
+/**
+ * Xử lý nút "Chọn" phương tiện
+ */
+window.confirmRoute = function() {
     const card = document.querySelector('.option-card.selected');
-    if (!card) return alert("Vui lòng chọn phương tiện!");
-    alert(`✅ ĐÃ CHỐT:\nPhương tiện: ${card.querySelector('h4').textContent}\nGiá: ${card.dataset.price}\nThời gian: ${card.dataset.time}`);
-}
-function goToPreviousPage() { window.history.back(); }
+    
+    if (!card) {
+        alert("Vui lòng chọn một phương tiện để di chuyển!");
+        return;
+    }
+    
+    // Lưu thông tin lựa chọn
+    const choice = {
+        type: card.dataset.vehicle,
+        price: card.dataset.price,
+        time: card.dataset.time,
+        score: card.dataset.score
+    };
+    localStorage.setItem('finalChoice', JSON.stringify(choice));
+    
+    // Xác nhận và chuyển trang
+    const msg = `✅ XÁC NHẬN LỘ TRÌNH:\n\n- Phương tiện: ${choice.type}\n- Giá dự kiến: ${choice.price}\n- Thời gian: ${choice.time}\n\nBạn muốn chốt đơn và gặp Trợ lý ảo ngay?`;
+    if(confirm(msg)) {
+        window.location.href = '/chatbot';
+    }
+};
+
+// Nút Back (Góc trái trên)
+window.goToPreviousPage = function() {
+    window.location.href = '/form';
+};
+
+// Nút "Tư vấn" (Màu xanh nhạt)
+window.goBack = function() {
+    window.location.href = '/chatbot';
+};
