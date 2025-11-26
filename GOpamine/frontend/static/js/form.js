@@ -478,9 +478,28 @@ submitBtn.addEventListener('click', async () => {
     }
 });
 
+// Hàm reset nút submit về trạng thái ban đầu
+function resetSubmitButton() {
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Hoàn tất';
+    }
+}
+
 // ===== KHỞI TẠO =====
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Reset nút submit về trạng thái ban đầu (phòng trường hợp quay lại từ chatbot)
+    resetSubmitButton();
+    
+    // Setup nút back để quay về Home
+    const backBtn = document.querySelector('.back-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            window.location.href = '/';
+        });
+    }
+    
     // Setup autocomplete cho input xuất phát
     const originInput = document.getElementById('origin-input');
     if (originInput) {
@@ -498,4 +517,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     updateDestinationVisibility();
+});
+
+// Xử lý khi trang được restore từ browser cache (khi quay lại bằng back button)
+window.addEventListener('pageshow', (event) => {
+    // Nếu trang được restore từ cache (back/forward navigation)
+    if (event.persisted) {
+        resetSubmitButton();
+    }
 });

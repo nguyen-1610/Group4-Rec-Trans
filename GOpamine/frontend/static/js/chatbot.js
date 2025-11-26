@@ -419,11 +419,8 @@ function setupHeaderNavigation() {
     
     if (backBtn) {
         backBtn.addEventListener('click', () => {
-            if (window.history.length > 1) {
-                window.history.back();
-            } else {
-                window.location.href = '/form';
-            }
+            // Luôn quay về trang form
+            window.location.href = '/form';
         });
     }
     
