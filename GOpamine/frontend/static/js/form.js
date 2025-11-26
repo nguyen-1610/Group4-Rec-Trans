@@ -30,7 +30,6 @@ const NOMINATIM_CONFIG = {
 
 let debounceTimer = null;
 
-<<<<<<< HEAD
 // ===== PHẦN LƯU VÀ KHÔI PHỤC FORM DATA =====
 
 /**
@@ -173,7 +172,6 @@ function clearSavedFormData() {
 }
 
 // ===== PHẦN MỚI: TÌM KIẾM VỚI NOMINATIM =====
-=======
 document.addEventListener('DOMContentLoaded', () => {
     // === Xử lý Input Xuất phát & Dropdown ===
     const originInput = document.getElementById('origin-input');
@@ -281,7 +279,6 @@ function handleGetUserLocation(inputElement, btnElement, dropdownElement) {
         { enableHighAccuracy: true, timeout: 5000 }
     );
 }
->>>>>>> form
 
 async function searchPlacesNominatim(query) {
     if (!query || query.length < 3) return [];
@@ -361,14 +358,11 @@ function setupAutocomplete(inputElement) {
     }
     inputElement.addEventListener('input', async (e) => {
         const query = e.target.value.trim();
-<<<<<<< HEAD
         
         // Lưu form data mỗi khi có thay đổi
         saveFormData();
 
         // Clear debounce cũ
-=======
->>>>>>> form
         clearTimeout(debounceTimer);
         if (query.length < 3) {
             suggestionsDiv.innerHTML = '';
@@ -750,7 +744,7 @@ function resetSubmitButton() {
 // ===== KHỞI TẠO =====
 
 document.addEventListener('DOMContentLoaded', () => {
-<<<<<<< HEAD
+
     // Reset nút submit
     resetSubmitButton();
     
@@ -769,14 +763,8 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = '/';
         });
     }
-=======
-    // 1. Reset nút submit
-    resetSubmitButton();
-    
-    const backBtn = document.querySelector('.back-btn');
-    if (backBtn) backBtn.addEventListener('click', () => window.location.href = '/');
->>>>>>> form
-    
+
+
     // ============================================================
     // 2. LOGIC CHO Ô XUẤT PHÁT (SỬA LẠI ĐỂ KHÔNG BỊ ĐÈ)
     // ============================================================
