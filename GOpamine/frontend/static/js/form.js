@@ -492,6 +492,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Reset nút submit về trạng thái ban đầu (phòng trường hợp quay lại từ chatbot)
     resetSubmitButton();
     
+    // Đọc query parameter và điền điểm đến nếu có
+    const urlParams = new URLSearchParams(window.location.search);
+    const destination = urlParams.get('destination');
+    
     // Setup nút back để quay về Home
     const backBtn = document.querySelector('.back-btn');
     if (backBtn) {
@@ -513,6 +517,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const firstInput = firstDestination.querySelector('.destination-input');
         if (firstInput) {
             setupAutocomplete(firstInput);
+            
+            // Nếu có destination từ query parameter, điền vào ô đầu tiên
+            if (destination) {
+                const decodedDestination = decodeURIComponent(destination);
+                firstInput.value = decodedDestination;
+                
+                // Tự động tìm kiếm để lấy thông tin địa điểm và điền vào dataset
+                setTimeout(async () => {
+                    const places = await searchPlacesNominatim(decodedDestination);
+                    if (places && places.length > 0) {
+                        // Lấy kết quả đầu tiên phù hợp nhất
+                        const placeData = places[0];
+                        firstInput.value = placeData.name.split(',').slice(0, 2).join(',');
+                        firstInput.dataset.placeData = JSON.stringify(placeData);
+                    }
+                }, 500);
+            }
         }
     }
     

@@ -257,11 +257,18 @@ a { text-decoration: none; color: inherit; transition: 0.3s; }
 }
 
 /* === 6. FEATURED LOCATIONS === */
+.card-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
 .card { 
     background: var(--white); border-radius: 12px; overflow: hidden; 
     box-shadow: 0 6px 15px rgba(0,0,0,0.08); transition: transform 0.3s ease;
+    cursor: pointer;
 }
-.card:hover { transform: translateY(-5px); }
+.card-link:hover .card { transform: translateY(-5px); }
 .card-img-wrap { height: 200px; overflow: hidden; }
 .card-img-wrap img { height: 100%; object-fit: cover; transition: 0.3s; }
 .card:hover img { transform: scale(1.05); }

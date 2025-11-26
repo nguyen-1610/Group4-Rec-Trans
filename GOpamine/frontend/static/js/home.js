@@ -234,4 +234,17 @@ document.addEventListener('DOMContentLoaded', function() {
             viewMoreBtn.style.display = 'none';
         });
     }
+
+    // --- XỬ LÝ CLICK VÀO CARD ĐỂ CHUYỂN ĐẾN FORM ---
+    const cards = document.querySelectorAll('.card[data-destination]');
+    cards.forEach(card => {
+        card.addEventListener('click', function() {
+            const destination = this.getAttribute('data-destination');
+            if (destination) {
+                // Encode URL đúng cách bằng JavaScript
+                const encodedDestination = encodeURIComponent(destination);
+                window.location.href = `/form?destination=${encodedDestination}`;
+            }
+        });
+    });
 });
