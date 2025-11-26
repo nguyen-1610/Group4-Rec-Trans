@@ -15,6 +15,9 @@ const DEFAULT_VEHICLE = {
     icon: '🚗'
 };
 
+// Key để lưu form data
+const FORM_DATA_KEY = 'savedFormData';
+
 // Cấu hình Nominatim API
 const NOMINATIM_CONFIG = {
     baseUrl: 'https://nominatim.openstreetmap.org/search',
@@ -28,6 +31,147 @@ const NOMINATIM_CONFIG = {
 
 let debounceTimer = null;
 let cachedPlaces = null; // Vẫn giữ cache cho database cũ (nếu cần)
+
+// ===== PHẦN LƯU VÀ KHÔI PHỤC FORM DATA =====
+
+/**
+ * Lưu toàn bộ dữ liệu form vào localStorage
+ */
+function saveFormData() {
+    try {
+        const originInput = document.getElementById('origin-input');
+        const originPlace = getPlaceFromInput(originInput);
+        
+        const destinationInputs = document.querySelectorAll('.destination-input');
+        const destinations = Array.from(destinationInputs).map(input => {
+            const place = getPlaceFromInput(input);
+            return {
+                value: input.value,
+                place: place
+            };
+        });
+        
+        const formData = {
+            origin: {
+                value: originInput.value,
+                place: originPlace
+            },
+            destinations: destinations,
+            budget: rangeSlider.value,
+            passengers: document.querySelector('input[placeholder="Số hành khách"]').value,
+            preferences: Array.from(document.querySelectorAll('.checkbox-item input:checked'))
+                .map(cb => cb.parentElement.querySelector('span').textContent),
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem(FORM_DATA_KEY, JSON.stringify(formData));
+        console.log('✅ Form data đã được lưu');
+    } catch (error) {
+        console.warn('Không thể lưu form data:', error);
+    }
+}
+
+/**
+ * Khôi phục dữ liệu form từ localStorage
+ */
+function restoreFormData() {
+    try {
+        const savedData = localStorage.getItem(FORM_DATA_KEY);
+        if (!savedData) return false;
+        
+        const formData = JSON.parse(savedData);
+        console.log('📋 Đang khôi phục form data...');
+        
+        // Khôi phục điểm xuất phát
+        const originInput = document.getElementById('origin-input');
+        if (formData.origin && formData.origin.value) {
+            originInput.value = formData.origin.value;
+            if (formData.origin.place) {
+                originInput.dataset.placeData = JSON.stringify(formData.origin.place);
+            }
+        }
+        
+        // Khôi phục điểm đến
+        if (formData.destinations && formData.destinations.length > 0) {
+            // Xóa các destination cũ (trừ cái đầu tiên)
+            const existingDestinations = destinationsList.querySelectorAll('.destination-item');
+            existingDestinations.forEach((item, index) => {
+                if (index > 0) item.remove();
+            });
+            
+            // Điền dữ liệu vào các destination
+            formData.destinations.forEach((dest, index) => {
+                let destItem;
+                
+                if (index === 0) {
+                    // Sử dụng destination đầu tiên có sẵn
+                    destItem = destinationsList.querySelector('.destination-item');
+                } else {
+                    // Tạo destination mới
+                    destItem = document.createElement('div');
+                    destItem.className = 'destination-item';
+                    destItem.draggable = true;
+                    destItem.innerHTML = `
+                        <div class="destination-input-wrapper">
+                            <input type="text" placeholder="Tìm kiếm địa điểm" class="destination-input" autocomplete="off">
+                            <div class="destination-controls">
+                                <div class="drag-handle">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                                <button class="remove-destination-btn" title="Xóa điểm đến">×</button>
+                            </div>
+                        </div>
+                    `;
+                    destinationsList.appendChild(destItem);
+                    initDestinationItem(destItem);
+                }
+                
+                const input = destItem.querySelector('.destination-input');
+                input.value = dest.value;
+                if (dest.place) {
+                    input.dataset.placeData = JSON.stringify(dest.place);
+                }
+                setupAutocomplete(input);
+            });
+            
+            updateDestinationVisibility();
+        }
+        
+        // Khôi phục ngân sách
+        if (formData.budget) {
+            rangeSlider.value = formData.budget;
+            budgetValue.textContent = formatCurrency(parseInt(formData.budget));
+        }
+        
+        // Khôi phục số hành khách
+        if (formData.passengers) {
+            document.querySelector('input[placeholder="Số hành khách"]').value = formData.passengers;
+        }
+        
+        // Khôi phục preferences
+        if (formData.preferences && formData.preferences.length > 0) {
+            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(checkbox => {
+                const label = checkbox.parentElement.querySelector('span').textContent;
+                checkbox.checked = formData.preferences.includes(label);
+            });
+        }
+        
+        console.log('✅ Form data đã được khôi phục');
+        return true;
+    } catch (error) {
+        console.warn('Không thể khôi phục form data:', error);
+        return false;
+    }
+}
+
+/**
+ * Xóa dữ liệu form đã lưu
+ */
+function clearSavedFormData() {
+    localStorage.removeItem(FORM_DATA_KEY);
+}
 
 // ===== PHẦN MỚI: TÌM KIẾM VỚI NOMINATIM =====
 
@@ -92,6 +236,9 @@ function setupAutocomplete(inputElement) {
     inputElement.addEventListener('input', async (e) => {
         const query = e.target.value.trim();
         
+        // Lưu form data mỗi khi có thay đổi
+        saveFormData();
+
         // Clear debounce cũ
         clearTimeout(debounceTimer);
         
@@ -151,6 +298,9 @@ function displaySuggestions(container, places, inputElement) {
             inputElement.value = placeData.name.split(',').slice(0, 2).join(',');
             inputElement.dataset.placeData = JSON.stringify(placeData);
             container.style.display = 'none';
+
+            // Lưu form data sau khi chọn địa điểm
+            saveFormData();
         });
     });
 }
@@ -201,6 +351,7 @@ function formatCurrency(value) {
 rangeSlider.addEventListener('input', (e) => {
     const value = parseInt(e.target.value);
     budgetValue.textContent = formatCurrency(value);
+    saveFormData(); // Lưu khi thay đổi budget
 });
 
 budgetValue.textContent = formatCurrency(parseInt(rangeSlider.value));
@@ -237,6 +388,8 @@ addDestinationBtn.addEventListener('click', () => {
     const newInput = newDestination.querySelector('.destination-input');
     setupAutocomplete(newInput);
     newInput.focus();
+
+    saveFormData(); // Lưu khi thêm destination
 });
 
 function updateDestinationVisibility() {
@@ -257,6 +410,7 @@ function initDestinationItem(item) {
         removeBtn.onclick = () => {
             item.remove();
             updateDestinationVisibility();
+            saveFormData(); // Lưu sau khi xóa destination
         };
     }
 
@@ -294,6 +448,7 @@ function handleDragOver(e) {
 
 function handleDrop(e) {
     e.preventDefault();
+    saveFormData(); // Lưu khi thay đổi thứ tự
 }
 
 function handleDragEnd(e) {
@@ -329,8 +484,22 @@ addPreferenceBtn.addEventListener('click', () => {
             <input type="checkbox">
         `;
         dropdownContent.insertBefore(newItem, addPreferenceBtn);
+        saveFormData(); // Lưu khi thay đổi preferences
     }
 });
+
+// Lắng nghe sự kiện thay đổi preferences
+document.addEventListener('change', (e) => {
+    if (e.target.type === 'checkbox' && e.target.closest('.checkbox-item')) {
+        saveFormData();
+    }
+});
+
+// Lắng nghe sự kiện thay đổi số hành khách
+const passengersInput = document.querySelector('input[placeholder="Số hành khách"]');
+if (passengersInput) {
+    passengersInput.addEventListener('input', saveFormData);
+}
 
 // ===== SUBMIT FORM =====
 
@@ -434,6 +603,8 @@ submitBtn.addEventListener('click', async () => {
         };
         
         console.log('📋 Form Data:', formData);
+
+        saveFormData(); // Lưu form data trước khi submit
         
         // 4. Tạo session (nếu có API)
         let sessionId = localStorage.getItem('sessionId');
@@ -489,13 +660,21 @@ function resetSubmitButton() {
 // ===== KHỞI TẠO =====
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Reset nút submit về trạng thái ban đầu (phòng trường hợp quay lại từ chatbot)
+    // Reset nút submit
     resetSubmitButton();
+    
+    // Khôi phục form data nếu có
+    const restored = restoreFormData();
+    if (restored) {
+        console.log('✅ Đã khôi phục dữ liệu form trước đó');
+    }
     
     // Setup nút back để quay về Home
     const backBtn = document.querySelector('.back-btn');
     if (backBtn) {
         backBtn.addEventListener('click', () => {
+            // Xóa form data khi quay về home
+            clearSavedFormData();
             window.location.href = '/';
         });
     }
@@ -521,8 +700,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Xử lý khi trang được restore từ browser cache (khi quay lại bằng back button)
 window.addEventListener('pageshow', (event) => {
-    // Nếu trang được restore từ cache (back/forward navigation)
     if (event.persisted) {
         resetSubmitButton();
+        // Khôi phục lại form data khi quay lại từ cache
+        restoreFormData();
     }
 });
