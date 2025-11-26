@@ -176,7 +176,7 @@ async function sendAutoPrompt() {
         
         // Tạo prompt tự động
         const autoPrompt = generateAutoPrompt(formData);
-        console.log('🤖 Auto prompt:', autoPrompt);
+        console.log('Auto prompt:', autoPrompt);
         
         // Đợi một chút để đảm bảo session đã sẵn sàng
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -199,7 +199,9 @@ async function sendMessageToBackend(message, allowRetry = true) {
     const typingIndicator = document.createElement('div');
     typingIndicator.className = 'bot-message typing-indicator';
     typingIndicator.innerHTML = `
-        <div class="bot-avatar">🤖</div>
+        <div class="bot-avatar">
+            <img src="../static/image/logo.jpg" alt="bot-avatar" >
+        </div>
         <div class="message-bubble">Đang suy nghĩ...</div>
     `;
     chatContainer.appendChild(typingIndicator);
@@ -262,7 +264,9 @@ async function sendMessageToBackend(message, allowRetry = true) {
         const errorMessage = document.createElement('div');
         errorMessage.className = 'bot-message';
         errorMessage.innerHTML = `
-            <div class="bot-avatar">🤖</div>
+            <div class="bot-avatar">
+                <img src="../static/image/logo.jpg" alt="bot-avatar" >
+            </div>
             <div class="message-bubble" style="background: #ffebee; color: #c62828;">
                 ❌ Xin lỗi, đã có lỗi xảy ra: ${error.message}<br>
                 Vui lòng kiểm tra kết nối và thử lại!
@@ -315,7 +319,9 @@ function appendBotMessage(message, persist = true) {
     const botMessage = document.createElement('div');
     botMessage.className = 'bot-message';
     botMessage.innerHTML = `
-        <div class="bot-avatar">🤖</div>
+        <div class="bot-avatar">
+            <img src="../static/image/logo.jpg" alt="bot-avatar" >
+        </div>
         <div class="message-bubble">${formatBotResponse(message)}</div>
     `;
     chatContainer.appendChild(botMessage);
