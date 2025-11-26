@@ -158,7 +158,15 @@
         .desktop-nav {
             display: none;
             align-items: center;
-            gap: 18px;
+            gap: 30px;
+        }
+
+        /* Thêm CSS cho các menu items */
+        /* Nhóm các link thường */
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 18px; /* Gap nhỏ giữa các link */
         }
 
         .desktop-nav .nav-link {
@@ -342,11 +350,13 @@
                 
                 <!-- Desktop Navigation -->
                 <nav class="desktop-nav">
-                    <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}" data-i18n="home" data-nav-section="home">Trang chủ</a>
-                    <a href="/chatbot" class="nav-link {% if request.endpoint == 'ai_assistant' %}active{% endif %}" data-i18n="assistant">Trợ lý AI</a>
-                    <a href="#featured" class="nav-link {% if request.endpoint == 'featured' %}active{% endif %}" data-i18n="suggestions" data-nav-section="featured">Gợi ý</a>
-                    <a href="#contact" class="nav-link" data-i18n="contact" data-nav-section="contact">Liên hệ</a>
-                    <a href="/guide" class="nav-link {% if request.endpoint == 'guide' %}active{% endif %}" data-i18n="guide">Hướng dẫn</a>
+                    <div class="nav-links">
+                        <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}" data-i18n="home" data-nav-section="home">Trang chủ</a>
+                        <a href="/chatbot" class="nav-link {% if request.endpoint == 'ai_assistant' %}active{% endif %}" data-i18n="assistant">Trợ lý AI</a>
+                        <a href="#featured" class="nav-link {% if request.endpoint == 'featured' %}active{% endif %}" data-i18n="suggestions" data-nav-section="featured">Gợi ý</a>
+                        <a href="/map_trans" class="nav-link {% if request.endpoint == 'map_trans' %}active{% endif %}" data-i18n="transport">Phương tiện</a>
+                        <a href="#contact" class="nav-link" data-i18n="contact" data-nav-section="contact">Liên hệ</a>
+                    </div>
                     <a href="/register" class="nav-link login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
                 </nav>
             </div>
@@ -359,8 +369,8 @@
                     <a href="/" class="menu-item {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}" data-i18n="home" data-nav-section="home">Trang chủ</a>
                     <a href="/chatbot" class="menu-item {% if request.endpoint == 'ai_assistant' %}active{% endif %}" data-i18n="assistant">Trợ lý AI</a>
                     <a href="#featured" class="menu-item {% if request.endpoint == 'featured' %}active{% endif %}" data-i18n="suggestions" data-nav-section="featured">Gợi ý</a>
+                    <a href="/map_trans" class="menu-item {% if request.endpoint == 'transport' %}active{% endif %}" data-i18n="transport">Phương tiện</a>
                     <a href="#contact" class="menu-item" data-i18n="contact" data-nav-section="contact">Liên hệ</a>
-                    <a href="/guide" class="menu-item {% if request.endpoint == 'guide' %}active{% endif %}" data-i18n="guide">Hướng dẫn</a>
                 </nav>
                 <a href="/register" class="menu-login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
             </div>
@@ -381,7 +391,7 @@
                     assistant: "Trợ lý AI",
                     suggestions: "Gợi ý",
                     contact: "Liên hệ",
-                    guide: "Hướng dẫn",
+                    transport: "Phương Tiện",
                     login_signup: "Đăng nhập/ Đăng ký"
                 },
                 en: {
@@ -390,7 +400,7 @@
                     assistant: "AI Assistant",
                     suggestions: "Suggestions",
                     contact: "Contact",
-                    guide: "Guide",
+                    transport: "Transport",
                     login_signup: "Login/ Register"
                 }
             };
