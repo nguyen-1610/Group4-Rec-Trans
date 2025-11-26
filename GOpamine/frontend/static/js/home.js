@@ -247,4 +247,57 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // --- SCROLL SPY: TỰ ĐỘNG ĐỔI ACTIVE STATE KHI SCROLL ---
+    function updateActiveNavOnScroll() {
+        const sections = {
+            home: null, // Sẽ tính từ đầu trang
+            featured: document.getElementById('featured'),
+            contact: document.getElementById('contact')
+        };
+
+        // Chỉ chạy nếu đang ở trang home
+        if (!sections.featured) return;
+
+        const scrollPosition = window.scrollY + 150; // Offset cho header sticky
+
+        // Lấy vị trí các section
+        const homeEnd = sections.featured ? sections.featured.offsetTop - 100 : Infinity;
+        const featuredStart = sections.featured ? sections.featured.offsetTop - 100 : Infinity;
+        const featuredEnd = sections.contact ? sections.contact.offsetTop - 100 : Infinity;
+        const contactStart = sections.contact ? sections.contact.offsetTop - 100 : Infinity;
+
+        // Tìm tất cả nav links
+        const navLinks = document.querySelectorAll('[data-nav-section]');
+        
+        // Xóa active class từ tất cả links
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+        });
+
+        // Thêm active class cho link phù hợp
+        if (scrollPosition < featuredStart) {
+            // Ở phần home
+            const homeLink = document.querySelector('[data-nav-section="home"]');
+            if (homeLink) homeLink.classList.add('active');
+        } else if (scrollPosition >= featuredStart && scrollPosition < featuredEnd) {
+            // Ở phần featured (Gợi ý)
+            const featuredLink = document.querySelector('[data-nav-section="featured"]');
+            if (featuredLink) featuredLink.classList.add('active');
+        } else if (scrollPosition >= contactStart) {
+            // Ở phần contact
+            const contactLink = document.querySelector('[data-nav-section="contact"]');
+            if (contactLink) contactLink.classList.add('active');
+        }
+    }
+
+    // Thêm event listener cho scroll (với debounce để tối ưu performance)
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(updateActiveNavOnScroll, 10);
+    });
+
+    // Gọi ngay khi trang load để set initial state
+    updateActiveNavOnScroll();
 });
