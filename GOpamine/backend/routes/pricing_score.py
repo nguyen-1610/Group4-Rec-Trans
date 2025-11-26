@@ -1,244 +1,175 @@
 import sqlite3
 import os
 import sys
-import requests
-from types import ModuleType # <--- Cần cái này để tạo module giả
 
-# ==============================================================================
-# 1. VÁ LỖI (HOTFIX) CHO MODULE ĐỒNG ĐỘI
-# ==============================================================================
-# Mục tiêu: Đánh lừa cost_estimation.py rằng 'utils.database' đang tồn tại.
-# Nếu không làm bước này, dòng 'from utils.database...' bên kia sẽ gây crash.
+# --- IMPORT MODULE ĐỒNG ĐỘI ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
 
-# 1. Tạo module cha 'utils' giả
-if 'utils' not in sys.modules:
-    mock_utils = ModuleType('utils')
-    sys.modules['utils'] = mock_utils
-
-# 2. Tạo module con 'utils.database' giả
-if 'utils.database' not in sys.modules:
-    mock_database = ModuleType('utils.database')
-    
-    # Tạo hàm giả trả về None -> Để cost_estimation dùng giá mặc định (backup)
-    def mock_get_price_config():
-        print("⚠️ [System] Đang dùng hàm giả lập cho get_price_config")
-        return None 
-    
-    mock_database.get_price_config = mock_get_price_config
-    
-    # Gắn vào hệ thống
-    sys.modules['utils.database'] = mock_database
-    # Gắn vào module cha
-    sys.modules['utils'].database = mock_database
-
-# ==============================================================================
-# 2. IMPORT MODULE ĐỒNG ĐỘI
-# ==============================================================================
-# Lấy đường dẫn thư mục hiện tại (routes)
-CURRENT_ROUTES_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Thêm vào sys.path để ưu tiên tìm file ở đây
-if CURRENT_ROUTES_DIR not in sys.path:
-    sys.path.insert(0, CURRENT_ROUTES_DIR)
-
+# A. Import Cost Estimation (Kế toán)
 try:
     import cost_estimation
-    print(f"✅ [System] Đã kết nối module đồng đội: cost_estimation")
-except ImportError as e:
-    print(f"❌ [CRITICAL ERROR] Không thể import 'cost_estimation': {e}")
+except ImportError:
     cost_estimation = None
+    print("[WARN] Khong tim thay module: cost_estimation.py")
 
-# ==============================================================================
-# 3. CẤU HÌNH ĐƯỜNG DẪN DB (FIXED CHO CẤU TRÚC ẢNH CŨ)
-# ==============================================================================
+# B. Import Real Times (Thời tiết)
+real_times = None 
+try:
+    import real_times
+    print("[INFO] Da load module: real_times")
+except ImportError:
+    print("[WARN] Khong tim thay module: real_times.py")
+    real_times = None
 
-# Logic: .../backend/routes/pricing_score.py -> Lùi 2 cấp -> data/vehicle.db
-BACKEND_DIR = os.path.dirname(CURRENT_ROUTES_DIR)   # Lùi 1 cấp
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)         # Lùi 2 cấp
-DATA_DIR = os.path.join(PROJECT_ROOT, 'data')       # Vào thư mục data
-VEHICLE_DB_PATH = os.path.join(DATA_DIR, 'vehicle.db')
+# --- 2. CẤU HÌNH DATABASE ---
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(current_dir)), 'backend', 'data', 'vehicle.db')
+if not os.path.exists(DB_PATH):
+    DB_PATH = os.path.join(current_dir, '../data/vehicle.db')
 
-# Kiểm tra
-if os.path.exists(VEHICLE_DB_PATH):
-    print(f"✅ [System] Đã tìm thấy DB tại: {VEHICLE_DB_PATH}")
-else:
-    print(f"❌ [Lỗi] Không tìm thấy DB tại: {VEHICLE_DB_PATH}")
-    # Fallback: Thử tìm ngay cạnh file này (nếu bạn đã copy db vào đây)
-    VEHICLE_DB_PATH = os.path.join(CURRENT_ROUTES_DIR, 'vehicle.db')
-
-# ==============================================================================
-# 4. CLASS DỮ LIỆU
-# ==============================================================================
-
+# --- 3. DATA CLASSES ---
 class UserRequest:
     def __init__(self, is_student, priorities):
         self.is_student = is_student
         self.priorities = priorities
 
 class WeatherContext:
-    def __init__(self, is_raining, is_hot, description):
+    def __init__(self, is_raining, is_hot):
         self.is_raining = is_raining
         self.is_hot = is_hot
-        self.description = description
 
-# ==============================================================================
-# 5. MODULE DB (LẤY DỮ LIỆU & MAPPING)
-# ==============================================================================
+# --- 4. HÀM LẤY THỜI TIẾT THẬT ---
+def get_real_weather_context():
+    """Gọi API thật để lấy dữ liệu"""
+    is_raining = False
+    is_hot = False
 
-def get_modes_with_mapping():
-    """Đọc DB và map ID sang từ khóa cho cost_estimation"""
+    if real_times:
+        api_key = os.getenv("OPENWEATHER_API_KEY") 
+        weather_data = real_times.fetch_weather_realtime(api_key)
+        
+        if weather_data.get("success"):
+            is_raining = weather_data.get("dang_mua", False)
+            temp = weather_data.get("nhiet_do", 30)
+            is_hot = True if temp > 35 else False
+            print(f"[INFO] Thoi tiet thuc te: {temp}C | Mua: {is_raining}")
+        else:
+            print(f"[ERROR] API Thoi tiet loi: {weather_data.get('error')}")
+    else:
+        print("[INFO] Khong co module real_times, su dung du lieu gia dinh.")
+    
+    return WeatherContext(is_raining, is_hot)
+
+# --- 5. HÀM LẤY DỮ LIỆU XE TỪ DB ---
+def get_modes_from_db():
     modes = []
-    try:
-        if not os.path.exists(VEHICLE_DB_PATH): return []
+    if not os.path.exists(DB_PATH):
+        print(f"[ERROR] Khong tim thay DB tai: {DB_PATH}")
+        return []
 
-        conn = sqlite3.connect(VEHICLE_DB_PATH)
+    try:
+        conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-
-        # Query lấy thông tin cơ bản + hiệu suất
-        query = """
-        SELECT 
-            v.type_key as id, 
-            v.display_name_vi as name, 
-            v.has_roof,
-            perf.avg_speed_kmh
-        FROM vehicle_types v
-        LEFT JOIN performance_profiles perf ON v.type_id = perf.type_id
-        """
-        cursor.execute(query)
+        rows = cursor.execute("SELECT type_key, display_name_vi as name, has_roof FROM vehicle_types").fetchall()
         
-        for row in cursor.fetchall():
+        for row in rows:
             mode = dict(row)
-            
-            # --- MAPPING LOGIC QUAN TRỌNG ---
-            # Phải khớp với logic trong cost_estimation.py
-            if mode['id'] == 'walking':
-                mode['mapping_key'] = 'walking'
-            elif 'bus' in mode['id']:
-                mode['mapping_key'] = 'bus'
-            elif 'bike' in mode['id']: 
-                mode['mapping_key'] = 'ride_hailing_bike'
-            elif 'car' in mode['id'] or 'taxi' in mode['id']:
-                mode['mapping_key'] = 'ride_hailing_car'
+            # Mapping key
+            if mode['type_key'] == 'walk':
+                mode['map_key'] = 'walking'
+                mode['speed'] = 5
+            elif 'bus' in mode['type_key']:
+                mode['map_key'] = 'bus'
+                mode['speed'] = 20
+            elif 'motorbike' in mode['type_key'] or 'bike' in mode['type_key']:
+                mode['map_key'] = 'ride_hailing_bike'
+                mode['speed'] = 30
+            elif 'car' in mode['type_key'] or 'taxi' in mode['type_key']:
+                mode['map_key'] = 'ride_hailing_car'
+                mode['speed'] = 40
             else:
-                mode['mapping_key'] = None 
+                mode['map_key'] = None
+                mode['speed'] = 20
             
-            modes.append(mode)
+            if mode['map_key']: modes.append(mode)
         conn.close()
     except Exception as e:
-        print(f"❌ Lỗi đọc DB: {e}")
+        print(f"[ERROR] Loi DB: {e}")
         return []
-    
     return modes
 
-# ==============================================================================
-# 6. API THỜI TIẾT & HELPERS
-# ==============================================================================
-
-def fetch_weather_context(lat, lon, api_key):
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=vi"
-    try:
-        response = requests.get(url, timeout=3)
-        data = response.json()
-        if response.status_code != 200: return WeatherContext(False, False, "Không rõ")
-
-        weather_id = data['weather'][0]['id']
-        is_raining = True if (200 <= weather_id <= 531) else False
-        is_hot = True if data['main']['temp'] > 35 else False
-        desc = data['weather'][0]['description']
-        return WeatherContext(is_raining, is_hot, desc)
-    except:
-        return WeatherContext(False, False, "Lỗi kết nối")
-
+# --- 6. HÀM TÍNH TRỌNG SỐ ---
 def calculate_weights(priorities):
     weights = {'cost': 0.25, 'time': 0.25, 'safety': 0.25, 'weather': 0.25}
-    BOOST = 0.3
+    BOOST = 0.4
     if 'saving' in priorities: weights['cost'] += BOOST
     if 'speed' in priorities: weights['time'] += BOOST
     if 'safety' in priorities: weights['safety'] += BOOST
     if 'comfort' in priorities: weights['weather'] += BOOST
-    
     total = sum(weights.values())
     return {k: v/total for k, v in weights.items()}
 
-# ==============================================================================
-# 7. THUẬT TOÁN GỢI Ý (CORE)
-# ==============================================================================
-
+# --- 7. CORE LOGIC: CHẤM ĐIỂM ---
 def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.5):
-    
-    # 1. Lấy dữ liệu từ DB
-    modes = get_modes_with_mapping()
-    if not modes: 
-        print("⚠️ Không lấy được dữ liệu xe từ DB.")
-        return []
+    modes = get_modes_from_db()
+    if not modes: return []
 
     weights = calculate_weights(user.priorities)
-    
-    # Ngưỡng tâm lý (0-10)
     ref_cost = 50000.0 if user.is_student else 100000.0
     ref_time = 45.0
-    
+
     results = []
-    
     for mode in modes:
-        if not mode.get('mapping_key'): continue 
-
-        # --- A. TÍNH GIÁ (GỌI HÀM ĐỒNG ĐỘI) ---
-        try:
-            if cost_estimation:
-                # Gọi hàm từ module đồng đội
-                final_price = cost_estimation.calculate_transport_cost(
-                    mode=mode['mapping_key'],
-                    distance_km=trip_distance,
-                    is_student=user.is_student,
-                    is_raining=weather_ctx.is_raining
-                )
-            else:
-                final_price = 0
-        except Exception as e:
-            print(f"⚠️ Lỗi cost_estimation ({mode['name']}): {e}")
-            final_price = 0 
-
-        # --- B. TÍNH THỜI GIAN (TỰ TÍNH) ---
-        avg_speed = mode.get('avg_speed_kmh') or 30.0
-        impact = traffic_level
-        if 'bike' in mode['id']: impact *= 0.6 
+        # A. Tính tiền
+        cost_result = {'value': 0, 'display': '0VND'}
+        if cost_estimation:
+            cost_result = cost_estimation.calculate_transport_cost(
+                mode=mode['map_key'],
+                distance_km=trip_distance,
+                is_student=user.is_student,
+                is_raining=weather_ctx.is_raining
+            )
+        final_price = cost_result['value']
         
-        real_speed = avg_speed * (1.0 - (impact * 0.5))
-        if real_speed <= 0: real_speed = 1.0
-        duration_min = (trip_distance / real_speed) * 60
+        # B. Tính thời gian
+        real_speed = mode['speed']
+        if 'bike' in mode['map_key']: real_speed *= (1 - traffic_level * 0.3)
+        else: real_speed *= (1 - traffic_level * 0.6)
+        duration_min = (trip_distance / max(real_speed, 1)) * 60
 
-        # --- C. TÍNH ĐIỂM (LOGIC CỦA BẠN) ---
+        # C. Chấm điểm
         s_cost = 10 * (ref_cost / (ref_cost + final_price)) if final_price > 0 else 10
         s_time = 10 * (ref_time / (ref_time + duration_min))
         
         s_weather = 10
-        if weather_ctx.is_raining and not mode['has_roof']: s_weather = 1.0
-        elif weather_ctx.is_hot and 'bike' in mode['id']: s_weather = 6.0
-            
         s_safety = 10
-        if 'bike' in mode['id'] and traffic_level > 0.7: s_safety = 7.0
-
+        
+        if weather_ctx.is_raining and not mode['has_roof']: s_weather = 2.0
+        if weather_ctx.is_hot and mode['type_key'] == 'walk': s_weather = 4.0
+        if traffic_level > 0.7 and 'bike' in mode['map_key']: s_safety = 7.0
+            
         final_score = (
-            (s_cost * weights['cost']) + 
-            (s_time * weights['time']) + 
-            (s_safety * weights['safety']) + 
-            (s_weather * weights['weather'])
+            (s_cost * weights['cost']) +
+            (s_time * weights['time']) +
+            (s_weather * weights['weather']) +
+            (s_safety * weights['safety'])
         )
-        
-        # --- D. NHÃN ---
+
         labels = []
-        if s_cost > 8.5: labels.append("💰 Siêu Rẻ")
-        if s_weather > 8.5 and mode['has_roof']: labels.append("❄️ Mát mẻ")
-        
+        if s_cost > 7.5: labels.append("Tiết kiệm")      # Cũ: Tiet kiem
+        if s_time > 8.0: labels.append("Nhanh nhất")     # Cũ: Nhanh
+        if s_weather > 9.0 and weather_ctx.is_raining: labels.append("Che mưa tốt") # Cũ: Che mua
+
         results.append({
-            "mode_name": mode['name'], 
-            "price": int(final_price),
+            "mode_name": mode['name'],
+            "price_value": final_price,
+            "display_price": cost_result['display'],
             "duration": int(duration_min),
-            "score": round(final_score, 2),
-            "labels": labels,
-            "note": f"Map: {mode['mapping_key']}"
+            "score": round(final_score, 1),
+            "labels": labels
         })
-        
+
     return sorted(results, key=lambda x: x['score'], reverse=True)
+# ==============================================================================
