@@ -21,6 +21,22 @@
             </div>
         </div>
 
+        <div class="map-search-overlay">
+            <div class="search-inputs">
+                <div class="input-group">
+                    <i class="fas fa-circle start-icon"></i>
+                    <input type="text" id="map-origin" placeholder="Điểm đi của bạn" autocomplete="off">
+                </div>
+                <div class="divider-line"></div>
+                <div class="input-group">
+                    <i class="fas fa-location-dot end-icon"></i>
+                    <input type="text" id="map-destination" placeholder="Chọn điểm đến" autocomplete="off">
+                </div>
+            </div>
+            
+            <div id="map-suggestions" class="map-suggestions hidden"></div>
+        </div>
+
         <div class="vehicle-options">
             <div class="vehicle-scroll-container">
                 <div class="option-card selected" data-vehicle="motorbike" data-price="15000" data-stars="3">

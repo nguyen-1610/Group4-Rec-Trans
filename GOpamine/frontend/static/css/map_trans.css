@@ -276,3 +276,85 @@ body {
     flex-shrink: 0;     
     overflow: hidden;   
 }
+
+.map-search-overlay {
+    position: absolute;
+    top: 3px; /* Nằm dưới nút Back/Tab một chút */
+    left: 15px;
+    right: 15px;
+    z-index: 999; /* Nổi lên trên map */
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    padding: 10px;
+    max-width: 900px; /* Giới hạn chiều rộng trên desktop */
+    margin: 0 auto;   /* Căn giữa nếu màn hình rộng */
+}
+
+.search-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+}
+
+.input-group i {
+    width: 24px;
+    text-align: center;
+    margin-right: 10px;
+    font-size: 14px;
+}
+
+.start-icon { color: #4285f4; font-size: 12px !important; }
+.end-icon { color: #ea4335; }
+
+.input-group input {
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 15px;
+    color: #333;
+    font-family: inherit;
+}
+
+.input-group input::placeholder { color: #999; }
+
+.divider-line {
+    height: 1px;
+    background: #eee;
+    margin-left: 44px; /* Căn thẳng hàng với text */
+}
+
+/* Gợi ý tìm kiếm (Autocomplete) */
+.map-suggestions {
+    margin-top: 5px;
+    border-top: 1px solid #f0f0f0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.map-suggestions.hidden { display: none; }
+
+.suggestion-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f9f9f9;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+}
+
+.suggestion-item { background: #f5f5f5; }
+.suggestion-item i { margin-right: 10px; color: #777; }
+
+/* Responsive cho Mobile */
+@media (max-width: 480px) {
+    .map-search-overlay {
+        left: 10px; right: 10px;
+    }
+}
