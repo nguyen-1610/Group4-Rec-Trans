@@ -24,6 +24,9 @@ def get_db_connection():
 # ==============================================================================
 # 2. LOAD DỮ LIỆU GIÁ (CACHE VÀO RAM)
 # ==============================================================================
+# ==============================================================================
+# 2. LOAD DỮ LIỆU GIÁ TỪ DB (ĐÃ FIX LỖI TRÙNG KEY Ô TÔ & TÊN HIỂN THỊ)
+# ==============================================================================
 def load_price_config_from_db():
     config = { "walking": 0, "bus": 7000, "motorbike": {}, "car": {} }
     
@@ -32,12 +35,36 @@ def load_price_config_from_db():
 
     cursor = conn.cursor()
 
-    # Helper function để xử lý tên hiển thị đẹp (Fix lỗi "BeCar Car")
-    def format_display_name(brand, tier, suffix):
-        base_name = f"{brand} {tier}".strip()
-        # Nếu trong tên hãng/loại đã có chữ "Car" hoặc "Bike" thì không thêm nữa
+    # 1. Helper: Làm đẹp tên hãng (Logic mới thêm vào)
+    def prettify_brand(name):
+        if not name: return "Standard"
+        name_lower = name.lower().strip()
+        
+        # Xử lý tên riêng
+        if "xanh" in name_lower and "sm" in name_lower:
+            return "Xanh SM"
+        if name_lower == "be" or name_lower == "bebike" or name_lower == "becar":
+            return "Be"
+        if name_lower == "grab":
+            return "Grab"
+        if name_lower == "gojek":
+            return "Gojek"
+            
+        # Các hãng khác viết hoa chữ cái đầu
+        return name.title()
+
+    # 2. Helper: Ghép tên hiển thị (Fix lỗi lặp từ + Viết hoa)
+    def format_display_name(raw_brand, tier, suffix):
+        # Bước 1: Chuẩn hóa tên hãng trước (be -> Be)
+        pretty_brand = prettify_brand(raw_brand)
+        
+        # Bước 2: Ghép chuỗi
+        base_name = f"{pretty_brand} {tier}".strip()
+        
+        # Bước 3: Kiểm tra lặp từ (tránh BeCar Car)
         if suffix.lower() in base_name.lower():
             return base_name
+            
         return f"{base_name} {suffix}"
 
     # A. Load Xe Máy
@@ -46,12 +73,15 @@ def load_price_config_from_db():
         for row in rows:
             brand = row["brand"] or "Standard"
             tier = row["type"] or "Normal"
+            
+            # Key dùng để code chạy (giữ nguyên logic cũ)
             key = f"{brand}_{tier}".lower().replace(" ", "")
             
             config["motorbike"][key] = {
                 "brand": brand,
                 "tier": tier,
-                "display_name": format_display_name(brand, tier, "Bike"), # <--- Fix lặp tên ở đây
+                # SỬA: Gọi hàm format mới để tên đẹp hơn
+                "display_name": format_display_name(brand, tier, "Bike"), 
                 "base_fare": row["base_price"],
                 "base_distance": row["base_distance_km"],
                 "price_per_km": row["per_km_after_base"],
@@ -70,7 +100,8 @@ def load_price_config_from_db():
             config["car"][key] = {
                 "brand": brand,
                 "tier": tier,
-                "display_name": format_display_name(brand, tier, "Car"), # <--- Fix lặp tên ở đây
+                # SỬA: Gọi hàm format mới
+                "display_name": format_display_name(brand, tier, "Car"),
                 "base_fare": row["base_price"],
                 "base_distance": row["base_distance_km"],
                 "per_km_3_12": row["per_km_3_12"],
