@@ -296,4 +296,8 @@ window.confirmRoute = function() {
 };
 
 window.goToPreviousPage = () => window.location.href = '/form';
-window.goBack = () => window.location.href = '/chatbot';
+window.goBack = function() {
+    // Có thể gửi kèm thông tin "Tôi đang phân vân" để chatbot biết
+    localStorage.setItem('chatContext', 'consulting'); 
+    window.location.href = '/chatbot';
+};
