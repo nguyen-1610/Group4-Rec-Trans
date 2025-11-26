@@ -1,102 +1,37 @@
+import os
 import sqlite3
-from datetime import datetime
 
-# Kết nối database (nếu chưa có sẽ tự tạo)
-def get_connection():
-    conn = sqlite3.connect("data/gopamine.db", check_same_thread=False)
-    return conn
+# Thư mục của file database.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Khởi tạo các bảng khi khởi động app
-def init_db():
-    conn = get_connection()
-    c = conn.cursor()
+# Thư mục chứa các file .db (đặt tên là "data")
+DB_DIR = os.path.join(BASE_DIR, "..", "data")
 
-    # Bảng người dùng
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
 
-    # Bảng phản hồi
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS feedback (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        comment TEXT,
-        image_path TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
+class DBConnection:
+    """Wrapper để mỗi database có hàm query riêng."""
+    def __init__(self, filename):
+        path = os.path.join(DB_DIR, filename)
+        self.conn = sqlite3.connect(path)
 
-    # Bảng hành trình (tùy chọn)
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS itineraries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        prompt TEXT,
-        ai_response TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
+    def query(self, sql, params=None):
+        """Thực thi query và trả kết quả."""
+        cur = self.conn.cursor()
+        cur.execute(sql, params or [])
+        self.conn.commit()
+        return cur.fetchall()
 
-    conn.commit()
-    conn.close()
+    def execute(self, sql, params=None):
+        """Thực thi query không cần trả kết quả (INSERT/UPDATE/DELETE)."""
+        cur = self.conn.cursor()
+        cur.execute(sql, params or [])
+        self.conn.commit()
 
-# ========== USERS ==========
-def add_user(username, password):
-    conn = get_connection()
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
 
-def verify_user(username, password):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
-    result = c.fetchone()
-    conn.close()
-    return result is not None
-
-# ========== FEEDBACK ==========
-def add_feedback(username, comment, image_path):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("INSERT INTO feedback (username, comment, image_path) VALUES (?, ?, ?)",
-              (username, comment, image_path))
-    conn.commit()
-    conn.close()
-
-def get_feedbacks():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT username, comment, image_path, created_at FROM feedback ORDER BY created_at DESC")
-    data = c.fetchall()
-    conn.close()
-    return data
-
-# ========== ITINERARIES ==========
-def save_itinerary(username, prompt, ai_response):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("INSERT INTO itineraries (username, prompt, ai_response) VALUES (?, ?, ?)",
-              (username, prompt, ai_response))
-    conn.commit()
-    conn.close()
-
-def get_itineraries(username):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT prompt, ai_response, created_at FROM itineraries WHERE username=? ORDER BY created_at DESC", (username,))
-    data = c.fetchall()
-    conn.close()
-    return data
+class DatabaseManager:
+    """Quản lý tất cả database trong 1 class."""
+    def __init__(self):
+        self.busmap = DBConnection("busmap.db")
+        self.users = DBConnection("users.db")
+        self.trips = DBConnection("trips.db")
+        self.analytics = DBConnection("analytics.db")
