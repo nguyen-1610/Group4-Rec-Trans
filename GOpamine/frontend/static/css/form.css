@@ -136,23 +136,53 @@ h1 {
 }
 
 .destination-input-wrapper {
-    flex: 1;
     position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
 }
 
 .destination-input {
     width: 100%;
-    padding-right: 80px;
+    height: 45px;
+    box-sizing: border-box !important;
+    padding: 10px 15px;
+    
+    /* QUAN TRỌNG: Chừa chỗ cho các nút bên phải */
+    padding-right: 60px !important; 
+    
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    background: white;
+    color: #333;
+    
+    /* Ép hiển thị dấu ... */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
+/* SỬA LỖI MỜ CHỮ TẠI ĐÂY */
 .destination-controls {
     position: absolute;
-    right: 8px;
+    right: 5px; 
     top: 50%;
     transform: translateY(-50%);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
+    z-index: 20;
+    
+    /* 1. Đổi sang nền trắng đặc (không trong suốt) để cắt chữ gãy gọn */
+    background: #fff; 
+    
+    /* 2. Tạo một lớp phủ mờ bên trái để chữ biến mất mượt hơn (tùy chọn) */
+    /* box-shadow: -10px 0 10px #fff; */
+    
+    padding-left: 5px;
+    height: 30px; /* Chiều cao vừa đủ bao quanh các nút */
 }
 
 .drag-handle {
@@ -477,32 +507,27 @@ input[type="text"]::placeholder {
     background: #245a48;
 }
 
-/* --- Styles cho Dropdown Điểm xuất phát --- */
-
-/* Menu thả xuống */
 .custom-dropdown {
-    position: absolute; /* Trôi nổi so với input-relative-wrapper */
-    top: 100%;          /* Nằm ngay dưới đáy input */
+    position: absolute; 
+    top: 100%;          
     left: 0;
-    width: 100%;        /* Rộng bằng input */
+    width: 100%;      
     background: white;
     border: 1px solid #ddd;
-    border-top: none;   /* Bỏ viền trên cho liền mạch */
+    border-top: none;  
     border-radius: 0 0 8px 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    z-index: 1000;      /* Đảm bảo nổi lên trên các phần tử khác */
+    z-index: 1000;   
     overflow: hidden;
     transition: all 0.2s ease;
 }
 
-/* Class để ẩn menu */
 .custom-dropdown.hidden {
     display: none;
     opacity: 0;
     transform: translateY(-5px);
 }
 
-/* Từng dòng trong menu */
 .dropdown-item {
     display: flex;
     align-items: center;
@@ -517,14 +542,14 @@ input[type="text"]::placeholder {
 }
 
 .dropdown-item:hover {
-    background-color: #f0f7f4; /* Màu xanh nhạt khi hover */
+    background-color: #f0f7f4;
 }
 
 /* Icon và Chữ */
 .dropdown-item .icon {
     font-size: 20px;
     margin-right: 12px;
-    color: #3C7363; /* Màu xanh chủ đạo của bạn */
+    color: #3C7363;
 }
 
 .dropdown-item .item-text {
@@ -543,10 +568,63 @@ input[type="text"]::placeholder {
     color: #888;
 }
 
-/* Hiệu ứng xoay khi đang lấy GPS */
 .icon.spinning {
     display: inline-block;
     animation: spin 1s linear infinite;
 }
 
 @keyframes spin { 100% { transform: rotate(360deg); } }
+
+.dropdown-item.gps-item {
+    background-color: #fff;
+    z-index: 2; 
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: #eee;
+    margin: 0 10px;
+}
+
+.dropdown-divider.hidden {
+    display: none;
+}
+
+#search-results-container {
+    max-height: 200px; 
+    overflow-y: auto;
+}
+
+.search-result-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f9f9f9;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.search-result-item:hover {
+    background-color: #f5f5f5;
+}
+
+.search-result-item .icon-place {
+    color: #888;
+    font-size: 16px;
+}  
+
+#search-results-container {
+    max-height: 250px; 
+    overflow-y: auto; 
+}
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+}
+.search-result-item:hover {
+    background-color: #f5f5f5;
+}
