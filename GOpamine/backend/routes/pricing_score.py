@@ -2,66 +2,64 @@ import sqlite3
 import os
 import sys
 
-# --- IMPORT MODULE ĐỒNG ĐỘI ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.append(current_dir)
+# ==============================================================================
+# PHẦN 1: CẤU HÌNH IMPORT & ĐƯỜNG DẪN (ĐÃ SỬA)
+# ==============================================================================
 
-# A. Import Cost Estimation (Kế toán)
+# Import các module cùng thư mục một cách an toàn
 try:
     import cost_estimation
-except ImportError:
-    cost_estimation = None
-    print("[WARN] Khong tim thay module: cost_estimation.py")
-
-# B. Import Real Times (Thời tiết)
-real_times = None 
-try:
     import real_times
-    print("[INFO] Da load module: real_times")
 except ImportError:
-    print("[WARN] Khong tim thay module: real_times.py")
-    real_times = None
+    from . import cost_estimation
+    from . import real_times
 
-# --- 2. CẤU HÌNH DATABASE ---
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(current_dir)), 'backend', 'data', 'vehicle.db')
-if not os.path.exists(DB_PATH):
-    DB_PATH = os.path.join(current_dir, '../data/vehicle.db')
+# Đường dẫn DB (Leo ra ngoài 2 cấp để tìm folder database)
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.abspath(os.path.join(CURRENT_DIR, '../../database/vehicle.db'))
 
-# --- 3. DATA CLASSES ---
+# ==============================================================================
+# PHẦN 2: DATA CLASSES (SỬA LẠI CHO KHỚP SỐ LƯỢNG THAM SỐ)
+# ==============================================================================
 class UserRequest:
     def __init__(self, is_student, priorities):
         self.is_student = is_student
         self.priorities = priorities
 
 class WeatherContext:
-    def __init__(self, is_raining, is_hot):
+    # Thêm giá trị mặc định để tránh lỗi "arguments mismatch"
+    def __init__(self, is_raining=False, is_hot=False):
         self.is_raining = is_raining
         self.is_hot = is_hot
 
-# --- 4. HÀM LẤY THỜI TIẾT THẬT ---
+# ==============================================================================
+# PHẦN 3: CÁC HÀM HỖ TRỢ (SỬA ĐƯỜNG DẪN DB)
+# ==============================================================================
+
 def get_real_weather_context():
     """Gọi API thật để lấy dữ liệu"""
     is_raining = False
     is_hot = False
 
-    if real_times:
+    # Kiểm tra xem module real_times có tồn tại không
+    if 'real_times' in sys.modules and real_times:
         api_key = os.getenv("OPENWEATHER_API_KEY") 
-        weather_data = real_times.fetch_weather_realtime(api_key)
-        
-        if weather_data.get("success"):
-            is_raining = weather_data.get("dang_mua", False)
-            temp = weather_data.get("nhiet_do", 30)
-            is_hot = True if temp > 35 else False
-            print(f"[INFO] Thoi tiet thuc te: {temp}C | Mua: {is_raining}")
-        else:
-            print(f"[ERROR] API Thoi tiet loi: {weather_data.get('error')}")
+        try:
+            weather_data = real_times.fetch_weather_realtime(api_key)
+            if weather_data.get("success"):
+                is_raining = weather_data.get("dang_mua", False)
+                temp = weather_data.get("nhiet_do", 30)
+                is_hot = True if temp > 35 else False
+                print(f"[INFO] Thoi tiet: {temp}C | Mua: {is_raining}")
+            else:
+                print(f"[WARN] API Thoi tiet loi: {weather_data.get('error')}")
+        except Exception as e:
+            print(f"[WARN] Loi module weather: {e}")
     else:
-        print("[INFO] Khong co module real_times, su dung du lieu gia dinh.")
+        print("[INFO] Khong co module real_times, dung gia dinh.")
     
     return WeatherContext(is_raining, is_hot)
 
-# --- 5. HÀM LẤY DỮ LIỆU XE TỪ DB ---
 def get_modes_from_db():
     modes = []
     if not os.path.exists(DB_PATH):
@@ -76,7 +74,7 @@ def get_modes_from_db():
         
         for row in rows:
             mode = dict(row)
-            # Mapping key
+            # Mapping key (Logic của bạn)
             if mode['type_key'] == 'walk':
                 mode['map_key'] = 'walking'
                 mode['speed'] = 5
@@ -96,11 +94,14 @@ def get_modes_from_db():
             if mode['map_key']: modes.append(mode)
         conn.close()
     except Exception as e:
-        print(f"[ERROR] Loi DB: {e}")
+        print(f"[ERROR] Loi DB Pricing: {e}")
         return []
     return modes
 
-# --- 6. HÀM TÍNH TRỌNG SỐ ---
+# ==============================================================================
+# PHẦN 4: THUẬT TOÁN CHÍNH (GIỮ NGUYÊN CỦA BẠN 100%)
+# ==============================================================================
+
 def calculate_weights(priorities):
     weights = {'cost': 0.25, 'time': 0.25, 'safety': 0.25, 'weather': 0.25}
     BOOST = 0.4
@@ -111,7 +112,6 @@ def calculate_weights(priorities):
     total = sum(weights.values())
     return {k: v/total for k, v in weights.items()}
 
-# --- 7. CORE LOGIC: CHẤM ĐIỂM ---
 def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.5):
     modes = get_modes_from_db()
     if not modes: return []
@@ -122,15 +122,30 @@ def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.
 
     results = []
     for mode in modes:
-        # A. Tính tiền
+        # A. TÍNH TIỀN
+        # Mặc định
         cost_result = {'value': 0, 'display': '0VND'}
+        
         if cost_estimation:
-            cost_result = cost_estimation.calculate_transport_cost(
+            # Gọi hàm (hàm này giờ trả về Dict)
+            result_data = cost_estimation.calculate_transport_cost(
                 mode=mode['map_key'],
                 distance_km=trip_distance,
                 is_student=user.is_student,
                 is_raining=weather_ctx.is_raining
             )
+            
+            # Kiểm tra nếu trả về Dict thì gán vào, nếu trả về Int (phòng hờ) thì tự format
+            if isinstance(result_data, dict):
+                cost_result = result_data
+            else:
+                # Fallback nếu lỡ hàm trả về số
+                val = int(result_data)
+                cost_result = {
+                    'value': val,
+                    'display': f"{val:,}VND"
+                }
+
         final_price = cost_result['value']
         
         # B. Tính thời gian
@@ -158,18 +173,17 @@ def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.
         )
 
         labels = []
-        if s_cost > 7.5: labels.append("Tiết kiệm")      # Cũ: Tiet kiem
-        if s_time > 8.0: labels.append("Nhanh nhất")     # Cũ: Nhanh
-        if s_weather > 9.0 and weather_ctx.is_raining: labels.append("Che mưa tốt") # Cũ: Che mua
+        if s_cost > 7.5: labels.append("Tiết kiệm")      
+        if s_time > 8.0: labels.append("Nhanh nhất")     
+        if s_weather > 9.0 and weather_ctx.is_raining: labels.append("Che mưa tốt") 
 
         results.append({
             "mode_name": mode['name'],
             "price_value": final_price,
-            "display_price": cost_result['display'],
+            "display_price": cost_result['display'], # Giờ nó sẽ là "~15,000VND"
             "duration": int(duration_min),
             "score": round(final_score, 1),
             "labels": labels
         })
 
     return sorted(results, key=lambda x: x['score'], reverse=True)
-# ==============================================================================
