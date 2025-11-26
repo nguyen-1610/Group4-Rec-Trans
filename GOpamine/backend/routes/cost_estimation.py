@@ -25,7 +25,6 @@ def get_db_connection():
 # 2. LOAD DỮ LIỆU GIÁ (CACHE VÀO RAM)
 # ==============================================================================
 def load_price_config_from_db():
-    """Đọc bảng giá từ DB và lưu vào dictionary để tra cứu nhanh."""
     config = { "walking": 0, "bus": 7000, "motorbike": {}, "car": {} }
     
     conn = get_db_connection()
@@ -33,18 +32,26 @@ def load_price_config_from_db():
 
     cursor = conn.cursor()
 
+    # Helper function để xử lý tên hiển thị đẹp (Fix lỗi "BeCar Car")
+    def format_display_name(brand, tier, suffix):
+        base_name = f"{brand} {tier}".strip()
+        # Nếu trong tên hãng/loại đã có chữ "Car" hoặc "Bike" thì không thêm nữa
+        if suffix.lower() in base_name.lower():
+            return base_name
+        return f"{base_name} {suffix}"
+
     # A. Load Xe Máy
     try:
         rows = cursor.execute("SELECT * FROM motorbike_pricing").fetchall()
         for row in rows:
             brand = row["brand"] or "Standard"
             tier = row["type"] or "Normal"
-            # Key định danh: grab_normal, be_premium
             key = f"{brand}_{tier}".lower().replace(" ", "")
             
             config["motorbike"][key] = {
                 "brand": brand,
                 "tier": tier,
+                "display_name": format_display_name(brand, tier, "Bike"), # <--- Fix lặp tên ở đây
                 "base_fare": row["base_price"],
                 "base_distance": row["base_distance_km"],
                 "price_per_km": row["per_km_after_base"],
@@ -63,6 +70,7 @@ def load_price_config_from_db():
             config["car"][key] = {
                 "brand": brand,
                 "tier": tier,
+                "display_name": format_display_name(brand, tier, "Car"), # <--- Fix lặp tên ở đây
                 "base_fare": row["base_price"],
                 "base_distance": row["base_distance_km"],
                 "per_km_3_12": row["per_km_3_12"],
@@ -75,7 +83,6 @@ def load_price_config_from_db():
     conn.close()
     return config
 
-# Load cấu hình ngay khi import module
 PRICE_CONFIG = load_price_config_from_db()
 
 # ==============================================================================

@@ -159,8 +159,8 @@ body {
 }
 
 .option-card.selected .vehicle-icon {
-    background: #4285f4;
-    color: white;
+    background: white !important;       /* QUAN TRỌNG: Giữ nền trắng để logo đẹp */
+    border: 2px solid #4285f4 !important; /* Chỉ tô màu cho cái viền */
 }
 
 .vehicle-info h4 {
@@ -228,4 +228,31 @@ body {
 
 .leaflet-routing-container {
     display: none;
+}
+
+/* --- Style cho Logo Hãng xe --- */
+
+.brand-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; 
+    border-radius: 50%;  
+    padding: 2px;        /* Padding chung cho các logo */
+}
+
+/* Riêng cho logo Be, nếu cần padding nhiều hơn để tránh bị cắt chữ */
+/* Bạn có thể dùng JS để thêm class riêng hoặc chỉnh sửa ảnh gốc */
+/* Cách đơn giản nhất là tăng padding chung lên 4px nếu thấy Be bị cắt nhiều */
+
+.vehicle-icon {
+    width: 45px;        
+    height: 45px;
+    background: #fff;   
+    border: 1px solid #eee;
+    border-radius: 50%; /* Bo tròn hoàn toàn */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;     
+    overflow: hidden;   
 }

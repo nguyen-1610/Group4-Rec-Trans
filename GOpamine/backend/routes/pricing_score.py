@@ -71,22 +71,37 @@ def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.
     if cost_estimation:
         config = cost_estimation.PRICE_CONFIG
         
-        # Xe máy: Lấy danh sách các Hãng duy nhất
-        bike_brands = {cfg['brand'] for cfg in config.get("motorbike", {}).values()}
+        # B. Lấy danh sách Hãng Xe Máy DUY NHẤT (Unique)
+        bike_brands = set()
+        for cfg in config.get("motorbike", {}).values():
+            bike_brands.add(cfg['brand'])
+            
         for brand in bike_brands:
+            clean_name = brand
+            if "bike" not in brand.lower() and "máy" not in brand.lower():
+                clean_name = f"{brand} Bike"
+            
             modes.append({
-                'name': f"{brand} Bike (Gói cước)", 
+                'name': f"{clean_name} (Normal/Premium)", 
                 'map_key': 'ride_hailing_bike',
                 'speed': 30,
                 'has_roof': False,
                 'brand': brand
             })
 
-        # Ô tô: Lấy danh sách các Hãng duy nhất
-        car_brands = {cfg['brand'] for cfg in config.get("car", {}).values()}
+        # C. Lấy danh sách Hãng Ô tô DUY NHẤT
+        car_brands = set()
+        for cfg in config.get("car", {}).values():
+            car_brands.add(cfg['brand'])
+            
         for brand in car_brands:
+            clean_name = brand
+            brand_lower = brand.lower()
+            if "car" not in brand_lower and "taxi" not in brand_lower and "ô tô" not in brand_lower:
+                clean_name = f"{brand} Car"
+
             modes.append({
-                'name': f"{brand} Car (4/7 chỗ)",
+                'name': f"{clean_name} (4/7 chỗ)", 
                 'map_key': 'ride_hailing_car',
                 'speed': 35,
                 'has_roof': True,

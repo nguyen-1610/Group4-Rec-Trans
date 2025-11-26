@@ -139,14 +139,20 @@ document.addEventListener('DOMContentLoaded', async function() {
         // 2. Helper chọn icon
         const getIcon = (name) => {
             const n = name.toLowerCase();
-            if (n.includes('grab')) return '🟢'; 
-            if (n.includes('be')) return '🟡';   
-            if (n.includes('gojek')) return '🔴'; 
-            if (n.includes('xanh')) return '🚙';  
-            if (n.includes('buýt') || n.includes('bus')) return '🚌';
-            if (n.includes('bộ') || n.includes('walk')) return '🚶';
-            if (n.includes('máy') || n.includes('bike')) return '🏍️';
-            return '🚗';
+            const path = '/static/icons/'; // Đường dẫn tới thư mục ảnh
+            
+            let imgName = 'car_default.png'; // Mặc định
+            
+            // Logic chọn ảnh dựa trên tên
+            if (n.includes('grab'))        imgName = 'grab.png';
+            else if (n.includes('be'))     imgName = 'be.png';
+            else if (n.includes('xanh'))   imgName = 'xanhsm.png';
+            else if (n.includes('buýt') || n.includes('bus')) imgName = 'bus.png';
+            else if (n.includes('bộ') || n.includes('walk'))  imgName = 'walk.png';
+            else if (n.includes('máy') || n.includes('bike')) imgName = 'motorbike.png'; // Icon mặc định cho xe máy
+            
+            // Trả về thẻ IMG thay vì Emoji
+            return `<img src="${path}${imgName}" class="brand-logo-img" alt="${name}">`;
         };
 
         // 3. Tạo và chèn thẻ HTML mới
