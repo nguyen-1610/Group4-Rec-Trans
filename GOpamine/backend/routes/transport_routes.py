@@ -26,7 +26,12 @@ def compare_transport():
             })
 
         data = request.get_json()
-        distance_km = float(data.get('distance_km', 0))
+
+        try:
+            distance_km = float(data.get('distance_km', 0))
+        except (ValueError, TypeError):
+            distance_km = 0.0
+
         priorities = data.get('priorities', ['saving', 'speed'])
         
         print(f"📊 [Transport API] So sánh giá cho {distance_km}km, ưu tiên: {priorities}")
