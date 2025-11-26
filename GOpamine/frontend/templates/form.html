@@ -21,7 +21,26 @@
                     <label class="form-label">
                         Điểm xuất phát
                     </label>
-                    <input type="text" placeholder="Tìm kiếm" id="origin-input" list="places-list" autocomplete="off">
+                    
+                    <div class="input-relative-wrapper" style="position: relative;">
+                        
+                        <input type="text" 
+                               placeholder="Nhập điểm đi hoặc chọn bên dưới..." 
+                               id="origin-input" 
+                               list="places-list" 
+                               autocomplete="off">
+                        
+                        <div id="origin-dropdown" class="custom-dropdown hidden">
+                            <div class="dropdown-item" id="btn-use-gps">
+                                <span class="icon">📍</span>
+                                <div class="item-text">
+                                    <span class="main">Sử dụng vị trí hiện tại</span>
+                                    <span class="sub">Nhấn để lấy tọa độ GPS</span>
+                                </div>
+                            </div>
+                            
+                            </div>
+                    </div>
                 </div>
 
                 <div class="form-group" id="destinations-group">
@@ -96,9 +115,10 @@
             </div>
         </div>
     </div>
-    
+
     <datalist id="places-list"></datalist>
     
     <script src="../static/js/form.js"></script>
+    <script src="../static/js/locations_user.js"></script>
 </body>
 </html>
