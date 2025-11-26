@@ -1,8 +1,10 @@
 import requests
 import math
 import sqlite3
+import os
 from typing import List, Dict, Tuple, Optional
 import json
+from flask import Blueprint, request, jsonify
 
 class AStarRouter:
     """
@@ -15,17 +17,42 @@ class AStarRouter:
         'bus': 'driving'
     }
     
-    def __init__(self, db_path=r'D:\PROJECT\rec_trans\Group4-Rec-Trans\GOpamine\backend\data\tourism-landmarks.db'):
+    def __init__(self, db_path=None):
         self.osrm_base = "http://router.project-osrm.org/route/v1"
-        self.db_path = db_path
+        # Nếu không có db_path, tính toán đường dẫn mặc định
+        if db_path is None:
+            # Tính toán đường dẫn tương đối từ file hiện tại
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            base_dir = os.path.join(current_dir, '..', '..')
+            db_path = os.path.join(base_dir, 'data', 'tourism-landmarks.db')
+        # Đảm bảo đường dẫn là tuyệt đối và normalize
+        self.db_path = os.path.abspath(os.path.normpath(db_path))
+        print(f"📂 Database path: {self.db_path}")
+        # Kiểm tra file có tồn tại không
+        if not os.path.exists(self.db_path):
+            print(f"⚠️  Warning: Database file not found at {self.db_path}")
         
     # ========== DATABASE ==========
     
     def get_db_connection(self):
         """Kết nối đến database"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            # Tạo thư mục nếu chưa tồn tại
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            return conn
+        except sqlite3.Error as e:
+            print(f"❌ SQLite Error: {e}")
+            print(f"   Database path: {self.db_path}")
+            raise
+        except Exception as e:
+            print(f"❌ Unexpected error connecting to database: {e}")
+            print(f"   Database path: {self.db_path}")
+            raise
     
     def get_all_places(self):
         """Lấy tất cả địa điểm từ database"""
@@ -33,23 +60,30 @@ class AStarRouter:
             conn = self.get_db_connection()
             cursor = conn.cursor()
             
-            # SỬA LẠI query này theo cấu trúc DB thực tế của bạn
-            # Giả sử table tên là 'landmarks' với columns: id, name, latitude, longitude
+            # Query theo cấu trúc DB thực tế: id, name, address, lat, lng
             cursor.execute("""
-                SELECT id, name, latitude as lat, longitude as lon 
+                SELECT id, name, lat, lng 
                 FROM locations
             """)
             
             places = []
             for row in cursor.fetchall():
+                # Chuyển đổi lat và lng từ TEXT sang float
                 lat_str = str(row['lat']).replace(',', '.')
-                lon_str = str(row['lon']).replace(',', '.')
+                lng_str = str(row['lng']).replace(',', '.')  # Sửa từ 'lon' thành 'lng'
+                
+                try:
+                    lat = float(lat_str)
+                    lng = float(lng_str)
+                except (ValueError, TypeError):
+                    print(f"⚠️  Warning: Invalid coordinates for {row['name']}: lat={lat_str}, lng={lng_str}")
+                    continue  # Bỏ qua địa điểm có tọa độ không hợp lệ
                 
                 places.append({
                     'id': row['id'],
                     'name': row['name'],
-                    'lat': float(lat_str),
-                    'lon': float(lon_str)
+                    'lat': lat,
+                    'lon': lng  # Sử dụng 'lon' để nhất quán với code còn lại
                 })
                 
             conn.close()
@@ -333,3 +367,75 @@ if __name__ == "__main__":
         print(f"📍 Waypoints: {data['total_waypoints']}")
     else:
         print(f"\n❌ Error: {result['error']}")
+
+
+def create_api_blueprint(db_path: str) -> Blueprint:
+    """
+    Tạo blueprint chứa toàn bộ API liên quan tới A* để tách khỏi app.py
+    """
+    router = AStarRouter(db_path=db_path)
+    api_bp = Blueprint('astar_api', __name__, url_prefix='/api')
+
+    @api_bp.route('/places', methods=['GET'])
+    def get_places():
+        try:
+            places = router.get_all_places()
+            return jsonify({
+                'success': True,
+                'data': places,
+                'total': len(places)
+            })
+        except Exception as e:
+            print(f"❌ Error in /api/places: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @api_bp.route('/find-route', methods=['POST'])
+    def find_route():
+        try:
+            data = request.get_json()
+
+            if not data or 'start_id' not in data or 'end_id' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Missing start_id or end_id'
+                }), 400
+
+            start_id = int(data['start_id'])
+            end_id = int(data['end_id'])
+            vehicle_type = data.get('vehicle_type', 'car')
+            vehicle_speed = data.get('vehicle_speed')
+            vehicle_speed = float(vehicle_speed) if vehicle_speed else None
+
+            print(f"📡 Nhận request: start={start_id}, end={end_id}")
+
+            result = router.find_optimal_route(
+                start_id,
+                end_id,
+                vehicle_type=vehicle_type,
+                vehicle_speed=vehicle_speed
+            )
+
+            print(f"✅ Kết quả: {result['success']}")
+
+            if result['success']:
+                return jsonify(result)
+            return jsonify(result), 404
+
+        except Exception as e:
+            print(f"❌ Error in /api/find-route: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @api_bp.route('/test', methods=['GET'])
+    def health_check():
+        return jsonify({
+            'success': True,
+            'message': 'Server is running!',
+            'db_path': db_path
+        })
+
+    return api_bp
