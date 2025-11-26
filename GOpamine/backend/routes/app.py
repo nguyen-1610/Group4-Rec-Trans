@@ -8,6 +8,8 @@ from form import form_bp
 
 # 2. IMPORT TỪ CHATBOT.PY
 from chatbot import chatbot_bp
+from flask_login import LoginManager
+from auth import auth_bp, User, get_db_connection
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
@@ -20,6 +22,32 @@ app = Flask(
     template_folder=os.path.join(BASE_DIR, 'frontend', 'templates'),
     static_folder=os.path.join(BASE_DIR, 'frontend', 'static')
 )
+
+app.secret_key = 'our_key'
+# Cấu hình Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login' # Nếu chưa login thì đá về trang login
+
+# Hàm load_user bắt buộc cho Flask-Login
+@login_manager.user_loader
+def load_user(user_id):
+    conn = get_db_connection()
+    # Lưu ý: Cột ID trong DB là user_id
+    user_row = conn.execute("SELECT * FROM User WHERE user_id = ?", (user_id,)).fetchone()
+    conn.close()
+    
+    if user_row:
+        return User(
+            user_id=user_row['user_id'], 
+            email=user_row['email'], 
+            username=user_row['username'],
+            auth_type=user_row['auth_type'],
+            is_guest=user_row['is_guest']
+        )
+    return None
+# ---------------------
+
 CORS(app)
 
 # Cho phép frontend chạy trên domain/port khác gọi được API backend
@@ -31,6 +59,7 @@ app.register_blueprint(feedback_bp)
 app.register_blueprint(chatbot_bp)
 app.register_blueprint(create_api_blueprint(DB_PATH))
 app.register_blueprint(form_bp)
+app.register_blueprint(auth_bp)
 
 
 # ========== ROUTES HTML ==========
