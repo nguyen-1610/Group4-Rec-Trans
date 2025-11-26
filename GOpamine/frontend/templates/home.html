@@ -13,10 +13,10 @@
         
         <div class="hero-content container">
             <h1 data-i18n="hero_title">Khám phá hành trình hoàn hảo của bạn.</h1>
-            <p data-i18n="hero_desc">AI gợi ý phương tiện di chuyển tối ưu dựa trên ngân sách, thời gian và sở thích của bạn.</p>
+            <p data-i18n="hero_desc">GOpamine gợi ý phương tiện di chuyển tối ưu dựa trên ngân sách, thời gian và sở thích của bạn.</p>
             
             <div class="hero-buttons">
-                <a href="/form" class="btn btn-primary btn-large" data-i18n="btn_start">Bắt đầu tìm lộ trình</a>
+                <a href="/form" class="btn btn-primary btn-large" data-i18n="btn_start">Khám phá lộ trình của bạn</a>
                 
                 <a href="/register" class="btn btn-outline" data-i18n="btn_signup">Tạo tài khoản</a>
                 
@@ -35,7 +35,7 @@
             <p class="section-desc" data-i18n="featured_desc">Thành phố lớn nhất Việt Nam với lịch sử phong phú và văn hoá sôi nổi.</p>
             
             <div class="grid-layout">
-                <div class="card">
+                <div class="card" data-destination="Chợ Bến Thành" style="cursor: pointer;">
                     <div class="card-img-wrap">
                         <img src="../static/image/cho_ben_thanh.jpg" alt="Chợ Bến Thành">
                     </div>
@@ -45,7 +45,7 @@
                     </div>
                 </div>
                 
-                <div class="card">
+                <div class="card" data-destination="Bảo tàng Chứng tích Chiến tranh" style="cursor: pointer;">
                     <div class="card-img-wrap">
                         <img src="../static/image/bao-tang_chung-tich_chien-tranh.jpg" alt="Bảo tàng Chứng tích Chiến tranh">
                     </div>
@@ -55,7 +55,7 @@
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card" data-destination="Nhà thờ Đức Bà Sài Gòn" style="cursor: pointer;">
                     <div class="card-img-wrap">
                         <img src="../static/image/notre-dame-2.jpg" alt="Nhà thờ Đức Bà Sài Gòn">
                     </div>
@@ -65,7 +65,7 @@
                     </div>
                 </div>
     
-                <div class="card">
+                <div class="card" data-destination="Tuyến Metro số 1" style="cursor: pointer;">
                     <div class="card-img-wrap">
                         <img src="../static/image/metro-1-2.jpg" alt="Tuyến Metro số 1">
                     </div>
@@ -75,7 +75,7 @@
                     </div>
                 </div>
             
-                <div class="card">
+                <div class="card" data-destination="Landmark 81" style="cursor: pointer;">
                     <div class="card-img-wrap">
                         <img src="../static/image/landmark-81-2.jpg" alt="Landmark 81">
                     </div>
@@ -85,7 +85,7 @@
                     </div>
                 </div>
             
-                <div class="card">
+                <div class="card" data-destination="Bưu điện Sài Gòn" style="cursor: pointer;">
                     <div class="card-img-wrap">
                         <img src="../static/image/buu-dien_sai-gon-2.jpg" alt="Bưu điện Sài Gòn">
                     </div>
@@ -199,18 +199,20 @@
         </div>
     </section>
 
-    <footer class="main-footer">
+    <footer id="contact" class="main-footer">
         <div class="container footer-grid">
             <div class="footer-col">
                 <h4 data-i18n="footer_about_title">GOpamine</h4>
-                <p data-i18n="footer_about_desc">Nền tảng AI giúp bạn tìm kiếm phương tiện di chuyển tối ưu cho mọi hành trình.</p>
+                <p data-i18n="footer_about_desc">Nền tảng AI kiến tạo lộ trình du lịch cá nhân hóa, 
+                                                tối ưu hóa chi phí, thời gian và trải nghiệm của bạn.</p>
             </div>
             <div class="footer-col">
                 <h4>Dịch vụ</h4>
                 <ul>
                     <li><a href="#" data-i18n="footer_search">Tìm kiếm phương tiện</a></li>
-                    <li><a href="#" data-i18n="footer_plan">Lập kế hoạch hành trình</a></li>
+                    <li><a href="/form" data-i18n="footer_plan">Lập kế hoạch hành trình</a></li>
                     <li><a href="#" data-i18n="footer_compare">So sánh giá cả</a></li>
+                    <li><a href="/chatbot">Trợ lý AI</a></li>
                 </ul>
             </div>
             <div class="footer-col">
@@ -223,7 +225,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p data-i18n="rights_reserved">© 2025 SGTravel Corporation. Mọi quyền được bảo lưu.</p>
+            <p data-i18n="rights_reserved">© 2025 GOpamine. Mọi quyền được bảo lưu.</p>
             <div class="footer-links"><a href="#" data-i18n="privacy">Chính sách bảo mật</a>
                 <a href="#" data-i18n="terms">Điều khoản dịch vụ</a>
             </div>

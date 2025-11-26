@@ -5,11 +5,12 @@ const translations = {
         "assistant": "Trợ lý AI",
         "suggestions": "Gợi ý",
         "about_us": "Về chúng tôi",
+        "contact": "Liên hệ",
         "guide": "Hướng dẫn",
         "login_signup": "Đăng nhập / Đăng ký",
         "hero_title": "Khám phá hành trình hoàn hảo của bạn.",
-        "hero_desc": "AI gợi ý phương tiện di chuyển tối ưu dựa trên ngân sách, thời gian và sở thích của bạn.",
-        "btn_start": "Bắt đầu tìm lộ trình",
+        "hero_desc": "Nền tảng AI kiến tạo lộ trình du lịch cá nhân hóa, tối ưu hóa chi phí, thời gian và trải nghiệm của bạn.",
+        "btn_start": "Khám phá lộ trình của bạn",
         "btn_signup": "Tạo tài khoản",
         "acc_exist": "Đã có tài khoản?",
         "btn_login": "Đăng nhập",
@@ -48,8 +49,9 @@ const translations = {
         "footer_search": "Tìm kiếm phương tiện",
         "footer_plan": "Lập kế hoạch hành trình",
         "footer_compare": "So sánh giá cả",
+        "footer_AI": "Trợ lý AI",
         "footer_connect": "Kết nối",
-        "rights_reserved": "© 2025 SGTravel Corporation. Mọi quyền được bảo lưu.",
+        "rights_reserved": "© 2025 GOpamine. Mọi quyền được bảo lưu.",
         "privacy": "Chính sách bảo mật",
         "terms": "Điều khoản dịch vụ",
         "footer_address": "Địa chỉ: 227 Nguyễn Văn Cừ, phường Chợ Quán, Thành phố Hồ Chí Minh"
@@ -59,6 +61,7 @@ const translations = {
         "assistant": "AI Assistant",
         "suggestions": "Suggestions",
         "about_us": "About Us",
+        "contact": "Contact",
         "guide": "Guide",
         "login_signup": "Log In / Sign Up",
         "hero_title": "Discover your perfect journey.",
@@ -103,7 +106,8 @@ const translations = {
         "footer_plan": "Journey Planning",
         "footer_compare": "Price Comparison",
         "footer_connect": "Connect",
-        "rights_reserved": "© 2025 SGTravel Corporation. All rights reserved.",
+        "footer_AI": "AI Assistant",
+        "rights_reserved": "© 2025 GOpamine. All rights reserved.",
         "privacy": "Privacy Policy",
         "terms": "Terms of Service",
         "footer_address": "Address: 227 Nguyễn Văn Cừ St, Chợ Quán Ward, HCMC"
@@ -113,10 +117,28 @@ const translations = {
 document.addEventListener('DOMContentLoaded', function() {
     console.log(">>> JS LOADER: Đã tải thành công (Phiên bản sửa lỗi Case-Sensitive)");
 
+    // Merge translations vào window.translations (nếu đã có từ base.html)
+    if (!window.translations) {
+        window.translations = { vi: {}, en: {} };
+    }
+    if (!window.translations.vi) {
+        window.translations.vi = {};
+    }
+    if (!window.translations.en) {
+        window.translations.en = {};
+    }
+    
+    // Merge translations từ home.js vào window.translations
+    Object.assign(window.translations.vi, translations.vi);
+    Object.assign(window.translations.en, translations.en);
+    
+    // Sử dụng window.translations thay vì translations local
+    const translationsToUse = window.translations;
+
     // --- KHỞI TẠO BIẾN NGÔN NGỮ ---
     // Lấy từ LocalStorage, nếu không có thì mặc định là 'vi' (viết thường)
     // QUAN TRỌNG: Luôn ép về chữ thường (.toLowerCase()) để tránh lỗi "VI"
-    let currentLang = (localStorage.getItem('userLang') || 'vi').toLowerCase();
+    let currentLang = (localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi').toLowerCase();
     
     console.log(">>> Ngôn ngữ khởi tạo:", currentLang);
 
@@ -146,11 +168,14 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.forEach(element => {
             const key = element.getAttribute('data-i18n');
             
+            // Sử dụng window.translations (đã merge từ base.html và home.js)
+            const trans = window.translations && window.translations[lang];
+            
             // Kiểm tra an toàn:
-            // 1. translations[lang] có tồn tại không? (ví dụ 'vi')
+            // 1. trans có tồn tại không? (ví dụ 'vi')
             // 2. Key có tồn tại trong ngôn ngữ đó không?
-            if (translations[lang] && translations[lang][key]) {
-                element.textContent = translations[lang][key];
+            if (trans && trans[key]) {
+                element.textContent = trans[key];
                 count++;
             } else {
                 console.warn(`⚠️ Thiếu key: "${key}" trong ngôn ngữ "${lang}"`);
@@ -173,11 +198,17 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log(">>> Người dùng đổi sang:", currentLang);
 
-            // Lưu lại (Luôn lưu chữ thường)
+            // Lưu lại (Luôn lưu chữ thường) - Lưu vào cả hai để tương thích
             localStorage.setItem('userLang', currentLang);
+            localStorage.setItem('language', currentLang);
 
             // Cập nhật giao diện
             updateUI(currentLang);
+            
+            // Gọi changeLanguage từ base.html nếu có
+            if (typeof changeLanguage === 'function') {
+                changeLanguage(currentLang);
+            }
         });
     } else {
         console.error("❌ LỖI: Không tìm thấy nút ID 'langSwitch' trong HTML");
@@ -203,4 +234,17 @@ document.addEventListener('DOMContentLoaded', function() {
             viewMoreBtn.style.display = 'none';
         });
     }
+
+    // --- XỬ LÝ CLICK VÀO CARD ĐỂ CHUYỂN ĐẾN FORM ---
+    const cards = document.querySelectorAll('.card[data-destination]');
+    cards.forEach(card => {
+        card.addEventListener('click', function() {
+            const destination = this.getAttribute('data-destination');
+            if (destination) {
+                // Encode URL đúng cách bằng JavaScript
+                const encodedDestination = encodeURIComponent(destination);
+                window.location.href = `/form?destination=${encodedDestination}`;
+            }
+        });
+    });
 });

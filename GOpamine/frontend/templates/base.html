@@ -14,6 +14,10 @@
             box-sizing: border-box;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background-color: #dfe9e4;
@@ -44,6 +48,13 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .logo-section:hover {
+            opacity: 0.8;
         }
 
         .logo-circle {
@@ -315,12 +326,12 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo-section">
+            <a href="/" class="logo-section">
                 <div class="logo-circle">
                     <i class="fas fa-building"></i>
                 </div>
                 <span class="logo-text">GOpamine</span>
-            </div>
+            </a>
             <div class="header-right">
                 <div class="lang-switch active" id="langSwitch">
                     <span class="lang-switch-text vi">VI</span>
@@ -331,12 +342,12 @@
                 
                 <!-- Desktop Navigation -->
                 <nav class="desktop-nav">
-                    <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
-                    <a href="/chatbot" class="nav-link {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
-                    <a href="#featured" class="menu-item {% if request.endpoint == 'featured' %}active{% endif %}">Gợi ý</a>
-                    <a href="/about" class="nav-link {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
-                    <a href="/guide" class="nav-link {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
-                    <a href="/register" class="nav-link login-btn">Đăng nhập/ Đăng ký</a>
+                    <a href="/" class="nav-link {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}" data-i18n="home">Trang chủ</a>
+                    <a href="/chatbot" class="nav-link {% if request.endpoint == 'ai_assistant' %}active{% endif %}" data-i18n="assistant">Trợ lý AI</a>
+                    <a href="#featured" class="menu-item {% if request.endpoint == 'featured' %}active{% endif %}" data-i18n="suggestions">Gợi ý</a>
+                    <a href="#contact" class="nav-link" data-i18n="contact">Liên hệ</a>
+                    <a href="/guide" class="nav-link {% if request.endpoint == 'guide' %}active{% endif %}" data-i18n="guide">Hướng dẫn</a>
+                    <a href="/register" class="nav-link login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
                 </nav>
             </div>
         </div>
@@ -345,13 +356,13 @@
         <div class="menu-dropdown" id="menuDropdown">
             <div class="menu-sidebar">
                 <nav class="menu-items">
-                    <a href="/" class="menu-item {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}">Trang chủ</a>
-                    <a href="/chatbot" class="menu-item {% if request.endpoint == 'ai_assistant' %}active{% endif %}">Trợ lý AI</a>
-                    <a href="#featured" class="menu-item {% if request.endpoint == 'featured' %}active{% endif %}">Gợi ý</a>
-                    <a href="/about" class="menu-item {% if request.endpoint == 'about' %}active{% endif %}">Về chúng tôi</a>
-                    <a href="/guide" class="menu-item {% if request.endpoint == 'guide' %}active{% endif %}">Hướng dẫn</a>
+                    <a href="/" class="menu-item {% if request.endpoint == 'index' or request.endpoint == 'home' %}active{% endif %}" data-i18n="home">Trang chủ</a>
+                    <a href="/chatbot" class="menu-item {% if request.endpoint == 'ai_assistant' %}active{% endif %}" data-i18n="assistant">Trợ lý AI</a>
+                    <a href="#featured" class="menu-item {% if request.endpoint == 'featured' %}active{% endif %}" data-i18n="suggestions">Gợi ý</a>
+                    <a href="#contact" class="menu-item" data-i18n="contact">Liên hệ</a>
+                    <a href="/guide" class="menu-item {% if request.endpoint == 'guide' %}active{% endif %}" data-i18n="guide">Hướng dẫn</a>
                 </nav>
-                <a href="/register" class="menu-login-btn" data-i18n="loginRegister">Đăng nhập/ Đăng ký</a>
+                <a href="/register" class="menu-login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
             </div>
         </div>
 
@@ -367,20 +378,20 @@
                 vi: {
                     // Navigation
                     home: "Trang chủ",
-                    aiAssistant: "Trợ lý AI",
+                    assistant: "Trợ lý AI",
                     suggestions: "Gợi ý",
-                    about: "Về chúng tôi",
+                    contact: "Liên hệ",
                     guide: "Hướng dẫn",
-                    loginRegister: "Đăng nhập/ Đăng ký"
+                    login_signup: "Đăng nhập/ Đăng ký"
                 },
                 en: {
                     // Navigation
                     home: "Home",
-                    aiAssistant: "AI Assistant",
+                    assistant: "AI Assistant",
                     suggestions: "Suggestions",
-                    about: "About Us",
+                    contact: "Contact",
                     guide: "Guide",
-                    loginRegister: "Login/ Register"
+                    login_signup: "Login/ Register"
                 }
             };
         } else {
@@ -389,55 +400,57 @@
             window.translations.en = window.translations.en || {};
             Object.assign(window.translations.vi, {
                 home: "Trang chủ",
-                aiAssistant: "Trợ lý AI",
+                assistant: "Trợ lý AI",
                 suggestions: "Gợi ý",
-                about: "Về chúng tôi",
+                contact: "Liên hệ",
                 guide: "Hướng dẫn",
-                loginRegister: "Đăng nhập/ Đăng ký"
+                login_signup: "Đăng nhập/ Đăng ký"
             });
             Object.assign(window.translations.en, {
                 home: "Home",
-                aiAssistant: "AI Assistant",
+                assistant: "AI Assistant",
                 suggestions: "Suggestions",
-                about: "About Us",
+                contact: "Contact",
                 guide: "Guide",
-                loginRegister: "Login/ Register"
+                login_signup: "Login/ Register"
             });
         }
 
         // Get current language from localStorage or default to 'vi'
+        // Sử dụng 'userLang' để đồng bộ với home.js
         function getCurrentLanguage() {
-            return localStorage.getItem('language') || 'vi';
+            return localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi';
         }
 
         // Save language to localStorage
+        // Lưu vào cả 'userLang' và 'language' để tương thích
         function setLanguage(lang) {
+            localStorage.setItem('userLang', lang);
             localStorage.setItem('language', lang);
         }
 
-        // Change language function
+        // Change language function - Đồng bộ với home.js
         function changeLanguage(lang) {
-            if (!window.translations || !window.translations[lang]) {
-                return;
+            // Nếu home.js đã load và có translations object, sử dụng nó
+            if (window.translations && window.translations[lang]) {
+                const translations = window.translations[lang];
+                
+                // Update all elements with data-i18n attribute
+                document.querySelectorAll('[data-i18n]').forEach(function(element) {
+                    const key = element.getAttribute('data-i18n');
+                    if (translations[key]) {
+                        element.textContent = translations[key];
+                    }
+                });
+
+                // Update all elements with data-i18n-placeholder attribute
+                document.querySelectorAll('[data-i18n-placeholder]').forEach(function(element) {
+                    const key = element.getAttribute('data-i18n-placeholder');
+                    if (translations[key]) {
+                        element.placeholder = translations[key];
+                    }
+                });
             }
-
-            const translations = window.translations[lang];
-            
-            // Update all elements with data-i18n attribute
-            document.querySelectorAll('[data-i18n]').forEach(function(element) {
-                const key = element.getAttribute('data-i18n');
-                if (translations[key]) {
-                    element.textContent = translations[key];
-                }
-            });
-
-            // Update all elements with data-i18n-placeholder attribute
-            document.querySelectorAll('[data-i18n-placeholder]').forEach(function(element) {
-                const key = element.getAttribute('data-i18n-placeholder');
-                if (translations[key]) {
-                    element.placeholder = translations[key];
-                }
-            });
 
             // Update language switch state
             const langSwitch = document.getElementById('langSwitch');
