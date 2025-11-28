@@ -79,7 +79,7 @@ async function initSession(forceNew = false) {
         } else {
             // Tạo session mới nếu user vào trực tiếp chatbot
             console.log('🆕 Tạo session mới...');
-            const response = await fetch('http://localhost:5000/api/session', {
+            const response = await fetch('/api/session', {
                 method: 'POST'
             });
             const data = await response.json();
@@ -210,7 +210,7 @@ async function sendMessageToBackend(message, allowRetry = true) {
     try {
         console.log('📤 Sending message:', message);
         
-        const response = await fetch('http://localhost:5000/api/chat', {
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
