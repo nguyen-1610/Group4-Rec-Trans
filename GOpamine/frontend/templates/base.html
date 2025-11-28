@@ -783,6 +783,15 @@
             }
         });
 
+        // === XỬ LÝ CLICK VÀO PROFILE ICON KHI CHƯA ĐĂNG NHẬP ===
+        const profileIcon = document.querySelector('.profile-icon');
+        if (profileIcon) {
+            profileIcon.style.cursor = 'pointer'; // Thêm con trỏ pointer
+            profileIcon.addEventListener('click', function() {
+                window.location.href = '/login';
+            });
+        }
+
         // === PROFILE DROPDOWN TOGGLE (DESKTOP) ===
         const profileTrigger = document.getElementById('profileTrigger');
         const profileDropdown = document.getElementById('profileDropdown');
