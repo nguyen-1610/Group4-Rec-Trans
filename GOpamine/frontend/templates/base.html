@@ -325,6 +325,200 @@
                 display: none;
             }
         }
+
+        /* === PROFILE CONTAINER (DESKTOP) === */
+        .user-profile-container {
+            position: relative;
+            margin-left: 8px;
+        }
+
+        .profile-trigger {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            background-color: #f0f4f2;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .profile-trigger:hover {
+            background-color: #e5efe9;
+            border-color: #3C7363;
+        }
+
+        .profile-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #3C7363;
+        }
+
+        .profile-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #2c4a3a;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-arrow {
+            font-size: 12px;
+            color: #3C7363;
+            transition: transform 0.3s ease;
+        }
+
+        .profile-trigger:hover .profile-arrow {
+            transform: rotate(180deg);
+        }
+
+        /* === PROFILE DROPDOWN === */
+        .profile-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(31, 74, 58, 0.15);
+            min-width: 240px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            border: 1px solid rgba(40, 72, 57, 0.1);
+        }
+
+        .profile-dropdown.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 18px;
+            color: #2c4a3a;
+            font-size: 14px;
+            transition: background-color 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .dropdown-item:first-child {
+            border-radius: 12px 12px 0 0;
+        }
+
+        .dropdown-item:last-child {
+            border-radius: 0 0 12px 12px;
+        }
+
+        .dropdown-item:hover {
+            background-color: #f4f7f5;
+        }
+
+        .dropdown-item i {
+            font-size: 16px;
+            color: #3C7363;
+            width: 20px;
+            text-align: center;
+        }
+
+        .dropdown-item.profile-info {
+            cursor: default;
+            background-color: #f8faf9;
+            font-weight: 500;
+        }
+
+        .dropdown-item.profile-info:hover {
+            background-color: #f8faf9;
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background-color: #e5e9e7;
+            margin: 4px 0;
+        }
+
+        /* === MOBILE PROFILE === */
+        .mobile-user-info {
+            padding: 20px;
+            border-top: 1px solid #eef2f0;
+        }
+
+        .mobile-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background-color: #f8faf9;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .mobile-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid #3C7363;
+        }
+
+        .mobile-user-text {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .mobile-username {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c4a3a;
+        }
+
+        .mobile-email {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .menu-logout-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px;
+            background-color: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 999px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .menu-logout-btn:hover {
+            background-color: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .menu-logout-btn i {
+            font-size: 16px;
+        }
+
+        /* Responsive - Ẩn profile container trên mobile */
+        @media (max-width: 991px) {
+            .user-profile-container {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -353,7 +547,35 @@
                         <a href="/map_trans" class="nav-link {% if request.endpoint == 'map_trans' %}active{% endif %}" data-i18n="transport">Phương tiện</a>
                         <a href="#contact" class="nav-link" data-i18n="contact" data-nav-section="contact">Liên hệ</a>
                     </div>
-                    <a href="/register" class="nav-link login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
+                    
+                    <!-- Phần Login/Profile - Có điều kiện -->
+                    {% if current_user.is_authenticated %}
+                        <!-- Khối đã đăng nhập: Hiển thị Profile -->
+                        <div class="user-profile-container">
+                            <div class="profile-trigger" id="profileTrigger">
+                                <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128" 
+                                    alt="Avatar" class="profile-avatar">
+                                <span class="profile-name">{{ current_user.username or current_user.email.split('@')[0] }}</span>
+                                <i class="fas fa-chevron-down profile-arrow"></i>
+                            </div>
+                            
+                            <!-- Dropdown Menu -->
+                            <div class="profile-dropdown" id="profileDropdown">
+                                <div class="dropdown-item profile-info">
+                                    <i class="fas fa-user"></i>
+                                    <span>{{ current_user.email }}</span>
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                <a href="#" class="dropdown-item" id="logoutBtn">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    <span data-i18n="logout">Đăng xuất</span>
+                                </a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Khối chưa đăng nhập: Hiển thị nút Login -->
+                        <a href="/register" class="nav-link login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
+                    {% endif %}
                 </nav>
             </div>
         </div>
@@ -368,7 +590,26 @@
                     <a href="/map_trans" class="menu-item {% if request.endpoint == 'transport' %}active{% endif %}" data-i18n="transport">Phương tiện</a>
                     <a href="#contact" class="menu-item" data-i18n="contact" data-nav-section="contact">Liên hệ</a>
                 </nav>
-                <a href="/register" class="menu-login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
+                
+                {% if current_user.is_authenticated %}
+                    <!-- Mobile: Hiển thị thông tin user -->
+                    <div class="mobile-user-info">
+                        <div class="mobile-profile">
+                            <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128" 
+                                 alt="Avatar" class="mobile-avatar">
+                            <div class="mobile-user-text">
+                                <span class="mobile-username">{{ current_user.username or current_user.email.split('@')[0] }}</span>
+                                <span class="mobile-email">{{ current_user.email }}</span>
+                            </div>
+                        </div>
+                        <a href="#" class="menu-logout-btn" id="mobileLogoutBtn">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span data-i18n="logout">Đăng xuất</span>
+                        </a>
+                    </div>
+                {% else %}
+                    <a href="/register" class="menu-login-btn" data-i18n="login_signup">Đăng nhập/ Đăng ký</a>
+                {% endif %}
             </div>
         </div>
 
@@ -388,7 +629,8 @@
                     suggestions: "Gợi ý",
                     contact: "Liên hệ",
                     transport: "Phương Tiện",
-                    login_signup: "Đăng nhập/ Đăng ký"
+                    login_signup: "Đăng nhập/ Đăng ký",
+                    logout: "Đăng xuất"
                 },
                 en: {
                     // Navigation
@@ -397,7 +639,8 @@
                     suggestions: "Suggestions",
                     contact: "Contact",
                     transport: "Transport",
-                    login_signup: "Login/ Register"
+                    login_signup: "Login/ Register",
+                    logout: "Logout"
                 }
             };
         } else {
@@ -410,7 +653,8 @@
                 suggestions: "Gợi ý",
                 contact: "Liên hệ",
                 guide: "Hướng dẫn",
-                login_signup: "Đăng nhập/ Đăng ký"
+                login_signup: "Đăng nhập/ Đăng ký",
+                logout: "Đăng xuất"
             });
             Object.assign(window.translations.en, {
                 home: "Home",
@@ -418,7 +662,8 @@
                 suggestions: "Suggestions",
                 contact: "Contact",
                 guide: "Guide",
-                login_signup: "Login/ Register"
+                login_signup: "Login/ Register",
+                logout: "Logout"
             });
         }
 
@@ -537,6 +782,84 @@
                 menuDropdown.classList.remove('active');
             }
         });
+
+        // === XỬ LÝ CLICK VÀO PROFILE ICON KHI CHƯA ĐĂNG NHẬP ===
+        const profileIcon = document.querySelector('.profile-icon');
+        if (profileIcon) {
+            profileIcon.style.cursor = 'pointer'; // Thêm con trỏ pointer
+            profileIcon.addEventListener('click', function() {
+                window.location.href = '/login';
+            });
+        }
+
+        // === PROFILE DROPDOWN TOGGLE (DESKTOP) ===
+        const profileTrigger = document.getElementById('profileTrigger');
+        const profileDropdown = document.getElementById('profileDropdown');
+
+        if (profileTrigger && profileDropdown) {
+            // Toggle dropdown khi click vào profile trigger
+            profileTrigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                profileDropdown.classList.toggle('active');
+            });
+
+            // Đóng dropdown khi click bên ngoài
+            document.addEventListener('click', function(e) {
+                if (profileDropdown.classList.contains('active')) {
+                    if (!profileDropdown.contains(e.target) && e.target !== profileTrigger) {
+                        profileDropdown.classList.remove('active');
+                    }
+                }
+            });
+        }
+
+        // === LOGOUT FUNCTION ===
+        async function handleLogout() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include' // Quan trọng: gửi cookies cùng request
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Đăng xuất thành công -> reload trang hoặc chuyển về home
+                    alert('Đăng xuất thành công!');
+                    window.location.href = '/'; // Chuyển về trang chủ
+                } else {
+                    alert('Lỗi đăng xuất: ' + (result.message || 'Không xác định'));
+                }
+            } catch (error) {
+                console.error('Logout Error:', error);
+                alert('Lỗi hệ thống: ' + error.message);
+            }
+        }
+
+        // === GẮN SỰ KIỆN CHO NÚT LOGOUT (DESKTOP & MOBILE) ===
+        const logoutBtn = document.getElementById('logoutBtn');
+        const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (confirm('Bạn có chắc muốn đăng xuất?')) {
+                    handleLogout();
+                }
+            });
+        }
+
+        if (mobileLogoutBtn) {
+            mobileLogoutBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (confirm('Bạn có chắc muốn đăng xuất?')) {
+                    handleLogout();
+                }
+            });
+        }
     </script>
 
     {% block extra_js %}{% endblock %}

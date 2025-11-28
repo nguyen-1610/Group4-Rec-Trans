@@ -770,3 +770,64 @@ window.addEventListener('pageshow', (event) => {
         restoreFormData();
     }
 });
+
+//<!-- ===== JAVASCRIPT XỬ LÝ PROFILE ===== -->
+// === PROFILE DROPDOWN TOGGLE ===
+const profileTrigger = document.getElementById('profileTrigger');
+const profileDropdown = document.getElementById('profileDropdown');
+
+if (profileTrigger && profileDropdown) {
+    profileTrigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        profileDropdown.classList.toggle('active');
+    });
+
+    document.addEventListener('click', function(e) {
+        if (profileDropdown.classList.contains('active')) {
+            if (!profileDropdown.contains(e.target) && e.target !== profileTrigger) {
+                profileDropdown.classList.remove('active');
+            }
+        }
+    });
+}
+
+// === LOGOUT FUNCTION ===
+async function handleLogout() {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Đăng xuất thành công!');
+            window.location.href = '/';
+        } else {
+            alert('Lỗi đăng xuất: ' + (result.message || 'Không xác định'));
+        }
+    } catch (error) {
+        console.error('Logout Error:', error);
+        alert('Lỗi hệ thống: ' + error.message);
+    }
+}
+
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (confirm('Bạn có chắc muốn đăng xuất?')) {
+            handleLogout();
+        }
+    });
+}
+
+// === XỬ LÝ CLICK VÀO PROFILE ICON KHI CHƯA ĐĂNG NHẬP ===
+const profileIcon = document.querySelector('.profile-icon');
+if (profileIcon) {
+    profileIcon.style.cursor = 'pointer';
+    profileIcon.addEventListener('click', function() {
+        window.location.href = '/login';
+    });
+}
