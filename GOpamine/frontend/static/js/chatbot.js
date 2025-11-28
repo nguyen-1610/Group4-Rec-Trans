@@ -191,6 +191,67 @@ async function sendAutoPrompt() {
     }
 }
 
+// ============================================================
+// [BỔ SUNG] TÍNH NĂNG CONTEXT THỜI GIAN (NATIVE JS)
+// ============================================================
+
+/**
+ * Lấy thông tin ngày giờ hiện tại theo định dạng tiếng Việt.
+ * Dùng để cung cấp ngữ cảnh (Context) cho AI Chatbot.
+ */
+function getCurrentTimeContext() {
+    const now = new Date();
+
+    // 1. Lấy Giờ:Phút (VD: 14:30)
+    const timeString = now.toLocaleTimeString('vi-VN', {
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: false 
+    });
+
+    // 2. Lấy Ngày tháng (VD: Thứ Sáu, 29/11/2025)
+    const dateString = now.toLocaleDateString('vi-VN', {
+        weekday: 'long', 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric'
+    });
+
+    // 3. Xác định buổi trong ngày (Sáng/Trưa/Chiều/Tối)
+    const hour = now.getHours();
+    let session = 'sáng';
+    if (hour >= 11 && hour < 13) session = 'trưa';
+    else if (hour >= 13 && hour < 18) session = 'chiều';
+    else if (hour >= 18) session = 'tối';
+    else if (hour >= 0 && hour < 5) session = 'khuya';
+
+    // Trả về object hoặc chuỗi đã format
+    return {
+        full_text: `Hôm nay là ${dateString}, bây giờ là ${timeString} (${session}).`,
+        hour: hour,
+        session: session
+    };
+}
+
+/**
+ * Hàm gửi tin nhắn kèm theo ngữ cảnh thời gian.
+ * (Bạn có thể dùng hàm này thay thế hoặc gọi bổ sung trong sendMessage)
+ */
+function appendTimeContextToPrompt(userMessage) {
+    const timeCtx = getCurrentTimeContext();
+    
+    // Nếu người dùng hỏi về thời gian, thời tiết, hoặc lịch trình
+    // AI sẽ cần biết giờ hiện tại để trả lời chính xác.
+    // Chúng ta âm thầm chèn thông tin này vào cuối tin nhắn (hoặc đầu) để AI biết.
+    
+    const systemContext = `\n[Context: ${timeCtx.full_text}]`;
+    
+    return userMessage + systemContext;
+}
+
+// --- TEST THỬ NGAY TẠI CONSOLE ---
+// console.log(">>> Giờ hiện tại:", getCurrentTimeContext().full_text);
+
 // Hàm gửi message đến backend (tách riêng để tái sử dụng)
 async function sendMessageToBackend(message, allowRetry = true) {
     if (!sessionId || !message) return;

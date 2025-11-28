@@ -14,7 +14,7 @@ def _load_realtime_module():
     File real-times.py có dấu gạch ngang nên không import trực tiếp được.
     Hàm này giúp load module đó để tái sử dụng hàm build_realtime_snapshot.
     """
-    module_path = os.path.join(os.path.dirname(__file__), "real-times.py")
+    module_path = os.path.join(os.path.dirname(__file__), "real_times.py")
     if not os.path.exists(module_path):
         return None
 
