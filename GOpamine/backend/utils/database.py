@@ -32,6 +32,6 @@ class DatabaseManager:
     """Quản lý tất cả database trong 1 class."""
     def __init__(self):
         self.busmap = DBConnection("busmap.db")
-        self.users = DBConnection("users.db")
-        self.trips = DBConnection("trips.db")
-        self.analytics = DBConnection("analytics.db")
+        self.user = DBConnection("user.db")
+        self.landmarks = DBConnection("tourism-landmarks.db")
+        self.vehicle = DBConnection("vehicle.db")
