@@ -8,6 +8,9 @@ import uuid
 
 from pricing_score import UserRequest, WeatherContext, calculate_adaptive_scores
 
+from astar import AStarRouter
+
+ROUTER = AStarRouter()
 
 def _load_realtime_module():
     """
@@ -108,6 +111,10 @@ def chat():
             )
             if pricing_context:
                 context_blocks.append(pricing_context)
+                
+            advanced_context = build_advanced_pricing_context(session["form_data"])
+            if advanced_context:
+                context_blocks.append(advanced_context)
 
         combined_context = "\n\n".join([c for c in context_blocks if c]) or None
 
@@ -255,6 +262,61 @@ def build_pricing_context(form_data, weather_payload, traffic_payload):
         print(f"[Pricing] Lỗi tạo context: {exc}")
         return None
 
+
+def build_advanced_pricing_context(form_data):
+    """
+    Sử dụng AStarRouter để tính toán và so sánh giá các hãng (Grab, Be, XanhSM, Bus).
+    """
+    try:
+        start_id = form_data.get('start_id')
+        dest_ids = form_data.get('destination_ids')
+        
+        if not start_id or not dest_ids:
+            return None
+
+        is_sv = is_student(form_data)
+
+        # Gọi AStarRouter
+        result = ROUTER.plan_multi_stop_trip(
+            start_id=int(start_id),
+            destination_ids=[int(x) for x in dest_ids],
+            is_student=is_sv
+        )
+
+        if not result['success']:
+            return None
+
+        data = result['data']
+        summary = data.get('summary', []) # Đã sort từ rẻ -> đắt
+        segments = data.get('segments', [])
+
+        # Xây dựng context cho Gemini
+        lines = [
+            "\n[DỮ LIỆU LỘ TRÌNH & BẢNG GIÁ CÁC HÃNG XE]",
+            f"- Tổng hành trình: {data['total_distance_km']} km (qua {len(segments)} chặng di chuyển).",
+            "- BẢNG GIÁ ƯỚC TÍNH (Tổng chuyến đi):"
+        ]
+        
+        # Liệt kê tất cả các hãng để người dùng chọn
+        for item in summary: 
+            icon = "🚌" if "Buýt" in item['name'] else ("🏍️" if "Bike" in item['name'] else "🚗")
+            lines.append(f"  {icon} {item['name']}: {item['display_total']}")
+
+        lines.append("\n- Chi tiết từng chặng (Tham khảo):")
+        for seg in segments:
+            # Lấy giá của phương tiện rẻ nhất (thường là bus) và đắt nhất (car) để làm khoảng giá
+            prices = seg.get('prices', {})
+            # Ví dụ lấy giá GrabBike để hiển thị mẫu
+            grab_bike = prices.get('grab_bike', {}).get('display', 'N/A')
+            lines.append(f"  + {seg['from_name']} -> {seg['to_name']} ({seg['distance_km']}km) | GrabBike: ~{grab_bike}")
+        
+        lines.append("[Hết dữ liệu - Hãy tư vấn dựa trên bảng giá các hãng ở trên]")
+        
+        return "\n".join(lines)
+
+    except Exception as e:
+        print(f"[Advanced Pricing Error] {e}")
+        return None
 
 def is_student(form_data):
     marker = str(form_data.get("passengers", "")).strip().lower()

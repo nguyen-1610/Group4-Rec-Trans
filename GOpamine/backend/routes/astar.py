@@ -6,6 +6,8 @@ from typing import List, Dict, Tuple, Optional
 import json
 from flask import Blueprint, request, jsonify
 
+from cost_estimation import calculate_transport_cost
+
 class AStarRouter:
     """
     Tìm đường đi tối ưu sử dụng A* kết hợp OSRM để lấy đường đi thực tế
@@ -347,6 +349,137 @@ class AStarRouter:
                 'error': str(e)
             }
 
+    def optimize_stop_order(self, start_place: Dict, destinations: List[Dict]) -> List[Dict]:
+        """
+        Sắp xếp lại thứ tự các điểm đến dùng thuật toán Nearest Neighbor (Tham lam).
+        Bắt đầu từ start_place, tìm điểm gần nhất tiếp theo.
+        """
+        optimized_order = []
+        current_location = start_place
+        unvisited = destinations.copy()
+
+        while unvisited:
+            # Tìm điểm gần nhất trong danh sách chưa đi so với vị trí hiện tại
+            nearest = min(unvisited, key=lambda x: self.haversine_distance(
+                current_location['lat'], current_location['lon'],
+                x['lat'], x['lon']
+            ))
+            
+            optimized_order.append(nearest)
+            current_location = nearest
+            unvisited.remove(nearest)
+            
+        return optimized_order
+
+    def plan_multi_stop_trip(self, start_id: int, destination_ids: List[int], 
+                             is_student: bool = False) -> Dict:
+        """
+        Lên kế hoạch đi nhiều điểm và SO SÁNH GIÁ CÁC BRAND (Grab, Be, XanhSM, Bus).
+        """
+        try:
+            # 1. Lấy dữ liệu & Tối ưu thứ tự
+            all_places = self.get_all_places()
+            start_place = next((p for p in all_places if p['id'] == start_id), None)
+            dest_places = [p for p in all_places if p['id'] in destination_ids]
+
+            if not start_place or not dest_places:
+                return {'success': False, 'error': 'Invalid locations'}
+
+            ordered_destinations = self.optimize_stop_order(start_place, dest_places)
+            full_route_sequence = [start_place] + ordered_destinations
+            
+            # ==================================================================
+            # 2. CẤU HÌNH CÁC HÃNG XE CẦN GỢI Ý (CHỈNH SỬA TẠI ĐÂY)
+            # ==================================================================
+            # Lưu ý: 'mode' và 'brand' phải khớp với dữ liệu trong cost_estimation.py và database
+            comparison_options = [
+                # --- XE MÁY (RIDE HAILING) ---
+                {"id": "grab_bike", "name": "GrabBike", "mode": "ride_hailing_bike", "brand": "Grab"},
+                {"id": "be_bike", "name": "BeBike", "mode": "ride_hailing_bike", "brand": "Be"},
+                {"id": "xanh_bike", "name": "XanhSM Bike", "mode": "ride_hailing_bike", "brand": "Xanh SM"},
+                
+                # --- Ô TÔ 4 CHỖ ---
+                {"id": "grab_car", "name": "GrabCar", "mode": "ride_hailing_car_4", "brand": "Grab"},
+                {"id": "be_car", "name": "BeCar", "mode": "ride_hailing_car_4", "brand": "Be"},
+                {"id": "xanh_car", "name": "XanhSM Taxi", "mode": "ride_hailing_car_4", "brand": "Xanh SM"},
+                
+                # --- CÔNG CỘNG ---
+                {"id": "bus", "name": "Xe Buýt", "mode": "bus", "brand": None},
+            ]
+
+            # Khởi tạo bộ đếm tổng tiền
+            totals = {opt['id']: 0 for opt in comparison_options}
+            segments = []
+
+            # 3. Duyệt qua từng chặng để tính tiền
+            for i in range(len(full_route_sequence) - 1):
+                curr_point = full_route_sequence[i]
+                next_point = full_route_sequence[i+1]
+                
+                # Tìm đường thực tế (OSRM)
+                route_result = self.find_optimal_route(curr_point['id'], next_point['id'], 'car')
+                if not route_result['success']: continue
+                
+                dist_km = route_result['data']['distance_km']
+                
+                # Tính giá cho TỪNG HÃNG trong danh sách trên
+                segment_prices = {}
+                
+                for opt in comparison_options:
+                    # Gọi hàm tính tiền (dựa trên DB)
+                    cost_res = calculate_transport_cost(
+                        mode=opt['mode'],
+                        distance_km=dist_km,
+                        is_student=is_student,
+                        brand_name=opt['brand']
+                    )
+                    cost_value = cost_res['value'] if isinstance(cost_res, dict) else cost_res
+                    
+                    # Cộng dồn
+                    totals[opt['id']] += cost_value
+                    
+                    # Lưu giá lẻ
+                    segment_prices[opt['id']] = {
+                        "name": opt['name'],
+                        "cost": cost_value,
+                        "display": cost_res.get('display', '0đ') if isinstance(cost_res, dict) else f"{cost_value}đ"
+                    }
+
+                segments.append({
+                    'step': i + 1,
+                    'from_name': curr_point['name'],
+                    'to_name': next_point['name'],
+                    'distance_km': dist_km,
+                    'prices': segment_prices
+                })
+
+            # 4. Tổng hợp kết quả (Sort từ rẻ đến đắt)
+            summary = []
+            for opt in comparison_options:
+                total_val = totals[opt['id']]
+                summary.append({
+                    "id": opt['id'],
+                    "name": opt['name'],
+                    "total_cost": total_val,
+                    "display_total": f"{total_val:,}đ"
+                })
+
+            summary.sort(key=lambda x: x['total_cost'])
+
+            return {
+                'success': True,
+                'data': {
+                    'total_distance_km': sum(s['distance_km'] for s in segments),
+                    'summary': summary,      # Bảng giá tổng của các hãng
+                    'segments': segments,    # Chi tiết từng chặng
+                    'optimized_order': [p['id'] for p in full_route_sequence]
+                }
+            }
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': str(e)}
 
 # ========== TESTING ==========
 if __name__ == "__main__":
@@ -437,5 +570,37 @@ def create_api_blueprint(db_path: str) -> Blueprint:
             'message': 'Server is running!',
             'db_path': db_path
         })
+    
+    @api_bp.route('/plan-trip', methods=['POST'])
+    def plan_trip():
+        """
+        API: Lên kế hoạch đi nhiều điểm
+        Body: {
+            "start_id": 1,
+            "destinations": [2, 5, 8],
+            "vehicle_type": "car",
+            "is_student": false
+        }
+        """
+        try:
+            data = request.get_json()
+            
+            if not data or 'start_id' not in data or 'destinations' not in data:
+                return jsonify({'success': False, 'error': 'Missing start_id or destinations list'}), 400
+            
+            # Gọi hàm logic mới
+            result = router.plan_multi_stop_trip(
+                start_id=int(data['start_id']),
+                destination_ids=data['destinations'], # List [int]
+                vehicle_type=data.get('vehicle_type', 'car'),
+                is_student=data.get('is_student', False)
+            )
+            
+            status_code = 200 if result['success'] else 400
+            return jsonify(result), status_code
+
+        except Exception as e:
+            print(f"❌ Error in /api/plan-trip: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     return api_bp
