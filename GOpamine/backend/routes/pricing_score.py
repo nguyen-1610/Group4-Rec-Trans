@@ -29,9 +29,10 @@ class UserRequest:
         self.passenger_count = int(passenger_count)
 
 class WeatherContext:
-    def __init__(self, is_raining=False, is_hot=False):
+    def __init__(self, is_raining=False, is_hot=False, desc=None):
         self.is_raining = is_raining
         self.is_hot = is_hot
+        self.desc = desc
 
 # ==============================================================================
 # 3. HELPER FUNCTIONS

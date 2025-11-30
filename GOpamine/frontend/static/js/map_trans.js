@@ -116,49 +116,93 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 5. LOGIC TÍNH TOÁN VÀ VẼ LỘ TRÌNH (GỌI API)
     // =========================================================================
 
+        // [FIX] Thay thế toàn bộ hàm recalculateRoute cũ bằng hàm này trong map_trans.js
+
     async function recalculateRoute() {
         console.log("🔄 Đang tính toán lại lộ trình...");
-        
-        // Hiện trạng thái loading ở danh sách xe
-        updateAllVehicleCardsDefault(); 
+        updateAllVehicleCardsDefault();
 
         try {
-            // Gọi API Backend (routing.py)
-            const response = await fetch('/api/find-route-osm', {
+            // 1. Lấy dữ liệu từ LocalStorage để biết có những điểm trung gian nào không
+            const storedRoute = getStoredRouteFromStorage();
+            // Nếu trong storage có danh sách waypoints (nhiều hơn 2 điểm)
+            const isMultiStop = storedRoute && storedRoute.waypoints && storedRoute.waypoints.length > 2;
+
+            let url, body;
+
+            if (isMultiStop) {
+                // === TRƯỜNG HỢP 1: ĐA ĐIỂM (MULTI-STOP) ===
+                // Gọi API /plan-trip (giống như bên form.js đã làm)
+                url = '/api/plan-trip';
+                body = {
+                    start_id: currentStart.name, // Dùng tên để backend tìm tọa độ
+                    destinations: storedRoute.waypoints.slice(1).map(wp => wp.name), // Lấy danh sách điểm đến (bỏ điểm đầu)
+                    vehicle_type: 'car'
+                };
+            } else {
+                // === TRƯỜNG HỢP 2: ĐI 1 CHẶNG (A -> B) ===
+                url = '/api/find-route-osm';
+                body = {
+                    start: currentStart,
+                    end: currentEnd,
+                    vehicle_type: 'car'
+                };
+            }
+
+            // 2. Gọi API
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    start: currentStart, 
-                    end: currentEnd, 
-                    vehicle_type: 'car' 
-                })
+                body: JSON.stringify(body)
             });
 
             const result = await response.json();
-            
+
             if (result.success) {
-                const routeData = result.data;
-                
-                // 1. Vẽ lại đường lên Map
-                drawRouteOnMap(routeData.route_coordinates, currentStart, currentEnd);
-                
-                // 2. Tính toán lại giá tiền các phương tiện
-                await fetchAndRenderTransportOptions(routeData.distance_km);
-                
-                // 3. Cập nhật LocalStorage (để nếu reload trang vẫn còn)
+                let routeData = result.data;
+                let finalCoords = [];
+                let totalDist = 0;
+                let waypoints = [];
+
+                // 3. Xử lý dữ liệu trả về (Chuẩn hóa vì 2 API trả về khác nhau)
+                if (isMultiStop) {
+                    // API plan-trip trả về segments
+                    totalDist = routeData.total_distance_km;
+                    waypoints = routeData.optimized_order || storedRoute.waypoints;
+                    
+                    // Nối các đoạn đường lại để vẽ
+                    if (routeData.segments) {
+                        routeData.segments.forEach(seg => {
+                            if (seg.geometry) finalCoords = finalCoords.concat(seg.geometry);
+                        });
+                    }
+                } else {
+                    // API find-route-osm trả về coordinates thẳng
+                    totalDist = routeData.distance_km;
+                    finalCoords = routeData.route_coordinates;
+                    waypoints = [currentStart, currentEnd];
+                }
+
+                // 4. Vẽ lại lên Map (Nhớ dùng hàm drawRouteOnMap mới tôi đã gửi ở tin nhắn trước)
+                // Lưu ý: Phải truyền waypoints vào để vẽ các điểm dừng
+                drawRouteOnMap(finalCoords, currentStart, currentEnd, waypoints);
+
+                // 5. Tính lại tiền (Quan trọng: totalDist bây giờ đã đúng là tổng các chặng)
+                await fetchAndRenderTransportOptions(totalDist);
+
+                // 6. Cập nhật lại Storage
                 const newStorage = {
-                    start_place: currentStart, 
-                    end_place: currentEnd,
-                    route_coordinates: routeData.route_coordinates,
-                    distance_km: routeData.distance_km, 
-                    waypoints: [currentStart, currentEnd]
+                    ...storedRoute,
+                    route_coordinates: finalCoords,
+                    distance_km: totalDist,
+                    waypoints: waypoints
                 };
                 localStorage.setItem('selectedRoute', JSON.stringify(newStorage));
-                
+
             } else {
-                alert("Không tìm thấy đường đi giữa 2 điểm này!");
+                alert("Không tìm thấy đường đi: " + (result.error || "Lỗi không xác định"));
             }
-        } catch (error) { 
+        } catch (error) {
             console.error("Lỗi tính lộ trình:", error);
             alert("Có lỗi xảy ra khi tìm đường.");
         }

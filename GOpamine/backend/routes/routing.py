@@ -121,7 +121,7 @@ def geocode_place():
             'User-Agent': 'RouteOptimizer/1.0'
         }
 
-        response = requests.get(nominatim_url, params=params, headers=headers, timeout=5)
+        response = requests.get(nominatim_url, params=params, headers=headers, timeout=15)
 
         if response.status_code != 200:
             return jsonify({
