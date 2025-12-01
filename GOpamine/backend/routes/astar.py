@@ -1,16 +1,28 @@
 import requests
 import math
-import sqlite3
+import itertools
 import os
-from typing import List, Dict, Tuple, Optional
 import json
+from time import sleep
 from flask import Blueprint, request, jsonify
+from typing import List, Dict, Tuple, Optional
 
-from cost_estimation import calculate_transport_cost
+# --- Import module tính tiền ---
+try:
+    from .cost_estimation import calculate_transport_cost
+except ImportError:
+    try:
+        from cost_estimation import calculate_transport_cost
+    except ImportError:
+        raise ImportError("Cannot import cost_estimation module")
 
 class AStarRouter:
     """
-    Tìm đường đi tối ưu sử dụng A* kết hợp OSRM để lấy đường đi thực tế
+    Multi-Stop Trip Optimizer
+    - Geocoding: Nominatim (OSM)
+    - Routing: OSRM (OpenStreetMap Routing Machine)
+    - TSP: Brute Force (Permutations) cho < 7 điểm
+    - Cost: cost_estimation module
     """
     
     PROFILE_MAP = {
@@ -19,588 +31,423 @@ class AStarRouter:
         'bus': 'driving'
     }
     
+    # Retry configuration
+    MAX_RETRIES = 3
+    RETRY_DELAY = 2
+    
     def __init__(self, db_path=None):
+        """
+        db_path: Giữ lại tham số để tương thích, nhưng không dùng
+        """
         self.osrm_base = "http://router.project-osrm.org/route/v1"
-        # Nếu không có db_path, tính toán đường dẫn mặc định
-        if db_path is None:
-            # Tính toán đường dẫn tương đối từ file hiện tại
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            base_dir = os.path.join(current_dir, '..', '..')
-            db_path = os.path.join(base_dir, 'data', 'tourism-landmarks.db')
-        # Đảm bảo đường dẫn là tuyệt đối và normalize
-        self.db_path = os.path.abspath(os.path.normpath(db_path))
-        print(f"📂 Database path: {self.db_path}")
-        # Kiểm tra file có tồn tại không
-        if not os.path.exists(self.db_path):
-            print(f"⚠️  Warning: Database file not found at {self.db_path}")
+        self.nominatim_base = "https://nominatim.openstreetmap.org/search"
+        self.headers = {
+            'User-Agent': 'GOpamine-Student-App/1.0 (student-project)'
+        }
+        print("🚀 AStarRouter initialized (Mode: Nominatim + OSRM + TSP Brute Force)")
+
+    def _retry_request(self, func, *args, **kwargs):
+        """Helper: Thử lại request với exponential backoff"""
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                return func(*args, **kwargs)
+            except requests.exceptions.RequestException as e:
+                if attempt < self.MAX_RETRIES - 1:
+                    wait_time = self.RETRY_DELAY * (2 ** attempt)
+                    print(f"⚠️  Request failed (attempt {attempt + 1}/{self.MAX_RETRIES}), retrying in {wait_time}s...")
+                    sleep(wait_time)
+                else:
+                    print(f"❌ Request failed after {self.MAX_RETRIES} attempts: {e}")
+                    return None
+
+    def get_place_by_id(self, place_identifier):
+        """
+        [HYBRID FIX] Chấp nhận cả Tọa độ (Dict) lẫn Tên (String).
+        Nếu là Tên quá dài -> Tự động cắt ngắn để tìm cho ra.
+        """
+        # 1. ƯU TIÊN: Nếu input là Dict có tọa độ (Frontend gửi đúng) -> Dùng luôn
+        if isinstance(place_identifier, dict) and 'lat' in place_identifier and 'lon' in place_identifier:
+            return {
+                'id': place_identifier.get('name', 'unknown'),
+                'name': place_identifier.get('name', 'Unknown Place'),
+                'lat': float(place_identifier['lat']),
+                'lon': float(place_identifier['lon'])
+            }
+
+        # 2. XỬ LÝ STRING: Nếu input là Tên (Frontend gửi sai hoặc chưa chọn dropdown)
+        if isinstance(place_identifier, int): return None
         
-    # ========== DATABASE ==========
-    
-    def get_db_connection(self):
-        """Kết nối đến database"""
         try:
-            # Tạo thư mục nếu chưa tồn tại
-            db_dir = os.path.dirname(self.db_path)
-            if db_dir and not os.path.exists(db_dir):
-                os.makedirs(db_dir, exist_ok=True)
+            # --- LOGIC CẮT CHUỖI THÔNG MINH ---
+            query_name = str(place_identifier)
             
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            return conn
-        except sqlite3.Error as e:
-            print(f"❌ SQLite Error: {e}")
-            print(f"   Database path: {self.db_path}")
-            raise
+            # Mẹo: Nếu tên có dấu phẩy (VD: "Đại học A, Quận 1, TP.HCM"), chỉ lấy phần đầu tiên "Đại học A"
+            if ',' in query_name:
+                query_name = query_name.split(',')[0].strip()
+            
+            # Mẹo 2: Nếu sau khi cắt mà vẫn quá dài (> 10 từ), cắt tiếp lấy 6 từ đầu
+            words = query_name.split()
+            if len(words) > 10:
+                query_name = ' '.join(words[:6])
+
+            # Tạo query tìm kiếm
+            query = f"{query_name}, Ho Chi Minh City" if "Ho Chi Minh" not in str(query_name) else query_name
+            params = {'q': query, 'format': 'json', 'limit': 1}
+            
+            print(f"🔍 Đang tìm lại với từ khóa ngắn gọn: '{query}'") # In ra để debug
+            
+            def make_request():
+                return requests.get(self.nominatim_base, params=params, headers=self.headers, timeout=5)
+            
+            resp = self._retry_request(make_request)
+            if not resp: return None
+            
+            data = resp.json()
+            if data and len(data) > 0:
+                return {
+                    'id': place_identifier, # Giữ nguyên ID gốc
+                    'name': data[0]['display_name'].split(',')[0], # Lấy tên hiển thị ngắn gọn
+                    'full_name': data[0]['display_name'],
+                    'lat': float(data[0]['lat']),
+                    'lon': float(data[0]['lon'])
+                }
+            
+            print(f"⚠️ Vẫn không tìm thấy: {query}")
+            return None
+            
         except Exception as e:
-            print(f"❌ Unexpected error connecting to database: {e}")
-            print(f"   Database path: {self.db_path}")
-            raise
-    
-    def get_all_places(self):
-        """Lấy tất cả địa điểm từ database"""
-        try:
-            conn = self.get_db_connection()
-            cursor = conn.cursor()
-            
-            # Query theo cấu trúc DB thực tế: id, name, address, lat, lng
-            cursor.execute("""
-                SELECT id, name, lat, lng 
-                FROM locations
-            """)
-            
-            places = []
-            for row in cursor.fetchall():
-                # Chuyển đổi lat và lng từ TEXT sang float
-                lat_str = str(row['lat']).replace(',', '.')
-                lng_str = str(row['lng']).replace(',', '.')  # Sửa từ 'lon' thành 'lng'
-                
-                try:
-                    lat = float(lat_str)
-                    lng = float(lng_str)
-                except (ValueError, TypeError):
-                    print(f"⚠️  Warning: Invalid coordinates for {row['name']}: lat={lat_str}, lng={lng_str}")
-                    continue  # Bỏ qua địa điểm có tọa độ không hợp lệ
-                
-                places.append({
-                    'id': row['id'],
-                    'name': row['name'],
-                    'lat': lat,
-                    'lon': lng  # Sử dụng 'lon' để nhất quán với code còn lại
-                })
-                
-            conn.close()
-            return places
-        
-        except Exception as e:
-            print(f"Database Error: {e}")
-            return self._get_sample_places()
-    
-    def _get_sample_places(self):
-        """Dữ liệu mẫu nếu DB chưa có hoặc lỗi"""
-        return [
-            {"id": 1, "name": "Bến Thành Market", "lat": 10.7727, "lon": 106.6980},
-            {"id": 2, "name": "Nhà Thờ Đức Bà", "lat": 10.7797, "lon": 106.6991},
-            {"id": 3, "name": "Bưu Điện Trung Tâm", "lat": 10.7798, "lon": 106.6997},
-            {"id": 4, "name": "Dinh Độc Lập", "lat": 10.7769, "lon": 106.6955},
-            {"id": 5, "name": "Chợ Bình Tây", "lat": 10.7502, "lon": 106.6392},
-            {"id": 6, "name": "Phố Đi Bộ Nguyễn Huệ", "lat": 10.7743, "lon": 106.7011},
-            {"id": 7, "name": "Bitexco Tower", "lat": 10.7716, "lon": 106.7039},
-            {"id": 8, "name": "Thảo Cầm Viên", "lat": 10.7878, "lon": 106.7057},
-            {"id": 9, "name": "Bảo Tàng Chứng Tích Chiến Tranh", "lat": 10.7796, "lon": 106.6919},
-            {"id": 10, "name": "Bến Nhà Rồng", "lat": 10.7675, "lon": 106.7073},
-            {"id": 11, "name": "Chợ Ăn Đông", "lat": 10.7535, "lon": 106.6680},
-            {"id": 12, "name": "Chợ Tân Định", "lat": 10.7889, "lon": 106.6917},
-            {"id": 13, "name": "Làng Du Lịch Bình Quới", "lat": 10.8042, "lon": 106.7429},
-            {"id": 14, "name": "Công Viên Lê Văn Tám", "lat": 10.7830, "lon": 106.6872},
-            {"id": 15, "name": "Chợ Bà Chiểu", "lat": 10.8119, "lon": 106.6954},
-            {"id": 16, "name": "Vincom Center", "lat": 10.7828, "lon": 106.7005},
-            {"id": 17, "name": "Đầm Sen Park", "lat": 10.7649, "lon": 106.6376},
-            {"id": 18, "name": "Phố Tây Bùi Viện", "lat": 10.7666, "lon": 106.6925},
-            {"id": 19, "name": "TTTM Saigon Centre", "lat": 10.7822, "lon": 106.7016},
-            {"id": 20, "name": "Chùa Vĩnh Nghiêm", "lat": 10.7995, "lon": 106.6804}
-        ]
-    
-    def get_place_by_id(self, place_id: int):
-        """Lấy thông tin 1 địa điểm theo ID"""
-        places = self.get_all_places()
-        return next((p for p in places if p['id'] == place_id), None)
-    
-    # ========== A* ALGORITHM ==========
-    
-    def haversine_distance(self, lat1: float, lon1: float, 
-                          lat2: float, lon2: float) -> float:
-        """Tính khoảng cách Haversine giữa 2 điểm (km)"""
+            print(f"❌ Geocoding Error: {e}")
+            return None
+
+    # ==============================================================================
+    # HELPER: DISTANCE & ROUTE
+    # ==============================================================================
+
+    def haversine_distance(self, lat1, lon1, lat2, lon2):
+        """Tính khoảng cách đường chim bay (km)"""
         R = 6371
-        
         dlat = math.radians(lat2 - lat1)
         dlon = math.radians(lon2 - lon1)
-        
-        a = (math.sin(dlat / 2) ** 2 + 
-             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * 
-             math.sin(dlon / 2) ** 2)
-        
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        
-        return R * c
-    
-    def a_star_pathfinding(self, start: Dict, goal: Dict, 
-                          all_places: List[Dict]) -> Optional[List[Dict]]:
+        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    def get_real_route(self, start, end, waypoints=None, profile='driving'):
         """
-        Thuật toán A* tìm đường đi qua các điểm trung gian tối ưu
-        """
-        open_set = {start['id']}
-        came_from = {}
-        
-        g_score = {place['id']: float('inf') for place in all_places}
-        g_score[start['id']] = 0
-        
-        f_score = {place['id']: float('inf') for place in all_places}
-        f_score[start['id']] = self.haversine_distance(
-            start['lat'], start['lon'], goal['lat'], goal['lon']
-        )
-        
-        while open_set:
-            current_id = min(open_set, key=lambda x: f_score[x])
-            current = next(p for p in all_places if p['id'] == current_id)
-            
-            if current_id == goal['id']:
-                return self._reconstruct_path(came_from, current, all_places)
-            
-            open_set.remove(current_id)
-            
-            for neighbor in all_places:
-                if neighbor['id'] == current_id:
-                    continue
-                
-                distance = self.haversine_distance(
-                    current['lat'], current['lon'],
-                    neighbor['lat'], neighbor['lon']
-                )
-                tentative_g = g_score[current_id] + distance
-                
-                if tentative_g < g_score[neighbor['id']]:
-                    came_from[neighbor['id']] = current_id
-                    g_score[neighbor['id']] = tentative_g
-                    f_score[neighbor['id']] = tentative_g + self.haversine_distance(
-                        neighbor['lat'], neighbor['lon'],
-                        goal['lat'], goal['lon']
-                    )
-                    open_set.add(neighbor['id'])
-        
-        return None
-    
-    def _reconstruct_path(self, came_from: Dict, current: Dict, 
-                         all_places: List[Dict]) -> List[Dict]:
-        """Tái tạo đường đi từ came_from map"""
-        path = [current]
-        
-        while current['id'] in came_from:
-            current_id = came_from[current['id']]
-            current = next(p for p in all_places if p['id'] == current_id)
-            path.insert(0, current)
-        
-        return path
-    
-    # ========== OSRM API ==========
-    
-    def get_real_route(self, start: Dict, end: Dict, 
-                       waypoints: Optional[List[Dict]] = None,
-                       profile: str = 'driving') -> Optional[Dict]:
-        """
-        Lấy đường đi thực tế từ OSRM API
+        Lấy đường đi thực tế từ OSRM
+        start, end: {lat, lon, name}
+        waypoints: list các điểm trung gian
+        Output: {coordinates, distance, duration, legs}
         """
         try:
             coords = [f"{start['lon']},{start['lat']}"]
-            
             if waypoints:
                 for wp in waypoints:
                     coords.append(f"{wp['lon']},{wp['lat']}")
-            
             coords.append(f"{end['lon']},{end['lat']}")
             
             url = f"{self.osrm_base}/{profile}/{';'.join(coords)}"
-            params = {
-                'overview': 'full',
-                'geometries': 'geojson',
-                'steps': 'true'
-            }
+            params = {'overview': 'full', 'geometries': 'geojson', 'steps': 'true'}
             
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
+            def make_request():
+                return requests.get(url, params=params, timeout=10)
             
-            data = response.json()
+            resp = self._retry_request(make_request)
+            if not resp:
+                return None
+            
+            data = resp.json()
             
             if data['code'] != 'Ok':
+                print(f"⚠️  OSRM returned code: {data['code']}")
                 return None
             
             route = data['routes'][0]
-            
             return {
                 'coordinates': route['geometry']['coordinates'],
-                'distance': route['distance'] / 1000,
-                'duration': route['duration'] / 60,
+                'distance': route['distance'] / 1000,  # Convert to km
+                'duration': route['duration'] / 60,    # Convert to minutes
                 'legs': route['legs']
             }
-            
         except Exception as e:
-            print(f"Error getting route from OSRM: {e}")
+            print(f"❌ OSRM Error: {e}")
             return None
-    
-    # ========== MAIN FUNCTION ==========
-    
-    def find_optimal_route(self, start_id: int, end_id: int,
-                           vehicle_type: str = 'car',
-                           vehicle_speed: Optional[float] = None) -> Optional[Dict]:
+
+    # ==============================================================================
+    # CORE: TSP BRUTE FORCE
+    # ==============================================================================
+
+    def optimize_stop_order(self, start_place, destinations):
         """
-        Hàm chính: Tìm đường đi tối ưu từ start_id đến end_id
+        TSP Brute Force: Tìm thứ tự tối ưu (ngắn nhất)
+        Dùng itertools.permutations để duyệt tất cả hoán vị
         
-        Returns:
-            {
-                'success': True/False,
-                'data': {
-                    'waypoints': [...],
-                    'route_coordinates': [[lon, lat], ...],
-                    'distance_km': 5.2,
-                    'duration_min': 15,
-                    'total_waypoints': 3
-                },
-                'error': 'message' (nếu có lỗi)
-            }
+        Input:
+          - start_place: {lat, lon, name}
+          - destinations: [{lat, lon, name}, ...]
+        Output: Danh sách destinations đã sắp xếp lại
         """
-        try:
-            # Validate
-            if start_id == end_id:
-                return {
-                    'success': False,
-                    'error': 'Start and end points cannot be the same'
-                }
+        if not destinations:
+            return []
+        if len(destinations) <= 1:
+            return destinations
+
+        best_order = destinations
+        min_dist = float('inf')
+
+        # Duyệt tất cả hoán vị
+        for perm in itertools.permutations(destinations):
+            d = 0
+            # Khoảng cách Start -> điểm 1
+            d += self.haversine_distance(start_place['lat'], start_place['lon'], 
+                                       perm[0]['lat'], perm[0]['lon'])
+            # Khoảng cách các điểm tiếp theo
+            for i in range(len(perm) - 1):
+                d += self.haversine_distance(perm[i]['lat'], perm[i]['lon'], 
+                                           perm[i+1]['lat'], perm[i+1]['lon'])
             
-            # Lấy tất cả địa điểm
-            all_places = self.get_all_places()
-            
-            # Tìm start và end
-            start = next((p for p in all_places if p['id'] == start_id), None)
-            end = next((p for p in all_places if p['id'] == end_id), None)
-            
-            if not start or not end:
-                return {
-                    'success': False,
-                    'error': 'Invalid place ID'
-                }
-            
-            # Chạy A* tìm waypoints
-            waypoints = self.a_star_pathfinding(start, end, all_places)
-            
-            if not waypoints or len(waypoints) < 2:
-                return {
-                    'success': False,
-                    'error': 'No route found'
-                }
-            
-            osrm_profile = self.PROFILE_MAP.get(vehicle_type, 'driving')
-            
-            # Lấy đường đi thực tế từ OSRM
-            if len(waypoints) <= 10:
-                real_route = self.get_real_route(
-                    waypoints[0], 
-                    waypoints[-1], 
-                    waypoints[1:-1] if len(waypoints) > 2 else None,
-                    profile=osrm_profile
-                )
-            else:
-                real_route = self.get_real_route(
-                    waypoints[0], 
-                    waypoints[-1],
-                    profile=osrm_profile
-                )
-            
-            if not real_route:
-                return {
-                    'success': False,
-                    'error': 'Cannot get real route from OSRM'
-                }
-            
-            duration_min = round(real_route['duration'], 0)
-            if vehicle_speed:
-                try:
-                    duration_min = round(
-                        (real_route['distance'] / vehicle_speed) * 60,
-                        0
-                    )
-                except ZeroDivisionError:
-                    pass
-            
+            if d < min_dist:
+                min_dist = d
+                best_order = list(perm)
+        
+        return best_order
+
+    def find_optimal_route(self, start_id, end_id, vehicle_type='car', vehicle_speed=None):
+        """
+        Tìm đường A -> B (2 điểm)
+        Giữ lại hàm này để tương thích với logic cũ
+        """
+        start = self.get_place_by_id(start_id)
+        end = self.get_place_by_id(end_id)
+        
+        if not start or not end:
+            return {'success': False, 'error': 'Không tìm thấy địa điểm (Geocoding fail)'}
+
+        profile = self.PROFILE_MAP.get(vehicle_type, 'driving')
+        real_route = self.get_real_route(start, end, profile=profile)
+        
+        if not real_route:
+            # Fallback Haversine
+            dist = self.haversine_distance(start['lat'], start['lon'], end['lat'], end['lon'])
+            duration = (dist / 30) * 60  # Giả sử 30 km/h trung bình
             return {
                 'success': True,
                 'data': {
-                    'waypoints': waypoints,
-                    'route_coordinates': real_route['coordinates'],
-                    'distance_km': round(real_route['distance'], 2),
-                    'duration_min': duration_min,
-                    'total_waypoints': len(waypoints),
-                    'vehicle_type': vehicle_type,
-                    'osrm_profile': osrm_profile
+                    'waypoints': [start, end],
+                    'route_coordinates': [],
+                    'distance_km': round(dist, 2),
+                    'duration_min': round(duration, 0),
+                    'total_waypoints': 2
                 }
             }
-            
-        except Exception as e:
-            return {
-                'success': False,
-                'error': str(e)
+
+        return {
+            'success': True,
+            'data': {
+                'waypoints': [start, end],
+                'route_coordinates': real_route['coordinates'],
+                'distance_km': round(real_route['distance'], 2),
+                'duration_min': round(real_route['duration'], 0),
+                'total_waypoints': 2
             }
+        }
 
-    def optimize_stop_order(self, start_place: Dict, destinations: List[Dict]) -> List[Dict]:
-        """
-        Sắp xếp lại thứ tự các điểm đến dùng thuật toán Nearest Neighbor (Tham lam).
-        Bắt đầu từ start_place, tìm điểm gần nhất tiếp theo.
-        """
-        optimized_order = []
-        current_location = start_place
-        unvisited = destinations.copy()
+    # ==============================================================================
+    # MAIN: MULTI-STOP TRIP PLANNING
+    # ==============================================================================
 
-        while unvisited:
-            # Tìm điểm gần nhất trong danh sách chưa đi so với vị trí hiện tại
-            nearest = min(unvisited, key=lambda x: self.haversine_distance(
-                current_location['lat'], current_location['lon'],
-                x['lat'], x['lon']
-            ))
-            
-            optimized_order.append(nearest)
-            current_location = nearest
-            unvisited.remove(nearest)
-            
-        return optimized_order
-
-    def plan_multi_stop_trip(self, start_id: int, destination_ids: List[int], 
-                             is_student: bool = False) -> Dict:
+    def plan_multi_stop_trip(self, start_id, destination_ids, is_student=False, vehicle_type='car'):
         """
-        Lên kế hoạch đi nhiều điểm và SO SÁNH GIÁ CÁC BRAND (Grab, Be, XanhSM, Bus).
+        Hàm chính: Lập kế hoạch lộ trình đa điểm
+        
+        Input:
+          - start_id: Tên/ID điểm xuất phát (String)
+          - destination_ids: Danh sách tên điểm đến (List[String])
+          - is_student: Boolean (áp dụng giảm giá SV)
+          - vehicle_type: 'car', 'moto', 'bus'
+        
+        Output:
+          {
+            'success': bool,
+            'data': {
+              'total_distance_km': float,
+              'summary': [{id, name, total_cost, display_total}, ...],
+              'segments': [{step, from_name, to_name, distance_km, geometry, prices}, ...],
+              'optimized_order': [list of place names]
+            } hoặc
+            'error': str
+          }
         """
         try:
-            # 1. Lấy dữ liệu & Tối ưu thứ tự
-            all_places = self.get_all_places()
-            start_place = next((p for p in all_places if p['id'] == start_id), None)
-            dest_places = [p for p in all_places if p['id'] in destination_ids]
-
-            if not start_place or not dest_places:
-                return {'success': False, 'error': 'Invalid locations'}
-
-            ordered_destinations = self.optimize_stop_order(start_place, dest_places)
-            full_route_sequence = [start_place] + ordered_destinations
+            # 0. VALIDATE INPUT - Đảm bảo destination_ids là list
+            if isinstance(destination_ids, str):
+                destination_ids = [destination_ids]
             
-            # ==================================================================
-            # 2. CẤU HÌNH CÁC HÃNG XE CẦN GỢI Ý (CHỈNH SỬA TẠI ĐÂY)
-            # ==================================================================
-            # Lưu ý: 'mode' và 'brand' phải khớp với dữ liệu trong cost_estimation.py và database
+            if not destination_ids or len(destination_ids) == 0:
+                return {'success': False, 'error': 'Vui lòng chỉ định ít nhất 1 điểm đến'}
+            
+            print(f"📍 Bắt đầu plan trip: Start={start_id}, Destinations={destination_ids}")
+            
+            # 1. GEOCODING - Lấy tọa độ từ tên địa điểm
+            start_place = self.get_place_by_id(start_id)
+            if not start_place:
+                return {'success': False, 'error': f'Không tìm thấy điểm đi: {start_id}'}
+
+            dest_places = []
+            for dest in destination_ids:
+                p = self.get_place_by_id(dest)
+                if p: 
+                    dest_places.append(p)
+                    print(f"✅ Geocoded: {dest} -> {p['name']}")
+                else:
+                    print(f"⚠️  Geocoding fail: {dest}")
+                sleep(1)  # Nominatim rate-limit
+
+            if not dest_places:
+                return {'success': False, 'error': 'Không tìm thấy địa điểm đến nào hợp lệ'}
+            
+            print(f"📍 Total destinations geocoded: {len(dest_places)}")
+
+            # 2. TSP - Tối ưu thứ tự
+            ordered_destinations = self.optimize_stop_order(start_place, dest_places)
+            full_route = [start_place] + ordered_destinations
+
+            # 3. Danh sách hãng xe để so sánh
             comparison_options = [
-                # --- XE MÁY (RIDE HAILING) ---
                 {"id": "grab_bike", "name": "GrabBike", "mode": "ride_hailing_bike", "brand": "Grab"},
                 {"id": "be_bike", "name": "BeBike", "mode": "ride_hailing_bike", "brand": "Be"},
                 {"id": "xanh_bike", "name": "XanhSM Bike", "mode": "ride_hailing_bike", "brand": "Xanh SM"},
-                
-                # --- Ô TÔ 4 CHỖ ---
                 {"id": "grab_car", "name": "GrabCar", "mode": "ride_hailing_car_4", "brand": "Grab"},
                 {"id": "be_car", "name": "BeCar", "mode": "ride_hailing_car_4", "brand": "Be"},
                 {"id": "xanh_car", "name": "XanhSM Taxi", "mode": "ride_hailing_car_4", "brand": "Xanh SM"},
-                
-                # --- CÔNG CỘNG ---
                 {"id": "bus", "name": "Xe Buýt", "mode": "bus", "brand": None},
             ]
 
-            # Khởi tạo bộ đếm tổng tiền
             totals = {opt['id']: 0 for opt in comparison_options}
             segments = []
 
-            # 3. Duyệt qua từng chặng để tính tiền
-            for i in range(len(full_route_sequence) - 1):
-                curr_point = full_route_sequence[i]
-                next_point = full_route_sequence[i+1]
+            # 4. TÍNH TOÁN TỪNG CHẶNG (IMPORTANT: Phải lặp hết tất cả)
+            for i in range(len(full_route) - 1):
+                curr = full_route[i]
+                nxt = full_route[i+1]
                 
-                # Tìm đường thực tế (OSRM)
-                route_result = self.find_optimal_route(curr_point['id'], next_point['id'], 'car')
-                if not route_result['success']: continue
+                print(f"🚗 Chặng {i + 1}: {curr['name']} -> {nxt['name']}")
                 
-                dist_km = route_result['data']['distance_km']
+                sleep(0.1)  # OSRM rate-limit
                 
-                # Tính giá cho TỪNG HÃNG trong danh sách trên
+                # Lấy đường thực tế
+                route_data = self.get_real_route(curr, nxt, profile=self.PROFILE_MAP.get(vehicle_type, 'driving'))
+                
+                if route_data:
+                    dist_km = route_data['distance']
+                    geometry = route_data['coordinates']
+                    print(f"   ✅ OSRM: {dist_km:.2f} km")
+                else:
+                    # Fallback: Haversine + 30% padding (để tính được)
+                    dist_km = self.haversine_distance(curr['lat'], curr['lon'], nxt['lat'], nxt['lon']) * 1.3
+                    geometry = []
+                    print(f"   ⚠️  Fallback Haversine: {dist_km:.2f} km")
+
+                # Tính giá từng chặng cho mỗi phương tiện (CRITICAL!)
                 segment_prices = {}
-                
                 for opt in comparison_options:
-                    # Gọi hàm tính tiền (dựa trên DB)
-                    cost_res = calculate_transport_cost(
-                        mode=opt['mode'],
-                        distance_km=dist_km,
-                        is_student=is_student,
+                    res = calculate_transport_cost(
+                        mode=opt['mode'], 
+                        distance_km=dist_km, 
+                        is_student=is_student, 
                         brand_name=opt['brand']
                     )
-                    cost_value = cost_res['value'] if isinstance(cost_res, dict) else cost_res
-                    
-                    # Cộng dồn
-                    totals[opt['id']] += cost_value
-                    
-                    # Lưu giá lẻ
+                    val = res['value'] if isinstance(res, dict) else res
+                    totals[opt['id']] += val  # ← CỘNG DỒN vào total
                     segment_prices[opt['id']] = {
-                        "name": opt['name'],
-                        "cost": cost_value,
-                        "display": cost_res.get('display', '0đ') if isinstance(cost_res, dict) else f"{cost_value}đ"
+                        "cost": val, 
+                        "display": res.get('display', '0đ') if isinstance(res, dict) else f"{val}đ"
                     }
+                    print(f"      {opt['name']}: +{val:,}đ (total now: {totals[opt['id']]:,}đ)")
 
                 segments.append({
                     'step': i + 1,
-                    'from_name': curr_point['name'],
-                    'to_name': next_point['name'],
-                    'distance_km': dist_km,
+                    'from_name': curr['name'],
+                    'to_name': nxt['name'],
+                    'distance_km': round(dist_km, 2),
+                    'geometry': geometry,
                     'prices': segment_prices
                 })
-
-            # 4. Tổng hợp kết quả (Sort từ rẻ đến đắt)
+            
+            print(f"\n💰 FINAL TOTALS:")
+            # 5. TỔNG HỢP KẾT QUẢ
             summary = []
             for opt in comparison_options:
-                total_val = totals[opt['id']]
+                print(f"   {opt['name']}: {totals[opt['id']]:,}đ")
                 summary.append({
                     "id": opt['id'],
                     "name": opt['name'],
-                    "total_cost": total_val,
-                    "display_total": f"{total_val:,}đ"
+                    "total_cost": totals[opt['id']],
+                    "display_total": f"{totals[opt['id']]:,}đ"
                 })
-
             summary.sort(key=lambda x: x['total_cost'])
+            
+            total_dist = sum(s['distance_km'] for s in segments)
+            print(f"\n✅ TRIP COMPLETED:")
+            print(f"   Total distance: {total_dist:.2f} km")
+            print(f"   Total segments: {len(segments)}")
+            print(f"   Optimized order: {[p['name'] for p in full_route]}")
 
             return {
                 'success': True,
                 'data': {
-                    'total_distance_km': sum(s['distance_km'] for s in segments),
-                    'summary': summary,      # Bảng giá tổng của các hãng
-                    'segments': segments,    # Chi tiết từng chặng
-                    'optimized_order': [p['id'] for p in full_route_sequence]
+                    'total_distance_km': total_dist,
+                    'summary': summary,
+                    'segments': segments,
+                    'optimized_order': [p['name'] for p in full_route]
                 }
             }
 
         except Exception as e:
+            print(f"❌ Plan Trip Error: {e}")
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
 
-# ========== TESTING ==========
-if __name__ == "__main__":
-    router = AStarRouter()
-    
-    # Test lấy địa điểm
-    places = router.get_all_places()
-    print(f"✅ Loaded {len(places)} places")
-    
-    # Test tìm đường
-    result = router.find_optimal_route(1, 5)
-    
-    if result['success']:
-        data = result['data']
-        print(f"\n✅ Route found!")
-        print(f"📏 Distance: {data['distance_km']} km")
-        print(f"⏱️  Duration: {data['duration_min']} min")
-        print(f"📍 Waypoints: {data['total_waypoints']}")
-    else:
-        print(f"\n❌ Error: {result['error']}")
-
-
-def create_api_blueprint(db_path: str) -> Blueprint:
+# ==============================================================================
+# BLUEPRINT FACTORY
+# ==============================================================================
+def create_api_blueprint(db_path=None):
     """
-    Tạo blueprint chứa toàn bộ API liên quan tới A* để tách khỏi app.py
+    Tạo Blueprint cho API routes
+    db_path: Giữ lại để tương thích nhưng không dùng
     """
     router = AStarRouter(db_path=db_path)
     api_bp = Blueprint('astar_api', __name__, url_prefix='/api')
 
     @api_bp.route('/places', methods=['GET'])
     def get_places():
-        try:
-            places = router.get_all_places()
-            return jsonify({
-                'success': True,
-                'data': places,
-                'total': len(places)
-            })
-        except Exception as e:
-            print(f"❌ Error in /api/places: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+        """Deprecated - Dùng Nominatim thay SQLite"""
+        return jsonify({'success': True, 'data': [], 'message': 'Deprecated: Use search by name'})
 
     @api_bp.route('/find-route', methods=['POST'])
     def find_route():
-        try:
-            data = request.get_json()
+        """2-point routing (Find optimal route from start to end)"""
+        data = request.get_json()
+        s = data.get('start_id') or data.get('start')
+        e = data.get('end_id') or data.get('end')
+        
+        res = router.find_optimal_route(s, e, data.get('vehicle_type', 'car'))
+        return jsonify(res)
 
-            if not data or 'start_id' not in data or 'end_id' not in data:
-                return jsonify({
-                    'success': False,
-                    'error': 'Missing start_id or end_id'
-                }), 400
-
-            start_id = int(data['start_id'])
-            end_id = int(data['end_id'])
-            vehicle_type = data.get('vehicle_type', 'car')
-            vehicle_speed = data.get('vehicle_speed')
-            vehicle_speed = float(vehicle_speed) if vehicle_speed else None
-
-            print(f"📡 Nhận request: start={start_id}, end={end_id}")
-
-            result = router.find_optimal_route(
-                start_id,
-                end_id,
-                vehicle_type=vehicle_type,
-                vehicle_speed=vehicle_speed
-            )
-
-            print(f"✅ Kết quả: {result['success']}")
-
-            if result['success']:
-                return jsonify(result)
-            return jsonify(result), 404
-
-        except Exception as e:
-            print(f"❌ Error in /api/find-route: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-
-    @api_bp.route('/test', methods=['GET'])
-    def health_check():
-        return jsonify({
-            'success': True,
-            'message': 'Server is running!',
-            'db_path': db_path
-        })
-    
     @api_bp.route('/plan-trip', methods=['POST'])
     def plan_trip():
-        """
-        API: Lên kế hoạch đi nhiều điểm
-        Body: {
-            "start_id": 1,
-            "destinations": [2, 5, 8],
-            "vehicle_type": "car",
-            "is_student": false
-        }
-        """
-        try:
-            data = request.get_json()
-            
-            if not data or 'start_id' not in data or 'destinations' not in data:
-                return jsonify({'success': False, 'error': 'Missing start_id or destinations list'}), 400
-            
-            # Gọi hàm logic mới
-            result = router.plan_multi_stop_trip(
-                start_id=int(data['start_id']),
-                destination_ids=data['destinations'], # List [int]
-                vehicle_type=data.get('vehicle_type', 'car'),
-                is_student=data.get('is_student', False)
-            )
-            
-            status_code = 200 if result['success'] else 400
-            return jsonify(result), status_code
-
-        except Exception as e:
-            print(f"❌ Error in /api/plan-trip: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+        """Multi-stop routing (Plan trip with multiple stops)"""
+        data = request.get_json()
+        
+        # [SỬA LẠI] Ưu tiên lấy object 'start' chứa tọa độ
+        start_input = data.get('start') or data.get('start_id') or data.get('start_name')
+        
+        res = router.plan_multi_stop_trip(
+            start_id=start_input, # Truyền start_input (có thể là dict hoặc string)
+            destination_ids=data.get('destinations') or data.get('stops', []),
+            is_student=data.get('is_student', False),
+            vehicle_type=data.get('vehicle_type', 'car')
+        )
+        return jsonify(res)
 
     return api_bp
