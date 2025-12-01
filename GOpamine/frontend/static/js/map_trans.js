@@ -354,6 +354,62 @@ document.addEventListener('DOMContentLoaded', async function() {
     function getStoredRouteFromStorage() {
         try { return JSON.parse(localStorage.getItem('selectedRoute')); } catch { return null; }
     }
+
+    // =========================================================================
+    // [MỚI] XỬ LÝ KÉO THẢ BOTTOM SHEET
+    // =========================================================================
+    const dragHandle = document.getElementById('dragHandle');
+    const panel = document.getElementById('vehicleOptionsPanel');
+    
+    let isDragging = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    // 1. Bắt đầu kéo (Mouse & Touch)
+    const startDrag = (e) => {
+        isDragging = true;
+        // Lấy tọa độ Y của chuột hoặc ngón tay
+        startY = e.clientY || e.touches[0].clientY;
+        // Lấy chiều cao hiện tại của khung (px)
+        startHeight = parseInt(window.getComputedStyle(panel).height, 10);
+        
+        panel.style.transition = 'none'; // Tắt transition để kéo cho mượt, không bị delay
+    };
+
+    dragHandle.addEventListener('mousedown', startDrag);
+    dragHandle.addEventListener('touchstart', startDrag);
+
+    // 2. Đang kéo (Mouse & Touch)
+    const onDrag = (e) => {
+        if (!isDragging) return;
+
+        const clientY = e.clientY || e.touches[0].clientY;
+        
+        // Tính khoảng cách đã di chuyển
+        // Kéo lên (Y giảm) -> Chiều cao TĂNG. Kéo xuống (Y tăng) -> Chiều cao GIẢM.
+        const deltaY = startY - clientY;
+        const newHeight = startHeight + deltaY;
+
+        // Cập nhật chiều cao (CSS đã có min/max-height chặn rồi nên cứ set thoải mái)
+        panel.style.height = `${newHeight}px`;
+    };
+
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('touchmove', onDrag, { passive: false });
+
+    // 3. Kết thúc kéo
+    const endDrag = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        panel.style.transition = 'height 0.3s ease'; // Bật lại transition cho đẹp
+        
+        // (Optional) Hiệu ứng Snap: Tự động hít về các mốc
+        // Nếu muốn khung tự động co về 40% hoặc mở 85% khi thả tay, bạn có thể code thêm ở đây.
+        // Hiện tại để tự do (free resize) theo yêu cầu.
+    };
+
+    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('touchend', endDrag);
 });
 
 // =============================================================================

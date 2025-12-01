@@ -88,21 +88,72 @@ body {
     color: #333;
 }
 
+/* ====================================== */
+/* DRAGGABLE BOTTOM SHEET - KÉO TỰ DO */
+/* ====================================== */
+
 .vehicle-options {
     background: white;
-    padding: 20px;
+    /* Xóa padding cũ nếu cần, hoặc giữ lại nhưng padding-top nên nhỏ thôi */
+    padding: 0 20px 20px 20px; 
+    
     border-top-left-radius: 24px;
     border-top-right-radius: 24px;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
-    max-height: 350px;
-    z-index: 100;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+    
     position: relative;
+    z-index: 100;
+    
+    /* [QUAN TRỌNG] Thiết lập chiều cao linh hoạt */
+    height: 40vh;          /* Chiều cao mặc định (40% màn hình) */
+    min-height: 200px;     /* Không cho kéo thấp hơn mức này (để vẫn thấy nút) */
+    max-height: 85vh;      /* Không cho kéo cao quá mức này */
+    
+    /* Dùng Flexbox để nút luôn nằm dưới cùng */
+    display: flex;
+    flex-direction: column;
+    
+    transition: height 0.1s linear; /* Hiệu ứng mượt khi kéo */
 }
 
+/* [MỚI] Style cho thanh nắm (Drag Handle) */
+.drag-handle-container {
+    width: 100%;
+    height: 30px; /* Vùng bấm kéo rộng ra cho dễ bấm */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none; /* Ngăn cuộn trang khi chạm vào đây trên mobile */
+    flex-shrink: 0; /* Không bị co lại */
+}
+
+.drag-handle-container:active {
+    cursor: grabbing;
+}
+
+.drag-bar {
+    width: 40px;
+    height: 5px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+}
+
+/* [SỬA] Container cuộn danh sách xe */
 .vehicle-scroll-container {
-    max-height: 200px;
-    overflow-y: auto;
-    margin-bottom: 16px;
+    /* Xóa max-height cũ (200px) để nó tự dãn theo khung cha */
+    max-height: none; 
+    flex: 1; /* Tự động chiếm hết khoảng trống còn lại */
+    overflow-y: auto; /* Cho phép cuộn dọc nội dung bên trong */
+    margin-bottom: 10px;
+    padding-top: 10px;
+}
+
+/* Giữ nguyên style nút bấm để không bị mất */
+.action-buttons {
+    flex-shrink: 0; /* Đảm bảo nút không bao giờ bị co nhỏ */
+    padding-top: 10px;
+    background: white; /* Nền trắng che nội dung khi cuộn */
 }
 
 .vehicle-scroll-container::-webkit-scrollbar {
@@ -208,8 +259,8 @@ body {
 .action-buttons {
     display: flex;
     gap: 15px; 
-    margin-top: 20px;
-    padding-bottom: 10px;
+    margin-top: 5px;
+    padding-bottom: 5px;
 }
 
 .btn {
