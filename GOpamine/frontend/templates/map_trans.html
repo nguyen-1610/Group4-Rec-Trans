@@ -9,6 +9,24 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" />
     
     <link rel="stylesheet" href="../static/css/map_trans.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        div:where(.swal2-container) {
+            display: grid !important;
+            place-items: center !important;
+            z-index: 10000 !important; /* Nổi lên trên bản đồ */
+        }
+        div:where(.swal2-container) button:where(.swal2-styled).swal2-confirm {
+            background-color: #3C7363 !important;
+            box-shadow: 0 0 0 3px rgba(60, 115, 99, 0.2) !important;
+        }
+        div:where(.swal2-icon).swal2-info {
+            border-color: #3C7363 !important;
+            color: #3C7363 !important;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
