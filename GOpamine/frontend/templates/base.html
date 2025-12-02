@@ -569,7 +569,7 @@
                         <!-- Khối đã đăng nhập: Hiển thị Profile -->
                         <div class="user-profile-container">
                             <div class="profile-trigger" id="profileTrigger">
-                                <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128" 
+                                <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128&bold=true&bold=true" 
                                     alt="Avatar" class="profile-avatar">
                                 <span class="profile-name">{{ current_user.username or current_user.email.split('@')[0] }}</span>
                                 <i class="fas fa-chevron-down profile-arrow"></i>
@@ -611,7 +611,7 @@
                     <!-- Mobile: Hiển thị thông tin user -->
                     <div class="mobile-user-info">
                         <div class="mobile-profile">
-                            <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128" 
+                            <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128&bold=true" 
                                  alt="Avatar" class="mobile-avatar">
                             <div class="mobile-user-text">
                                 <span class="mobile-username">{{ current_user.username or current_user.email.split('@')[0] }}</span>

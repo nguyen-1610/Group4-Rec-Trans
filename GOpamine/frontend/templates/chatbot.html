@@ -17,18 +17,15 @@
                 <button class="toggle-btn active" data-target="chatbot" type="button">AI</button>
             </div>
             
-            <!-- ===== PHẦN PROFILE MỚI (Có điều kiện) ===== -->
             {% if current_user.is_authenticated %}
-                <!-- Khối đã đăng nhập -->
                 <div class="user-profile-container">
                     <div class="profile-trigger" id="profileTrigger">
-                        <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128" 
+                        <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128&bold=true" 
                              alt="Avatar" class="profile-avatar">
                         <span class="profile-name">{{ current_user.username or current_user.email.split('@')[0] }}</span>
                         <i class="fas fa-chevron-down profile-arrow"></i>
                     </div>
                     
-                    <!-- Dropdown Menu -->
                     <div class="profile-dropdown" id="profileDropdown">
                         <div class="dropdown-item-profile profile-info">
                             <i class="fas fa-user"></i>
@@ -42,8 +39,9 @@
                     </div>
                 </div>
             {% else %}
-                <!-- Khối chưa đăng nhập -->
-                <div class="profile-icon">👤</div>
+                <div class="profile-icon">
+                    <i class="fas fa-user"></i>
+                </div>
             {% endif %}
         </div>
     </div>

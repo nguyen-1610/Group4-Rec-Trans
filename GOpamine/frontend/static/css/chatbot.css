@@ -397,3 +397,138 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
 }
+
+/* ========================================= */
+/* [MỚI] CSS CHO PROFILE USER TRÊN HEADER    */
+/* ========================================= */
+
+.user-profile-container {
+    position: relative;
+    margin-left: 10px;
+}
+
+.profile-trigger {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px; /* [Cập nhật] Tăng padding cho giống trang Home */
+    border-radius: 999px;
+    background-color: #f0f4f2; /* [Cập nhật] Đổi sang màu xanh nhạt */
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+
+.profile-trigger:hover {
+    background-color: #f0f4f2;
+    border-color: #3C7363;
+}
+
+.profile-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #3C7363;
+}
+
+.profile-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c4a3a;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-arrow {
+    font-size: 12px;
+    color: #3C7363;
+    transition: transform 0.3s ease;
+}
+
+.profile-trigger:hover .profile-arrow {
+    transform: rotate(180deg);
+}
+
+/* === Dropdown Menu === */
+.profile-dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(31, 74, 58, 0.15);
+    min-width: 220px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    border: 1px solid rgba(40, 72, 57, 0.1);
+}
+
+.profile-dropdown.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    color: #2c4a3a;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.dropdown-item-profile:first-child {
+    border-radius: 12px 12px 0 0;
+}
+
+.dropdown-item-profile:last-child {
+    border-radius: 0 0 12px 12px;
+}
+
+.dropdown-item-profile:hover {
+    background-color: #f4f7f5;
+}
+
+.dropdown-item-profile i {
+    font-size: 16px;
+    color: #3C7363;
+    width: 20px;
+    text-align: center;
+}
+
+.dropdown-item-profile.profile-info {
+    cursor: default;
+    background-color: #f8faf9;
+    font-weight: 500;
+}
+
+.dropdown-divider-profile {
+    height: 1px;
+    background-color: #e5e9e7;
+    margin: 4px 0;
+}
+
+/* Responsive: Ẩn tên trên mobile nếu cần */
+@media (max-width: 480px) {
+    .profile-name, .profile-arrow {
+        display: none;
+    }
+    .profile-trigger {
+        padding: 0;
+        background: transparent;
+    }
+    .profile-avatar {
+        width: 36px;
+        height: 36px;
+    }
+}
