@@ -1,26 +1,20 @@
 /**
- * 🚌 GOPamine - Map & Transport Logic
- * ==========================================
- * - Yêu cầu: Phải load gopamine_utils.js trước file này.
- * - Chức năng: Tìm kiếm (dùng utils), Vẽ đường (OSM), Tính giá (Backend).
+ * 🚌 GOPamine - Map & Transport Logic (Robust Version)
+ * ====================================================
+ * - Fix lỗi trắng trang (Crash) do dữ liệu sai.
+ * - Fix lỗi mất icon A, B, C (Dùng SVG).
+ * - Hỗ trợ kéo thả bảng giá (Bottom Sheet).
  */
 
 document.addEventListener('DOMContentLoaded', async function() {
     
     // =========================================================================
-    // 1. KHỞI TẠO & BIẾN STATE
+    // 1. KHỞI TẠO BẢN ĐỒ & LAYER
     // =========================================================================
     
-    // Biến quản lý vẽ đường (để xóa đi vẽ lại dễ dàng)
     let routeLayerGroup = L.layerGroup();
-    
-    // State lưu tọa độ hiện tại
     let currentStart = { lat: null, lon: null, name: '' };
     let currentEnd = { lat: null, lon: null, name: '' };
-
-    // =========================================================================
-    // 2. KHỞI TẠO BẢN ĐỒ (LEAFLET)
-    // =========================================================================
 
     const map = L.map('map', { zoomControl: false, zoom: 13 });
     
@@ -29,127 +23,177 @@ document.addEventListener('DOMContentLoaded', async function() {
     }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     
-    routeLayerGroup.addTo(map); // Thêm layer vẽ đường vào map
+    routeLayerGroup.addTo(map);
 
     // =========================================================================
-    // 3. LOAD DỮ LIỆU TỪ STORAGE (KHI TỪ FORM CHUYỂN QUA)
+    // 2. LOAD DỮ LIỆU AN TOÀN (SAFE LOAD)
     // =========================================================================
 
-    const storedRoute = getStoredRouteFromStorage();
-    
-    if (storedRoute) {
-        // Cập nhật State
-        currentStart = { ...storedRoute.start_place, lon: storedRoute.start_place.lon || storedRoute.start_place.lng };
-        currentEnd = { ...storedRoute.end_place, lon: storedRoute.end_place.lon || storedRoute.end_place.lng };
+    try {
+        const storedRoute = getStoredRouteFromStorage();
         
-        // Điền tên vào ô Input
-        const inputStart = document.getElementById('map-origin');
-        const inputEnd = document.getElementById('map-destination');
-        if(inputStart) inputStart.value = currentStart.name;
-        if(inputEnd) inputEnd.value = currentEnd.name;
+        if (storedRoute && storedRoute.start_place && storedRoute.end_place) {
+            // Cập nhật State
+            currentStart = { ...storedRoute.start_place, lon: storedRoute.start_place.lon || storedRoute.start_place.lng };
+            currentEnd = { ...storedRoute.end_place, lon: storedRoute.end_place.lon || storedRoute.end_place.lng };
+            
+            // Điền input
+            const inputStart = document.getElementById('map-origin');
+            const inputEnd = document.getElementById('map-destination');
+            if(inputStart) inputStart.value = currentStart.name || '';
+            if(inputEnd) inputEnd.value = currentEnd.name || '';
 
-        // Vẽ đường & Load danh sách xe
-        drawRouteOnMap(storedRoute.route_coordinates, currentStart, currentEnd);
-        updateAllVehicleCardsDefault();
-        await fetchAndRenderTransportOptions(storedRoute.distance_km);
-        
-        // Tự động chọn thẻ xe đã chọn bên form (nếu có)
-        if (storedRoute.vehicle) {
-            const card = document.querySelector(`.option-card[data-vehicle="${storedRoute.vehicle.type}"]`);
-            if (card) card.click();
+            // [QUAN TRỌNG] Vẽ đường & Marker
+            // Nếu waypoints bị lỗi (là string), fallback về [Start, End]
+            let safeWaypoints = storedRoute.waypoints;
+            if (safeWaypoints && safeWaypoints.length > 0 && typeof safeWaypoints[0] === 'string') {
+                console.warn("⚠️ Dữ liệu cũ không tương thích, đang reset waypoints...");
+                safeWaypoints = [currentStart, currentEnd];
+            }
+
+            drawRouteOnMap(storedRoute.route_coordinates, currentStart, currentEnd, safeWaypoints);
+            
+            // Render danh sách xe
+            updateAllVehicleCardsDefault();
+            await fetchAndRenderTransportOptions(storedRoute.distance_km);
+            
+            // Auto select
+            if (storedRoute.vehicle) {
+                setTimeout(() => {
+                    const card = document.querySelector(`.option-card[data-vehicle="${storedRoute.vehicle.type}"]`);
+                    if (card) card.click();
+                }, 500);
+            }
+        } else {
+            // Mặc định: TP.HCM
+            map.setView([10.7769, 106.7009], 13);
         }
-    } else {
-        // Nếu không có dữ liệu, hiển thị mặc định (TP.HCM)
+    } catch (err) {
+        console.error("❌ Lỗi khởi tạo Map:", err);
+        // Nếu lỗi quá nặng, xóa storage để lần sau không bị trắng trang
+        localStorage.removeItem('selectedRoute');
         map.setView([10.7769, 106.7009], 13);
     }
 
     // =========================================================================
-    // 4. LOGIC TÌM KIẾM MỚI (SỬ DỤNG AUTOCOMPLETE TỪ UTILS)
+    // 3. LOGIC VẼ MAP & MARKER (DÙNG SVG ĐỂ KHÔNG BỊ MẤT)
     // =========================================================================
 
-    /**
-     * Callback: Hàm này chạy khi user chọn một địa điểm từ danh sách gợi ý
-     */
+    function createCustomMarker(map, lat, lng, color, label, popupContent) {
+        // [FIX] Dùng SVG để đảm bảo icon luôn hiển thị
+        const svgIcon = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+                <path fill="${color}" d="M16 0C7.163 0 0 7.163 0 16c0 12 16 26 16 26s16-14 16-26C32 7.163 24.837 0 16 0z" stroke="white" stroke-width="2"/>
+                <circle cx="16" cy="16" r="10" fill="white" opacity="0.2"/>
+                <text x="50%" y="21" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">${label}</text>
+            </svg>`;
+
+        const icon = L.divIcon({
+            html: svgIcon,
+            className: 'custom-svg-marker',
+            iconSize: [32, 42],
+            iconAnchor: [16, 42],
+            popupAnchor: [0, -45]
+        });
+
+        L.marker([lat, lng], { icon: icon, zIndexOffset: 1000 })
+            .addTo(routeLayerGroup)
+            .bindPopup(`<div style="text-align:center; font-weight:bold; color:${color}">${label}. ${popupContent}</div>`);
+    }
+
+    function drawRouteOnMap(coords, start, end, waypoints) {
+        routeLayerGroup.clearLayers(); 
+
+        // 1. Vẽ Marker
+        const pointsToDraw = (waypoints && Array.isArray(waypoints) && waypoints.length > 0) 
+                             ? waypoints 
+                             : [start, end];
+
+        pointsToDraw.forEach((point, index) => {
+            // Kiểm tra an toàn: Point phải là object có lat/lon
+            if (!point || typeof point !== 'object') return;
+
+            const label = String.fromCharCode(65 + index); // A, B, C...
+            let color = '#fbbc04'; // Mặc định Vàng (Trung gian)
+            
+            if (index === 0) color = '#4285f4'; // Start: Xanh
+            else if (index === pointsToDraw.length - 1) color = '#ea4335'; // End: Đỏ
+
+            const lat = parseFloat(point.lat);
+            const lng = parseFloat(point.lon || point.lng);
+            
+            if (!isNaN(lat) && !isNaN(lng)) {
+                createCustomMarker(map, lat, lng, color, label, point.name || `Điểm ${label}`);
+            }
+        });
+
+        // 2. Vẽ Đường (Polyline)
+        if (coords && coords.length > 0) {
+            const latlngs = coords.map(c => [c[1], c[0]]);
+            // Vẽ viền trắng cho nổi bật
+            L.polyline(latlngs, { color: 'white', weight: 7, opacity: 0.8 }).addTo(routeLayerGroup);
+            // Vẽ đường chính
+            const mainLine = L.polyline(latlngs, { color: '#4285f4', weight: 5 }).addTo(routeLayerGroup);
+            
+            // Zoom vừa khít
+            map.fitBounds(mainLine.getBounds(), { 
+                paddingTopLeft: [20, 20],
+                paddingBottomRight: [20, 250] // Chừa chỗ cho bảng giá
+            });
+        }
+    }
+
+    // =========================================================================
+    // 4. LOGIC TÍNH LẠI LỘ TRÌNH (KHI THAY ĐỔI ĐIỂM)
+    // =========================================================================
+
     function handleMapInputUpdate(placeData, inputElement) {
-        // 1. Chuẩn hóa dữ liệu
         const newPlace = {
             lat: parseFloat(placeData.lat),
             lon: parseFloat(placeData.lon),
-            name: placeData.name.split(',').slice(0, 2).join(',') // Lấy tên ngắn gọn
+            name: placeData.name.split(',').slice(0, 2).join(',')
         };
-        
-        // 2. Lưu vào dataset (để tiện debug hoặc sử dụng lại)
         inputElement.dataset.placeData = JSON.stringify(newPlace);
 
-        // 3. Cập nhật biến State toàn cục
-        if (inputElement.id === 'map-origin') {
-            console.log("📍 Đã chọn điểm đi:", newPlace.name);
-            currentStart = newPlace;
-        } else if (inputElement.id === 'map-destination') {
-            console.log("📍 Đã chọn điểm đến:", newPlace.name);
-            currentEnd = newPlace;
-        }
+        if (inputElement.id === 'map-origin') currentStart = newPlace;
+        else if (inputElement.id === 'map-destination') currentEnd = newPlace;
         
-        // 4. Tự động tính lại lộ trình nếu đã đủ 2 điểm
         if (currentStart.lat && currentEnd.lat) {
             recalculateRoute();
         }
     }
 
-    // Lấy phần tử input
     const originInput = document.getElementById('map-origin');
     const destInput = document.getElementById('map-destination');
 
-    // Kích hoạt Autocomplete (Hàm này lấy từ gopamine_utils.js)
     if (typeof setupAutocomplete === 'function') {
-        if (originInput) {
-            setupAutocomplete(originInput, handleMapInputUpdate);
-        }
-        if (destInput) {
-            setupAutocomplete(destInput, handleMapInputUpdate);
-        }
-    } else {
-        console.error("⚠️ Chưa load file gopamine_utils.js!");
+        if (originInput) setupAutocomplete(originInput, handleMapInputUpdate);
+        if (destInput) setupAutocomplete(destInput, handleMapInputUpdate);
     }
 
-    // =========================================================================
-    // 5. LOGIC TÍNH TOÁN VÀ VẼ LỘ TRÌNH (GỌI API)
-    // =========================================================================
-
-        // [FIX] Thay thế toàn bộ hàm recalculateRoute cũ bằng hàm này trong map_trans.js
-
     async function recalculateRoute() {
-        console.log("🔄 Đang tính toán lại lộ trình...");
+        console.log("🔄 Đang tính lại...");
         updateAllVehicleCardsDefault();
 
         try {
-            // 1. Lấy dữ liệu từ LocalStorage để biết có những điểm trung gian nào không
-            const storedRoute = getStoredRouteFromStorage();
-            // Nếu trong storage có danh sách waypoints (nhiều hơn 2 điểm)
-            const isMultiStop = storedRoute && storedRoute.waypoints && storedRoute.waypoints.length > 2;
+            const storedData = getStoredRouteFromStorage();
+            const isMultiStop = storedData && storedData.waypoints && storedData.waypoints.length > 2;
 
             let url, body;
-
             if (isMultiStop) {
-                // === TRƯỜNG HỢP 1: ĐA ĐIỂM (MULTI-STOP) ===
-                // Gọi API /plan-trip (giống như bên form.js đã làm)
+                // Multi-stop: Giữ nguyên danh sách điểm trung gian, chỉ thay đổi điểm đầu/cuối nếu user sửa input
+                // (Logic này đơn giản hóa, thực tế cần phức tạp hơn nếu muốn sửa điểm giữa)
                 url = '/api/plan-trip';
                 body = {
-                    start_id: currentStart.name, // Dùng tên để backend tìm tọa độ
-                    destinations: storedRoute.waypoints.slice(1).map(wp => wp.name), // Lấy danh sách điểm đến (bỏ điểm đầu)
+                    start_id: currentStart.name,
+                    destinations: storedData.waypoints.slice(1).map(wp => wp.name),
                     vehicle_type: 'car'
                 };
             } else {
-                // === TRƯỜNG HỢP 2: ĐI 1 CHẶNG (A -> B) ===
                 url = '/api/find-route-osm';
-                body = {
-                    start: currentStart,
-                    end: currentEnd,
-                    vehicle_type: 'car'
-                };
+                body = { start: currentStart, end: currentEnd, vehicle_type: 'car' };
             }
 
-            // 2. Gọi API
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -164,35 +208,25 @@ document.addEventListener('DOMContentLoaded', async function() {
                 let totalDist = 0;
                 let waypoints = [];
 
-                // 3. Xử lý dữ liệu trả về (Chuẩn hóa vì 2 API trả về khác nhau)
                 if (isMultiStop) {
-                    // API plan-trip trả về segments
                     totalDist = routeData.total_distance_km;
-                    waypoints = routeData.optimized_order || storedRoute.waypoints;
-                    
-                    // Nối các đoạn đường lại để vẽ
+                    waypoints = routeData.optimized_order || storedData.waypoints;
                     if (routeData.segments) {
                         routeData.segments.forEach(seg => {
                             if (seg.geometry) finalCoords = finalCoords.concat(seg.geometry);
                         });
                     }
                 } else {
-                    // API find-route-osm trả về coordinates thẳng
                     totalDist = routeData.distance_km;
                     finalCoords = routeData.route_coordinates;
                     waypoints = [currentStart, currentEnd];
                 }
 
-                // 4. Vẽ lại lên Map (Nhớ dùng hàm drawRouteOnMap mới tôi đã gửi ở tin nhắn trước)
-                // Lưu ý: Phải truyền waypoints vào để vẽ các điểm dừng
                 drawRouteOnMap(finalCoords, currentStart, currentEnd, waypoints);
-
-                // 5. Tính lại tiền (Quan trọng: totalDist bây giờ đã đúng là tổng các chặng)
                 await fetchAndRenderTransportOptions(totalDist);
 
-                // 6. Cập nhật lại Storage
                 const newStorage = {
-                    ...storedRoute,
+                    ...storedData,
                     route_coordinates: finalCoords,
                     distance_km: totalDist,
                     waypoints: waypoints
@@ -200,56 +234,25 @@ document.addEventListener('DOMContentLoaded', async function() {
                 localStorage.setItem('selectedRoute', JSON.stringify(newStorage));
 
             } else {
-                alert("Không tìm thấy đường đi: " + (result.error || "Lỗi không xác định"));
+                alert("Không tìm thấy đường đi: " + (result.error || "Lỗi server"));
             }
         } catch (error) {
             console.error("Lỗi tính lộ trình:", error);
-            alert("Có lỗi xảy ra khi tìm đường.");
-        }
-    }
-
-    function drawRouteOnMap(coords, start, end) {
-        routeLayerGroup.clearLayers(); // Xóa đường cũ
-
-        // Marker Điểm đi (A)
-        createCustomMarker(map, start.lat, start.lon, '#4285f4', 'A', start.name);
-        // Marker Điểm đến (B)
-        createCustomMarker(map, end.lat, end.lon, '#ea4335', 'B', end.name);
-
-        // Vẽ đường nối
-        if (coords && coords.length > 0) {
-            // OSRM trả về [lon, lat] -> Leaflet cần [lat, lon]
-            const latlngs = coords.map(c => [c[1], c[0]]);
-            
-            // Vẽ viền trắng (để nổi bật trên nền bản đồ)
-            L.polyline(latlngs, { color: 'white', weight: 8 }).addTo(routeLayerGroup);
-            // Vẽ đường chính màu xanh
-            const mainLine = L.polyline(latlngs, { color: '#4285f4', weight: 5 }).addTo(routeLayerGroup);
-            
-            // Zoom map vừa khít với đường đi
-            map.fitBounds(mainLine.getBounds(), { padding: [50, 50], paddingTopLeft: [50, 150] });
         }
     }
 
     // =========================================================================
-    // 6. RENDER CARDS & UI (LOGIC CŨ GIỮ NGUYÊN)
+    // 5. RENDER CARDS & UI
     // =========================================================================
 
     async function fetchAndRenderTransportOptions(distanceKm) {
         try {
-            // Lấy ưu tiên từ form cũ (nếu có)
             let priorities = ['saving', 'speed'];
             try {
                 const formData = JSON.parse(localStorage.getItem('formData'));
-                if (formData?.preferences) {
-                    priorities = formData.preferences.map(p => 
-                        p.toLowerCase().includes('tiết') ? 'saving' :
-                        p.toLowerCase().includes('nhanh') ? 'speed' : 'comfort'
-                    );
-                }
+                if (formData?.preferences) priorities = formData.preferences;
             } catch (e) {}
 
-            // Gọi API so sánh giá
             const response = await fetch('/api/compare-transport', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -266,6 +269,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         } catch (error) {
             console.error("Lỗi lấy giá xe:", error);
+            document.querySelector('.vehicle-scroll-container').innerHTML = '<div style="text-align:center; padding:10px;">Lỗi kết nối.</div>';
         }
     }
 
@@ -273,7 +277,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         const container = document.querySelector('.vehicle-scroll-container');
         container.innerHTML = '';
 
-        // Hàm helper lấy icon
         const getIcon = (name) => {
             const n = name.toLowerCase();
             const path = '/static/icons/';
@@ -323,23 +326,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
 
         setupCardSelectionEvents();
-        
-        // Auto select first card
         const firstCard = container.querySelector('.option-card');
         if(firstCard) firstCard.classList.add('selected');
     }
 
     function updateAllVehicleCardsDefault() {
-        const container = document.querySelector('.vehicle-scroll-container');
-        container.innerHTML = '<div style="text-align:center; padding:20px; color:#666;"><i class="fas fa-spinner fa-spin"></i> Đang tính toán lộ trình...</div>';
-    }
-
-    function createCustomMarker(map, lat, lng, color, label, popup) {
-        const icon = L.divIcon({
-            html: `<div style="background:${color}; color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 2px 5px rgba(0,0,0,0.3); font-weight:bold;">${label}</div>`,
-            className: '', iconSize: [30, 30], iconAnchor: [15, 15]
-        });
-        L.marker([lat, lng], { icon }).addTo(routeLayerGroup).bindPopup(popup);
+        document.querySelector('.vehicle-scroll-container').innerHTML = '<div style="text-align:center; padding:20px; color:#666;"><i class="fas fa-spinner fa-spin"></i> Đang tính toán...</div>';
     }
 
     function setupCardSelectionEvents() {
@@ -356,66 +348,49 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // =========================================================================
-    // [MỚI] XỬ LÝ KÉO THẢ BOTTOM SHEET
+    // 6. XỬ LÝ KÉO THẢ (BOTTOM SHEET)
     // =========================================================================
     const dragHandle = document.getElementById('dragHandle');
     const panel = document.getElementById('vehicleOptionsPanel');
     
-    let isDragging = false;
-    let startY = 0;
-    let startHeight = 0;
+    if (dragHandle && panel) {
+        let isDragging = false;
+        let startY = 0;
+        let startHeight = 0;
 
-    // 1. Bắt đầu kéo (Mouse & Touch)
-    const startDrag = (e) => {
-        isDragging = true;
-        // Lấy tọa độ Y của chuột hoặc ngón tay
-        startY = e.clientY || e.touches[0].clientY;
-        // Lấy chiều cao hiện tại của khung (px)
-        startHeight = parseInt(window.getComputedStyle(panel).height, 10);
-        
-        panel.style.transition = 'none'; // Tắt transition để kéo cho mượt, không bị delay
-    };
+        const startDrag = (e) => {
+            isDragging = true;
+            startY = e.clientY || e.touches[0].clientY;
+            startHeight = parseInt(window.getComputedStyle(panel).height, 10);
+            panel.style.transition = 'none'; 
+        };
 
-    dragHandle.addEventListener('mousedown', startDrag);
-    dragHandle.addEventListener('touchstart', startDrag);
+        dragHandle.addEventListener('mousedown', startDrag);
+        dragHandle.addEventListener('touchstart', startDrag);
 
-    // 2. Đang kéo (Mouse & Touch)
-    const onDrag = (e) => {
-        if (!isDragging) return;
+        const onDrag = (e) => {
+            if (!isDragging) return;
+            const clientY = e.clientY || e.touches[0].clientY;
+            const deltaY = startY - clientY;
+            const newHeight = startHeight + deltaY;
+            panel.style.height = `${newHeight}px`;
+        };
 
-        const clientY = e.clientY || e.touches[0].clientY;
-        
-        // Tính khoảng cách đã di chuyển
-        // Kéo lên (Y giảm) -> Chiều cao TĂNG. Kéo xuống (Y tăng) -> Chiều cao GIẢM.
-        const deltaY = startY - clientY;
-        const newHeight = startHeight + deltaY;
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('touchmove', onDrag, { passive: false });
 
-        // Cập nhật chiều cao (CSS đã có min/max-height chặn rồi nên cứ set thoải mái)
-        panel.style.height = `${newHeight}px`;
-    };
+        const endDrag = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            panel.style.transition = 'height 0.3s ease'; 
+        };
 
-    document.addEventListener('mousemove', onDrag);
-    document.addEventListener('touchmove', onDrag, { passive: false });
-
-    // 3. Kết thúc kéo
-    const endDrag = () => {
-        if (!isDragging) return;
-        isDragging = false;
-        panel.style.transition = 'height 0.3s ease'; // Bật lại transition cho đẹp
-        
-        // (Optional) Hiệu ứng Snap: Tự động hít về các mốc
-        // Nếu muốn khung tự động co về 40% hoặc mở 85% khi thả tay, bạn có thể code thêm ở đây.
-        // Hiện tại để tự do (free resize) theo yêu cầu.
-    };
-
-    document.addEventListener('mouseup', endDrag);
-    document.addEventListener('touchend', endDrag);
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+    }
 });
 
-// =============================================================================
-// 7. GLOBAL FUNCTIONS (CHO CÁC NÚT BẤM TRÊN HTML)
-// =============================================================================
-
+// GLOBAL FUNCTIONS
 window.switchTab = function(arg1, arg2) {
     const tabName = (typeof arg1 === 'string') ? arg1 : arg2;
     if (tabName === 'ai' || tabName === 'chatbot') window.location.href = '/chatbot';
@@ -424,16 +399,7 @@ window.switchTab = function(arg1, arg2) {
 window.confirmRoute = function() {
     const card = document.querySelector('.option-card.selected');
     if (!card) return alert("Vui lòng chọn một phương tiện!");
-    
-    const choice = {
-        type: card.dataset.vehicle,
-        price: card.dataset.price,
-        time: card.dataset.time,
-        score: card.dataset.score
-    };
-    // alert(`💰 Đã chọn: ${choice.type} - Giá: ${choice.price}`);
-    // Code logic đặt xe tiếp theo ở đây...
-    alert(`Đã chọn ${choice.type}. Tính năng đặt xe đang phát triển!`);
+    alert(`Đã chọn ${card.dataset.vehicle}. Tính năng đặt xe đang phát triển!`);
 };
 
 window.goToPreviousPage = () => window.history.back();

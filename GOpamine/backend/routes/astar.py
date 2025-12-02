@@ -398,7 +398,7 @@ class AStarRouter:
                     'total_distance_km': total_dist,
                     'summary': summary,
                     'segments': segments,
-                    'optimized_order': [p['name'] for p in full_route]
+                    'optimized_order': full_route
                 }
             }
 
