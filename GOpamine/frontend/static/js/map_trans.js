@@ -147,31 +147,41 @@ document.addEventListener('DOMContentLoaded', async function() {
     // =========================================================================
 
     async function recalculateRoute() {
-        console.log("🔄 Đang tính toán lại lộ trình...", currentWaypoints);
+        // Log để debug xem mảng hiện tại có gì
+        console.log("🔄 Đang tính toán lại lộ trình cho:", currentWaypoints);
+        
+        // Cần ít nhất 2 điểm hợp lệ (có lat, lon) mới tính được
+        // Lọc bỏ các điểm chưa chọn xong (lat = null)
+        const validWaypoints = currentWaypoints.filter(wp => wp.lat && wp.lon);
+        
+        if (validWaypoints.length < 2) {
+            console.log("⚠️ Chưa đủ 2 điểm hợp lệ để tính đường.");
+            return;
+        }
+
         updateAllVehicleCardsDefault();
 
         try {
-            const isMultiStop = currentWaypoints.length > 2;
+            const isMultiStop = validWaypoints.length > 2;
             let url, body;
 
-            // Lấy điểm đầu và danh sách điểm đến
-            const startPoint = currentWaypoints[0];
-            
             if (isMultiStop) {
-                // API Multi-stop
+                // === TRƯỜNG HỢP NHIỀU ĐIỂM ===
                 url = '/api/plan-trip';
                 body = {
-                    start_id: startPoint.name, // Backend dùng tên để geocode lại nếu cần
-                    start: startPoint,         // [UPDATE] Gửi kèm tọa độ để chính xác hơn
-                    destinations: currentWaypoints.slice(1).map(wp => wp.name),
+                    start: validWaypoints[0], 
+                    // Lấy tất cả các điểm còn lại làm destinations
+                    destinations: validWaypoints.slice(1).map(wp => wp.name),
                     vehicle_type: 'car'
                 };
             } else {
-                // API 2 điểm
+                // === TRƯỜNG HỢP 2 ĐIỂM (SỬA LỖI TẠI ĐÂY) ===
+                // Dùng trực tiếp phần tử đầu và cuối của mảng validWaypoints
+                // Thay vì dùng biến currentStart/currentEnd cũ kĩ
                 url = '/api/find-route-osm';
                 body = {
-                    start: startPoint,
-                    end: currentWaypoints[1],
+                    start: validWaypoints[0],
+                    end: validWaypoints[1],
                     vehicle_type: 'car'
                 };
             }
@@ -192,11 +202,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 
                 if (isMultiStop) {
                     totalDist = routeData.total_distance_km;
-                    // Backend trả về optimized_order (full objects)
-                    // Ta cần cập nhật lại currentWaypoints theo thứ tự tối ưu này?
-                    // Tùy chọn: Nếu muốn UI tự nhảy theo thứ tự tối ưu thì gán lại.
-                    // Ở đây ta cứ dùng thứ tự trả về để vẽ Map.
-                    optimizedWaypoints = routeData.optimized_order || currentWaypoints;
+                    
+                    // Backend trả về danh sách đã tối ưu
+                    // Logic cập nhật state để giao diện input nhảy theo thứ tự mới
+                    optimizedWaypoints = routeData.optimized_order || validWaypoints;
+                    currentWaypoints = optimizedWaypoints; // [QUAN TRỌNG] Đồng bộ state
+                    renderInputPanel(); // Vẽ lại input theo thứ tự mới
                     
                     if (routeData.segments) {
                         routeData.segments.forEach(seg => {
@@ -204,9 +215,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                         });
                     }
                 } else {
+                    // Xử lý 2 điểm
                     totalDist = routeData.distance_km;
                     finalCoords = routeData.route_coordinates;
-                    optimizedWaypoints = currentWaypoints;
+                    // Với 2 điểm, thứ tự chính là thứ tự trong mảng
+                    optimizedWaypoints = validWaypoints; 
                 }
 
                 // Vẽ Map
@@ -228,9 +241,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
             } else {
                 alert("Không tìm thấy đường đi: " + (result.error || "Lỗi server"));
+                // Reset lại UI nếu lỗi để không bị treo loading
+                document.querySelector('.vehicle-scroll-container').innerHTML = '';
             }
         } catch (error) {
             console.error("Lỗi tính lộ trình:", error);
+            alert("Có lỗi xảy ra khi kết nối server.");
+            document.querySelector('.vehicle-scroll-container').innerHTML = '';
         }
     }
 
