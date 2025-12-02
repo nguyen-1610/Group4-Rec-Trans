@@ -302,3 +302,148 @@ function handleGetUserLocation(inputElement, btnElement, dropdownElement) {
         console.log("✅ Đã chèn Icon Overlay vào origin-input");
     }
 })();
+
+// =========================================================
+// [NEW] HÀM TẠO DÒNG INPUT ĐỊA ĐIỂM (DÙNG CHUNG CHO MAP & FORM)
+// =========================================================
+
+/**
+ * Tạo một dòng input địa điểm với Label (A, B, C) và logic Autocomplete
+ * @param {number} index - Số thứ tự (0, 1, 2...)
+ * @param {object} placeData - Dữ liệu địa điểm {name, lat, lon}
+ * @param {boolean} isRemovable - Có hiện nút xóa không?
+ * @param {function} onUpdate - Callback khi user chọn địa điểm mới (data, element)
+ * @param {function} onRemove - Callback khi user bấm xóa
+ * @returns {HTMLElement} - Thẻ div chứa dòng input
+ */
+function createRouteInputRow(index, placeData, isRemovable, onUpdate, onRemove) {
+    // 1. Tính toán Nhãn & Màu sắc
+    const label = String.fromCharCode(65 + index); // 0->A, 1->B...
+    let color = '#fbbc04'; // Vàng (Trung gian)
+    
+    // Logic màu giống hệt trên Map
+    if (index === 0) color = '#4285f4'; // Start: Xanh
+    // Lưu ý: Logic màu điểm cuối sẽ được xử lý ở bước render cha, 
+    // nhưng ở đây ta cứ mặc định là Vàng, lát nữa CSS hoặc logic cha sẽ ghi đè nếu cần.
+    // Tuy nhiên, để đơn giản, ta có thể nhận tham số 'isLast' hoặc để logic màu linh hoạt hơn.
+    // Tạm thời ta để class CSS xử lý màu.
+
+    const container = document.createElement('div');
+    container.className = 'input-group route-row'; // Thêm class route-row để dễ style
+    container.dataset.index = index;
+    
+    // 2. Tạo HTML (Icon A/B/C + Input + Nút Xóa)
+    // Style icon tròn giống trên Map
+    const iconHtml = `
+        <div class="waypoint-icon" style="background-color: ${color}">
+            ${label}
+        </div>
+    `;
+
+    const removeBtnHtml = isRemovable 
+        ? `<button class="remove-wp-btn" title="Xóa điểm này">×</button>` 
+        : '';
+
+    container.innerHTML = `
+        ${iconHtml}
+        <input type="text" class="map-input" 
+               placeholder="${index === 0 ? 'Chọn điểm đi' : 'Chọn điểm đến'}" 
+               value="${placeData.name || ''}" 
+               autocomplete="off">
+        ${removeBtnHtml}
+    `;
+
+    // 3. Gắn dữ liệu vào input (để Autocomplete dùng)
+    const input = container.querySelector('input');
+    if (placeData.lat) {
+        input.dataset.placeData = JSON.stringify(placeData);
+    }
+
+    // 4. Kích hoạt Autocomplete
+    if (typeof setupAutocomplete === 'function') {
+        setupAutocomplete(input, (newData, el) => {
+            // Khi chọn xong, gọi callback để Map cập nhật
+            onUpdate(index, newData);
+        });
+    }
+
+    // 5. Xử lý nút xóa
+    if (isRemovable) {
+        const btn = container.querySelector('.remove-wp-btn');
+        btn.onclick = () => onRemove(index);
+    }
+
+    return container;
+}
+
+// [AUTO CSS] Inject thêm style cho các thành phần mới
+(function injectRouteStyles() {
+    const css = `
+        .route-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+            position: relative;
+        }
+        .waypoint-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .map-input {
+            flex: 1;
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .map-input:focus {
+            border-color: #3C7363;
+        }
+        .remove-wp-btn {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+        }
+        .remove-wp-btn:hover {
+            color: #ea4335;
+        }
+        /* Nút thêm điểm đến */
+        .add-stop-container {
+            padding-left: 34px; /* Thụt vào thẳng hàng với input */
+            margin-top: 5px;
+        }
+        .add-stop-btn {
+            background: none;
+            border: none;
+            color: #3C7363;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .add-stop-btn:hover {
+            text-decoration: underline;
+        }
+    `;
+    const style = document.createElement('style');
+    style.appendChild(document.createTextNode(css));
+    document.head.appendChild(style);
+})();
