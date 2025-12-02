@@ -40,16 +40,13 @@
         </div>
 
         <div class="map-search-overlay">
-            <div class="search-inputs">
-                <div class="input-group">
-                    <i class="fas fa-circle start-icon"></i>
-                    <input type="text" id="map-origin" placeholder="Điểm đi của bạn" autocomplete="off">
+            <div class="search-inputs" id="route-inputs-container">
                 </div>
-                <div class="divider-line"></div>
-                <div class="input-group">
-                    <i class="fas fa-location-dot end-icon"></i>
-                    <input type="text" id="map-destination" placeholder="Chọn điểm đến" autocomplete="off">
-                </div>
+            
+            <div class="add-stop-container">
+                <button id="add-stop-btn" class="add-stop-btn">
+                    <i class="fas fa-plus-circle"></i> Thêm điểm đến
+                </button>
             </div>
             
             <div id="map-suggestions" class="map-suggestions hidden"></div>
