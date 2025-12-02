@@ -421,11 +421,6 @@ window.switchTab = (arg1, arg2) => {
     const tabName = (typeof arg1 === 'string') ? arg1 : arg2;
     if (tabName === 'ai' || tabName === 'chatbot') window.location.href = '/chatbot';
 };
-window.confirmRoute = () => {
-    const card = document.querySelector('.option-card.selected');
-    if (!card) return alert("Vui lòng chọn một phương tiện!");
-    alert(`Đã chọn ${card.dataset.vehicle}. Tính năng đặt xe đang phát triển!`);
-};
 window.confirmRoute = function() {
     // =============================================================================
     // 7. GLOBAL FUNCTIONS (ĐÃ CẬP NHẬT LOGIC CHUYỂN APP)
