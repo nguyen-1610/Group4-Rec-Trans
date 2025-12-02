@@ -477,8 +477,17 @@ async function handleLogout() {
 
         const result = await response.json();
         if (result.success) {
-            alert('Đăng xuất thành công!');
-            window.location.href = '/';
+            // --- [BỔ SUNG] HỘP THOẠI ĐĂNG XUẤT THÀNH CÔNG ---
+            Swal.fire({
+                title: 'Đã đăng xuất!',
+                text: 'Hẹn gặp lại bạn trong hành trình tới.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            }).then(() => {
+                window.location.href = '/';
+            });
+            // -----------------------------------------------
         } else {
             alert('Lỗi đăng xuất: ' + (result.message || 'Không xác định'));
         }
@@ -492,9 +501,23 @@ const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {
     logoutBtn.addEventListener('click', function(e) {
         e.preventDefault();
-        if (confirm('Bạn có chắc muốn đăng xuất?')) {
-            handleLogout();
-        }
+        
+        // --- [BỔ SUNG] HỘP THOẠI XÁC NHẬN ĐẸP ---
+        Swal.fire({
+            title: 'Đăng xuất?',
+            text: "Bạn sẽ cần đăng nhập lại để lưu lịch trình.",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3C7363',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Đăng xuất',
+            cancelButtonText: 'Hủy'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                handleLogout();
+            }
+        });
+        // ----------------------------------------
     });
 }
 

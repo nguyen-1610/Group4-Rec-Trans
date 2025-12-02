@@ -418,3 +418,15 @@ body {
         min-width: auto !important; /* Bỏ giới hạn chiều rộng tối thiểu */
     }
 }
+
+/* --- BỔ SUNG: CĂN GIỮA HỘP THOẠI CHUYỂN APP (SWEETALERT2) --- */
+div:where(.swal2-container) {
+    display: grid !important;
+    place-items: center !important; /* Căn giữa tuyệt đối cả dọc và ngang */
+    z-index: 10000 !important;      /* Đảm bảo nổi lên trên cùng */
+}
+
+/* Đảm bảo hộp thoại không bị dính lên top */
+div:where(.swal2-popup) {
+    margin: auto !important;
+}

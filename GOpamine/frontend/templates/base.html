@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}GOpamine{% endblock %}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     {% block extra_css %}{% endblock %}
     
     <style>
@@ -518,6 +519,21 @@
             .user-profile-container {
                 display: none;
             }
+        }
+        
+        div:where(.swal2-container) button:where(.swal2-styled).swal2-confirm {
+            background-color: #3C7363 !important; /* Màu nút OK */
+            box-shadow: 0 0 0 3px rgba(60, 115, 99, 0.2) !important;
+        }
+        
+        /* Màu viền và dấu tích xanh */
+        div:where(.swal2-icon).swal2-success {
+            border-color: #3C7363 !important;
+            color: #3C7363 !important;
+        }
+        
+        div:where(.swal2-icon).swal2-success [class^=swal2-success-line] {
+            background-color: #3C7363 !important;
         }
     </style>
 </head>

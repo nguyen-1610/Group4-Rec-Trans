@@ -322,18 +322,83 @@ window.switchTab = function(arg1, arg2) {
 };
 
 window.confirmRoute = function() {
-    const card = document.querySelector('.option-card.selected');
-    if (!card) return alert("Vui lòng chọn một phương tiện!");
+    // =============================================================================
+    // 7. GLOBAL FUNCTIONS (ĐÃ CẬP NHẬT LOGIC CHUYỂN APP)
+    // =============================================================================
     
-    const choice = {
-        type: card.dataset.vehicle,
-        price: card.dataset.price,
-        time: card.dataset.time,
-        score: card.dataset.score
+    // Danh sách liên kết của các hãng (Bạn có thể cập nhật link xịn hơn nếu có)
+    const BRAND_LINKS = {
+        'grab': 'https://www.grab.com/vn/download/',   // Trang tải Grab
+        'be': 'https://be.com.vn/',                    // Trang chủ Be
+        'xanh': 'https://www.xanhsm.com/',             // Trang chủ Xanh SM
+        'bus': 'https://busmap.vn/',                   // BusMap
+        'vinbus': 'https://vinbus.vn/',                // VinBus
+        'google': 'https://www.google.com/maps/dir/'   // Google Maps (cho xe cá nhân)
     };
-    // alert(`💰 Đã chọn: ${choice.type} - Giá: ${choice.price}`);
-    // Code logic đặt xe tiếp theo ở đây...
-    alert(`Đã chọn ${choice.type}. Tính năng đặt xe đang phát triển!`);
+    
+    window.confirmRoute = function() {
+        // 1. Tìm thẻ xe đang được chọn
+        const selectedCard = document.querySelector('.option-card.selected');
+        
+        if (!selectedCard) {
+            // Nếu có SweetAlert2 thì dùng, không thì dùng alert thường
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Chưa chọn xe', 'Vui lòng chọn một phương tiện để tiếp tục', 'warning');
+            } else {
+                alert("Vui lòng chọn một phương tiện!");
+            }
+            return;
+        }
+        
+        // 2. Lấy thông tin xe
+        const vehicleName = selectedCard.dataset.vehicle.toLowerCase(); // VD: "grabcar 4 chỗ"
+        let targetUrl = '';
+    
+        // 3. Logic định tuyến (Routing Logic)
+        if (vehicleName.includes('grab')) {
+            targetUrl = BRAND_LINKS.grab;
+        } 
+        else if (vehicleName.includes('be') && !vehicleName.includes('bến')) { 
+            // Tránh nhầm với "Bến xe"
+            targetUrl = BRAND_LINKS.be;
+        } 
+        else if (vehicleName.includes('xanh') || vehicleName.includes('gsm')) {
+            targetUrl = BRAND_LINKS.xanh;
+        } 
+        else if (vehicleName.includes('buýt') || vehicleName.includes('bus')) {
+            targetUrl = BRAND_LINKS.bus;
+        } 
+        else {
+            // Với xe máy cá nhân hoặc đi bộ -> Mở Google Maps chỉ đường
+            // Lấy tọa độ điểm đến từ biến toàn cục (nếu có) hoặc mở Maps trống
+            targetUrl = BRAND_LINKS.google;
+        }
+    
+        // 4. Xác nhận và Chuyển trang
+        const confirmMessage = `Bạn đã chọn ${selectedCard.dataset.vehicle}.\nChúng tôi sẽ chuyển bạn đến ứng dụng của hãng để đặt xe.`;
+        
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Xác nhận chuyển hướng',
+                text: `Mở ứng dụng/website của ${selectedCard.dataset.vehicle}?`,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#3C7363',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Đi ngay',
+                cancelButtonText: 'Hủy'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.open(targetUrl, '_blank'); // Mở tab mới
+                }
+            });
+        } else {
+            // Fallback nếu không có SweetAlert2
+            if (confirm(confirmMessage)) {
+                window.open(targetUrl, '_blank');
+            }
+        }
+    };
 };
 
 window.goToPreviousPage = () => window.history.back();
