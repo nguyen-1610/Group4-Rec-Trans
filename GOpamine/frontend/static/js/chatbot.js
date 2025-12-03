@@ -15,9 +15,7 @@ function isUserLoggedIn() {
     return document.querySelector('.user-profile-container') !== null;
 }
 
-// === [MỚI] HÀM CHỌN NƠI LƯU TRỮ ===
-// Nếu đăng nhập -> dùng localStorage (Lâu dài)
-// Nếu chưa đăng nhập -> dùng sessionStorage (Tạm thời, mất khi tắt tab)
+// === HÀM CHỌN NƠI LƯU TRỮ ===
 function getStorage() {
     return isUserLoggedIn() ? localStorage : sessionStorage;
 }
@@ -31,11 +29,9 @@ function prepareChatHistory(session, reset = false) {
     if (!historyKey) return;
     
     if (reset) {
-        // Xóa trong storage tương ứng
         getStorage().removeItem(historyKey);
     }
     
-    // [SỬA] Luôn khôi phục lịch sử (Dù là Guest hay User)
     restoreChatHistory();
 }
 
@@ -43,7 +39,6 @@ function restoreChatHistory() {
     if (!historyKey) return;
     
     try {
-        // [SỬA] Lấy dữ liệu từ storage tương ứng
         const storage = getStorage();
         const historyRaw = storage.getItem(historyKey);
         
@@ -64,11 +59,9 @@ function restoreChatHistory() {
 }
 
 function persistMessage(role, content) {
-    // [SỬA] Cho phép cả Guest và User đều được lưu (vào kho tương ứng)
     if (!historyKey || !role || typeof content !== 'string') return;
     
     try {
-        // [SỬA] Lưu vào storage tương ứng (Local hoặc Session)
         const storage = getStorage();
         const history = JSON.parse(storage.getItem(historyKey) || '[]');
         history.push({ role, content });
@@ -83,7 +76,6 @@ function persistMessage(role, content) {
 // ========================================
 async function initSession(forceNew = false) {
     try {
-        // Kiểm tra xem có session từ form không (Lưu ý: SessionID của form vẫn để Local để giữ kết nối khi chuyển trang)
         const existingSessionId = !forceNew ? localStorage.getItem('sessionId') : null;
         
         if (existingSessionId) {
@@ -91,7 +83,6 @@ async function initSession(forceNew = false) {
             console.log('✅ Sử dụng session cũ:', sessionId);
             prepareChatHistory(sessionId);
             
-            // Nếu lịch sử trống (user mới hoặc guest mới mở lại tab), hiện lời chào
             const storage = getStorage();
             if (!storage.getItem(getHistoryKey(sessionId))) {
                 showWelcomeMessage();
@@ -116,21 +107,17 @@ async function initSession(forceNew = false) {
 }
 
 async function recreateSession() {
-    // Xóa trong storage hiện tại trước khi tạo mới
     if (historyKey) getStorage().removeItem(historyKey);
-    
     localStorage.removeItem('sessionId');
     sessionId = null;
     historyKey = null;
     return initSession(true);
 }
 
-// Hiển thị message chào mừng
 function showWelcomeMessage() {
     console.log('👋 Chatbot ready');
 }
 
-// Tạo prompt tự động từ Form Data
 function generateAutoPrompt(formData) {
     let prompt = "Tôi muốn được tư vấn về lộ trình di chuyển. ";
     
@@ -153,7 +140,6 @@ function generateAutoPrompt(formData) {
     return prompt;
 }
 
-// Gửi prompt tự động
 async function sendAutoPrompt() {
     try {
         const pendingFormDataStr = localStorage.getItem('pendingFormData');
@@ -172,7 +158,6 @@ async function sendAutoPrompt() {
     }
 }
 
-// Hàm gửi message đến backend
 async function sendMessageToBackend(message, allowRetry = true) {
     if (!sessionId || !message) return;
     
@@ -217,6 +202,7 @@ async function sendMessageToBackend(message, allowRetry = true) {
             <div class="message-bubble" style="background: #ffebee; color: #c62828;">❌ Lỗi: ${error.message}</div>
         `;
         chatContainer.appendChild(errorMessage);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 }
 
@@ -338,7 +324,7 @@ function setupHeaderNavigation() {
 }
 setupHeaderNavigation();
 
-//const profileTrigger = document.getElementById('profileTrigger');
+const profileTrigger = document.getElementById('profileTrigger');
 const profileDropdown = document.getElementById('profileDropdown');
 
 if (profileTrigger && profileDropdown) {
@@ -391,7 +377,6 @@ if (logoutBtn) {
         e.preventDefault();
         
         const doLogout = () => {
-            // [SỬA] Khi đăng xuất: Xóa sạch LocalStorage (nơi user đang lưu)
             if (historyKey) localStorage.removeItem(historyKey);
             handleLogout();
         };
@@ -415,8 +400,18 @@ if (logoutBtn) {
     });
 }
 
-const profileIcon = document.querySelector('.profile-icon');
-if (profileIcon) {
-    profileIcon.style.cursor = 'pointer';
-    profileIcon.addEventListener('click', () => window.location.href = '/login');
-}
+// ============================================================
+// [KHÔI PHỤC] XỬ LÝ CLICK VÀO PROFILE ICON KHI CHƯA ĐĂNG NHẬP
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    const profileIcon = document.querySelector('.profile-icon');
+    
+    // Chỉ chạy nếu tìm thấy class .profile-icon (tức là user CHƯA đăng nhập)
+    if (profileIcon) {
+        profileIcon.style.cursor = 'pointer';
+        profileIcon.addEventListener('click', function() {
+            console.log("Redirecting to login...");
+            window.location.href = '/login';
+        });
+    }
+});
