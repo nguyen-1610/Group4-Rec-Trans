@@ -53,52 +53,107 @@ body {
     right: 15px;
     background: #e8e8e8;
     border: none;
-    border-radius: 25px;
+    border-radius: 20px;
     padding: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     z-index: 1000;
     display: flex;
-    gap: 4px;
+    gap: 0px;
+    width: 112.475px;
+    height: 36.8px;
 }
 
 .tab-btn {
-    padding: 8px 24px;
+    padding: 6px 16px;
     border: none;
     background: transparent;
     cursor: pointer;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     color: #666;
     transition: all 0.3s ease;
-    border-radius: 20px;
-    min-width: 70px;
+    border-radius: 16px;
+    width: 59.2375px;
+    height: 28.8px;
 }
 
 .tab-btn.active {
     background: white;
     color: #333;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
 }
 
 .tab-btn:hover:not(.active) {
     color: #333;
 }
 
+/* ====================================== */
+/* DRAGGABLE BOTTOM SHEET - KÉO TỰ DO */
+/* ====================================== */
+
 .vehicle-options {
     background: white;
-    padding: 20px;
+    /* Xóa padding cũ nếu cần, hoặc giữ lại nhưng padding-top nên nhỏ thôi */
+    padding: 0 20px 20px 20px; 
+    
     border-top-left-radius: 24px;
     border-top-right-radius: 24px;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
-    max-height: 350px;
-    z-index: 100;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+    
     position: relative;
+    z-index: 100;
+    
+    /* [QUAN TRỌNG] Thiết lập chiều cao linh hoạt */
+    height: 40vh;          /* Chiều cao mặc định (40% màn hình) */
+    min-height: 200px;     /* Không cho kéo thấp hơn mức này (để vẫn thấy nút) */
+    max-height: 85vh;      /* Không cho kéo cao quá mức này */
+    
+    /* Dùng Flexbox để nút luôn nằm dưới cùng */
+    display: flex;
+    flex-direction: column;
+    
+    transition: height 0.1s linear; /* Hiệu ứng mượt khi kéo */
 }
 
+/* [MỚI] Style cho thanh nắm (Drag Handle) */
+.drag-handle-container {
+    width: 100%;
+    height: 30px; /* Vùng bấm kéo rộng ra cho dễ bấm */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none; /* Ngăn cuộn trang khi chạm vào đây trên mobile */
+    flex-shrink: 0; /* Không bị co lại */
+}
+
+.drag-handle-container:active {
+    cursor: grabbing;
+}
+
+.drag-bar {
+    width: 40px;
+    height: 5px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+}
+
+/* [SỬA] Container cuộn danh sách xe */
 .vehicle-scroll-container {
-    max-height: 200px;
-    overflow-y: auto;
-    margin-bottom: 16px;
+    /* Xóa max-height cũ (200px) để nó tự dãn theo khung cha */
+    max-height: none; 
+    flex: 1; /* Tự động chiếm hết khoảng trống còn lại */
+    overflow-y: auto; /* Cho phép cuộn dọc nội dung bên trong */
+    margin-bottom: 10px;
+    padding-top: 10px;
+}
+
+/* Giữ nguyên style nút bấm để không bị mất */
+.action-buttons {
+    flex-shrink: 0; /* Đảm bảo nút không bao giờ bị co nhỏ */
+    padding-top: 10px;
+    background: white; /* Nền trắng che nội dung khi cuộn */
 }
 
 .vehicle-scroll-container::-webkit-scrollbar {
@@ -204,8 +259,8 @@ body {
 .action-buttons {
     display: flex;
     gap: 15px; 
-    margin-top: 20px;
-    padding-bottom: 10px;
+    margin-top: 5px;
+    padding-bottom: 5px;
 }
 
 .btn {
@@ -286,7 +341,7 @@ body {
     background: white;
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    padding: 10px;
+    padding: 6px;
     max-width: 900px; /* Giới hạn chiều rộng trên desktop */
     margin: 0 auto;   /* Căn giữa nếu màn hình rộng */
 }
@@ -300,7 +355,7 @@ body {
 .input-group {
     display: flex;
     align-items: center;
-    padding: 8px 10px;
+    padding: 4px 10px;
 }
 
 .input-group i {
@@ -352,9 +407,77 @@ body {
 .suggestion-item:hover { background: #f5f5f5; }
 .suggestion-item i { margin-right: 10px; color: #777; }
 
-/* Responsive cho Mobile */
+
 @media (max-width: 480px) {
-    .map-search-overlay {
-        left: 10px; right: 10px;
+    
+    /* 1. Nút Back: Neo chặt ở góc trái trên cùng */
+    .back-btn {
+        top: 10px !important;       /* Cách mép trên 10px */
+        left: 10px !important;      /* Cách mép trái 10px */
+        width: 38px !important;     /* Thu nhỏ nhẹ (gốc 40px) */
+        height: 38px !important;
+        z-index: 1005 !important;   /* Lớp cao nhất để luôn bấm được */
     }
+
+    /* 2. Thanh Search: Kéo LÊN ngang hàng với nút Back */
+    .map-search-overlay {
+        /* Vị trí dọc: Ngang hàng với nút Back */
+        top: 10px !important;       
+        left: 58px !important;      
+        right: 10px !important;     
+        
+        width: auto !important;     /* Để left/right có tác dụng kéo dãn */
+        padding: 6px 10px !important; /* Giảm padding trong cho gọn */
+    }
+
+    /* Tinh chỉnh input bên trong cho vừa vặn */
+
+    .input-group {
+        padding: 4px 0 !important;
+    }
+
+    .divider-line {
+        margin: 1px 0 2px 44px !important;
+    }
+
+    .input-group input {
+        font-size: 13px !important; /* Chữ nhỏ hơn xíu trên mobile */
+        height: 24px !important;
+    }
+
+    /* 3. Nút AI/Map: Đẩy xuống DƯỚI thanh Search & Thu nhỏ */
+    .ai-chat-btn {
+        /* Vị trí dọc: Nằm dưới thanh Search */
+        /* Search bar cao khoảng 50-55px + 10px top = ~65px. Đặt 75px là an toàn */
+        top: 100px !important;       
+        
+        /* Vị trí ngang: Căn phải */
+        right: 10px !important;
+        left: auto !important;      /* Đảm bảo không bị dính lề trái */
+        
+        z-index: 1002 !important;
+        transform: scale(0.85);      /* Thu nhỏ còn 85% kích thước gốc */
+        transform-origin: top right; /* Thu nhỏ về phía góc phải trên */
+        
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important; /* Đổ bóng đậm hơn chút cho nổi */
+    }
+
+    /* Thu nhỏ chữ trong các tab con của nút AI */
+    .tab-btn {
+        padding: 6px 16px !important;
+        font-size: 13px !important;
+        min-width: auto !important; /* Bỏ giới hạn chiều rộng tối thiểu */
+    }
+}
+
+/* --- BỔ SUNG: CĂN GIỮA HỘP THOẠI CHUYỂN APP (SWEETALERT2) --- */
+div:where(.swal2-container) {
+    display: grid !important;
+    place-items: center !important; /* Căn giữa tuyệt đối cả dọc và ngang */
+    z-index: 10000 !important;      /* Đảm bảo nổi lên trên cùng */
+}
+
+/* Đảm bảo hộp thoại không bị dính lên top */
+div:where(.swal2-popup) {
+    margin: auto !important;
 }

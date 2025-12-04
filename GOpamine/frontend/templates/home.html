@@ -18,13 +18,16 @@
             <div class="hero-buttons">
                 <a href="/form" class="btn btn-primary btn-large" data-i18n="btn_start">Khám phá lộ trình của bạn</a>
                 
-                <a href="/register" class="btn btn-outline" data-i18n="btn_signup">Tạo tài khoản</a>
-                
-                <div class="login-text-wrapper">
-                    <span class="small-text" data-i18n="acc_exist">Đã có tài khoản? </span>
-                    <a href="/login" class="btn-text-link" data-i18n="btn_login">Đăng nhập</a>
-
-                </div>
+                {% if current_user.is_authenticated %}
+                    <a href="/chatbot" class="btn btn-outline" data-i18n="btn_chat_ai">Trò chuyện cùng AI</a>
+                {% else %}
+                    <a href="/register" class="btn btn-outline" data-i18n="btn_signup">Tạo tài khoản</a>
+                    
+                    <div class="login-text-wrapper">
+                        <span class="small-text" data-i18n="acc_exist">Đã có tài khoản? </span>
+                        <a href="/login" class="btn-text-link" data-i18n="btn_login">Đăng nhập</a>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </section>

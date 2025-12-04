@@ -5,12 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Thiết lập lộ trình</title>
     <link rel="stylesheet" href="../static/css/form.css">
+    <!-- Thêm Font Awesome cho icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
             <button class="back-btn">←</button>
-            <div class="profile-icon">👤</div>
+            
+            <!-- ===== PHẦN PROFILE MỚI (Có điều kiện) ===== -->
+            <div class="header-profile">
+                <!-- Backend sẽ render một trong hai khối này -->
+                {% if current_user.is_authenticated %}
+                    <!-- Khối đã đăng nhập -->
+                    <div class="user-profile-container">
+                        <div class="profile-trigger" id="profileTrigger">
+                            <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128" 
+                                 alt="Avatar" class="profile-avatar">
+                            <span class="profile-name">{{ current_user.username or current_user.email.split('@')[0] }}</span>
+                            <i class="fas fa-chevron-down profile-arrow"></i>
+                        </div>
+                        
+                        <!-- Dropdown Menu -->
+                        <div class="profile-dropdown" id="profileDropdown">
+                            <div class="dropdown-item-profile profile-info">
+                                <i class="fas fa-user"></i>
+                                <span>{{ current_user.email }}</span>
+                            </div>
+                            <div class="dropdown-divider-profile"></div>
+                            <a href="#" class="dropdown-item-profile" id="logoutBtn">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Đăng xuất</span>
+                            </a>
+                        </div>
+                    </div>
+                {% else %}
+                    <!-- Khối chưa đăng nhập (giữ nguyên style cũ) -->
+                    <div class="profile-icon">👤</div>
+                {% endif %}
+            </div>
         </div>
 
         <div class="form-container">
@@ -25,7 +58,7 @@
                                id="origin-input" 
                                autocomplete="off"> <div id="origin-dropdown" class="custom-dropdown hidden">
                             <div class="dropdown-item gps-item" id="btn-use-gps">
-                                <span class="icon">📍</span> <div class="item-text">
+                                <span class="icon"> <i class="fas fa-map-marker-alt"></i> </span> <div class="item-text">
                                     <span class="main">Sử dụng vị trí hiện tại</span>
                                     <span class="sub">Nhấn để lấy tọa độ GPS</span>
                                 </div>

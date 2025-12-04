@@ -33,11 +33,38 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await response.json();
 
             if (result.success) {
-                if (successMsg) alert(successMsg);
-                window.location.href = result.redirect_url || '/';
+                // --- [LOGIC MỚI] PHÂN LOẠI HÀNH ĐỘNG DỰA VÀO successMsg ---
+                
+                if (successMsg) {
+                    // TRƯỜNG HỢP 1: ĐĂNG KÝ (Có tin nhắn thông báo)
+                    Swal.fire({
+                        title: 'Đăng ký thành công!',
+                        text: successMsg,           // Dùng tin nhắn được truyền vào
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false,
+                        backdrop: `rgba(0,0,0,0.4)`
+                    }).then(() => {
+                        window.location.href = "/login"; // Chuyển về trang đăng nhập
+                    });
+                } else {
+                    // TRƯỜNG HỢP 2: ĐĂNG NHẬP (successMsg là null)
+                    Swal.fire({
+                        title: 'Đăng nhập thành công!',
+                        text: 'Đang chuyển hướng về trang chủ...',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        backdrop: `rgba(0,0,0,0.4)`
+                    }).then(() => {
+                        // Chuyển về Home (hoặc URL server trả về)
+                        window.location.href = result.redirect_url || '/'; 
+                    });
+                }
+                // -------------------------------------------------------
             } else {
-                // Hiển thị chính xác message từ server gửi về
-                alert("Thất bại: " + (result.message || "Lỗi không xác định"));
+                // (Giữ nguyên logic lỗi cũ)
+                alert("Lỗi: " + (result.message || "Server không trả về lý do"));
             }
 
         } catch (error) {

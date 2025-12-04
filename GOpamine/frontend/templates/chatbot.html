@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Bot</title>
     <link rel="stylesheet" href="../static/css/chatbot.css">
+    <!-- Thêm Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="header">
@@ -14,7 +16,33 @@
                 <button class="toggle-btn" data-target="map" type="button">Map</button>
                 <button class="toggle-btn active" data-target="chatbot" type="button">AI</button>
             </div>
-            <div class="profile-icon">👤</div>
+            
+            {% if current_user.is_authenticated %}
+                <div class="user-profile-container">
+                    <div class="profile-trigger" id="profileTrigger">
+                        <img src="https://ui-avatars.com/api/?name={{ current_user.username or current_user.email }}&background=3C7363&color=fff&size=128&bold=true" 
+                             alt="Avatar" class="profile-avatar">
+                        <span class="profile-name">{{ current_user.username or current_user.email.split('@')[0] }}</span>
+                        <i class="fas fa-chevron-down profile-arrow"></i>
+                    </div>
+                    
+                    <div class="profile-dropdown" id="profileDropdown">
+                        <div class="dropdown-item-profile profile-info">
+                            <i class="fas fa-user"></i>
+                            <span>{{ current_user.email }}</span>
+                        </div>
+                        <div class="dropdown-divider-profile"></div>
+                        <a href="#" class="dropdown-item-profile" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Đăng xuất</span>
+                        </a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="profile-icon">
+                    <i class="fas fa-user"></i>
+                </div>
+            {% endif %}
         </div>
     </div>
 

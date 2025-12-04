@@ -9,6 +9,24 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" />
     
     <link rel="stylesheet" href="../static/css/map_trans.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        div:where(.swal2-container) {
+            display: grid !important;
+            place-items: center !important;
+            z-index: 10000 !important; /* Nổi lên trên bản đồ */
+        }
+        div:where(.swal2-container) button:where(.swal2-styled).swal2-confirm {
+            background-color: #3C7363 !important;
+            box-shadow: 0 0 0 3px rgba(60, 115, 99, 0.2) !important;
+        }
+        div:where(.swal2-icon).swal2-info {
+            border-color: #3C7363 !important;
+            color: #3C7363 !important;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -22,87 +40,35 @@
         </div>
 
         <div class="map-search-overlay">
-            <div class="search-inputs">
-                <div class="input-group">
-                    <i class="fas fa-circle start-icon"></i>
-                    <input type="text" id="map-origin" placeholder="Điểm đi của bạn" autocomplete="off">
+            <div class="search-inputs" id="route-inputs-container">
                 </div>
-                <div class="divider-line"></div>
-                <div class="input-group">
-                    <i class="fas fa-location-dot end-icon"></i>
-                    <input type="text" id="map-destination" placeholder="Chọn điểm đến" autocomplete="off">
-                </div>
+            
+            <div class="add-stop-container">
+                <button id="add-stop-btn" class="add-stop-btn">
+                    <i class="fas fa-plus-circle"></i> Thêm điểm đến
+                </button>
             </div>
             
             <div id="map-suggestions" class="map-suggestions hidden"></div>
         </div>
 
-        <div class="vehicle-options">
-            <div class="vehicle-scroll-container">
-                <div class="option-card selected" data-vehicle="motorbike" data-price="15000" data-stars="3">
-                    <div class="option-left">
-                        <div class="vehicle-icon">🏍️</div>
-                        <div class="vehicle-info">
-                            <h4>Xe máy</h4>
-                            <p>9 phút</p>
-                        </div>
-                    </div>
-                    <div class="option-right">
-                        <div class="price">15.000đ</div>
-                    </div>
-                </div>
-
-                <div class="option-card" data-vehicle="car" data-price="30000" data-stars="3">
-                    <div class="option-left">
-                        <div class="vehicle-icon">🚗</div>
-                        <div class="vehicle-info">
-                            <h4>Ô tô điện</h4>
-                            <p>9 phút</p>
-                        </div>
-                    </div>
-                    <div class="option-right">
-                        <div class="price">30.000đ</div>
-                    </div>
-                </div>
-
-                <div class="option-card" data-vehicle="bus" data-price="7000" data-stars="3">
-                    <div class="option-left">
-                        <div class="vehicle-icon">🚌</div>
-                        <div class="vehicle-info">
-                            <h4>Xe buýt</h4>
-                            <p>15 phút</p>
-                        </div>
-                    </div>
-                    <div class="option-right">
-                        <div class="price">7.000đ</div>
-                    </div>
-                </div>
-
-                <div class="option-card" data-vehicle="walk" data-price="0" data-stars="0">
-                    <div class="option-left">
-                        <div class="vehicle-icon">🚶</div>
-                        <div class="vehicle-info">
-                            <h4>Đi bộ</h4>
-                            <p>25 phút</p>
-                        </div>
-                    </div>
-                    <div class="option-right">
-                        <div class="price">Miễn phí</div>
-                        <div class="stars">-</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="goBack()">
-                    Tư Vấn Với AI
-                </button>
-                <button class="btn btn-primary" onclick="confirmRoute()">
-                    Chọn
-                </button>
-            </div>
-        </div>
+        <div class="vehicle-options" id="vehicleOptionsPanel">
+    <div class="drag-handle-container" id="dragHandle">
+        <div class="drag-bar"></div>
     </div>
+
+    <div class="vehicle-scroll-container">
+        </div>
+
+    <div class="action-buttons">
+        <button class="btn btn-secondary" onclick="goBack()">
+            Tư Vấn Với AI
+        </button>
+        <button class="btn btn-primary" onclick="confirmRoute()">
+            Chọn
+        </button>
+    </div>
+</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>

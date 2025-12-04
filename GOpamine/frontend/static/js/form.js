@@ -473,16 +473,44 @@ async function tryCreateSession() {
     return null;
 }
 
-async function requestRouteFromBackend(startPlace, endPlace, vehicle = DEFAULT_VEHICLE) {
-    const response = await fetch(`${API_BASE}/find-route-osm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+// [FIX] Sửa lại hàm này trong form.js
+async function requestRouteFromBackend(startPlace, destinations, vehicle = DEFAULT_VEHICLE) {
+    // Kiểm tra nếu chỉ có 1 điểm đến -> dùng logic cũ
+    // Nếu có nhiều điểm đến -> dùng logic TSP (plan-trip)
+    const isMultiStop = destinations.length > 1;
+    
+    // Endpoint backend: Dùng /plan-trip nếu nhiều điểm (đã có trong astar.py)
+    // Lưu ý: check lại file astar.py xem route exact là gì, thường là /api/plan-trip
+    const endpoint = isMultiStop ? `${API_BASE}/plan-trip` : `${API_BASE}/find-route-osm`;
+
+    // Chuẩn bị body request tùy theo API
+    let bodyPayload = {};
+
+    if (isMultiStop) {
+        // Cấu trúc cho /api/plan-trip (trong astar.py: plan_multi_stop_trip)
+        bodyPayload = {
+            start_id: startPlace.name, // astar.py dùng tên để geocode lại
+            destinations: destinations.map(d => d.name), // Gửi danh sách tên các điểm đến
+            vehicle_type: vehicle.type,
+            is_student: false 
+        };
+    } else {
+        // Cấu trúc cũ cho 1 điểm đến
+        const endPlace = destinations[0];
+        bodyPayload = {
             start: { lat: startPlace.lat, lon: startPlace.lon, name: startPlace.name },
             end: { lat: endPlace.lat, lon: endPlace.lon, name: endPlace.name },
             vehicle_type: vehicle.type,
             vehicle_speed: vehicle.speed
-        })
+        };
+    }
+
+    console.log(`📡 Calling API: ${endpoint}`, bodyPayload);
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload)
     });
     
     const result = await response.json();
@@ -490,7 +518,32 @@ async function requestRouteFromBackend(startPlace, endPlace, vehicle = DEFAULT_V
         throw new Error(result.error || 'Không tìm được tuyến đường');
     }
     
-    return result.data;
+    // [QUAN TRỌNG] Chuẩn hóa dữ liệu trả về để map_trans.js hiểu
+    if (isMultiStop) {
+        // API plan-trip trả về: total_distance_km, segments, optimized_order
+        // Ta cần map nó về format mà map_trans.js đang mong đợi (route_coordinates, distance_km)
+        
+        // Gom tất cả tọa độ của các chặng (segments) lại thành 1 đường dài
+        let allCoords = [];
+        let totalDist = result.data.total_distance_km;
+        
+        if (result.data.segments) {
+            result.data.segments.forEach(seg => {
+                if (seg.geometry) allCoords = allCoords.concat(seg.geometry);
+            });
+        }
+
+        return {
+            route_coordinates: allCoords, // Để vẽ đường nối liền
+            distance_km: totalDist,       // Tổng quãng đường để tính tiền
+            waypoints: result.data.optimized_order, // Thứ tự điểm đi đã tối ưu
+            is_multi_stop: true,
+            details: result.data // Lưu lại để hiển thị chi tiết nếu cần
+        };
+    } else {
+        // Trả về data cũ
+        return result.data;
+    }
 }
 
 async function syncFormDataWithChatbot(sessionId, formData) {
@@ -563,24 +616,24 @@ submitBtn.addEventListener('click', async () => {
         }
         await syncFormDataWithChatbot(sessionId, formData);
         
-        // 5. Gọi backend để tính route (OSM routing)
-        const primaryDestination = destinations[0];
+                // 5. Gọi backend để tính route
         console.log('🧭 Đang tính toán đường đi...');
-        
-        const routeData = await requestRouteFromBackend(startPlace, primaryDestination, DEFAULT_VEHICLE);
-        
+                
+        // [FIX] Truyền toàn bộ mảng destinations thay vì chỉ primaryDestination
+        const routeData = await requestRouteFromBackend(startPlace, destinations, DEFAULT_VEHICLE);
+                
         // 6. Lưu route vào localStorage
         const routePayload = {
             timestamp: Date.now(),
             start_place: startPlace,
-            end_place: primaryDestination,
-            route_coordinates: routeData.route_coordinates,
-            waypoints: routeData.waypoints,
+            end_place: destinations[destinations.length - 1], // Điểm cuối cùng trong hành trình
+            // Các trường dữ liệu quan trọng để map_trans.js vẽ và tính tiền:
+            route_coordinates: routeData.route_coordinates, 
             distance_km: routeData.distance_km,
-            duration_min: routeData.duration_min,
+            waypoints: routeData.waypoints,
             vehicle: DEFAULT_VEHICLE
         };
-        
+
         localStorage.setItem('selectedRoute', JSON.stringify(routePayload));
         localStorage.setItem('pendingFormData', JSON.stringify(formData));
         
@@ -770,3 +823,64 @@ window.addEventListener('pageshow', (event) => {
         restoreFormData();
     }
 });
+
+//<!-- ===== JAVASCRIPT XỬ LÝ PROFILE ===== -->
+// === PROFILE DROPDOWN TOGGLE ===
+const profileTrigger = document.getElementById('profileTrigger');
+const profileDropdown = document.getElementById('profileDropdown');
+
+if (profileTrigger && profileDropdown) {
+    profileTrigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        profileDropdown.classList.toggle('active');
+    });
+
+    document.addEventListener('click', function(e) {
+        if (profileDropdown.classList.contains('active')) {
+            if (!profileDropdown.contains(e.target) && e.target !== profileTrigger) {
+                profileDropdown.classList.remove('active');
+            }
+        }
+    });
+}
+
+// === LOGOUT FUNCTION ===
+async function handleLogout() {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Đăng xuất thành công!');
+            window.location.href = '/';
+        } else {
+            alert('Lỗi đăng xuất: ' + (result.message || 'Không xác định'));
+        }
+    } catch (error) {
+        console.error('Logout Error:', error);
+        alert('Lỗi hệ thống: ' + error.message);
+    }
+}
+
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (confirm('Bạn có chắc muốn đăng xuất?')) {
+            handleLogout();
+        }
+    });
+}
+
+// === XỬ LÝ CLICK VÀO PROFILE ICON KHI CHƯA ĐĂNG NHẬP ===
+const profileIcon = document.querySelector('.profile-icon');
+if (profileIcon) {
+    profileIcon.style.cursor = 'pointer';
+    profileIcon.addEventListener('click', function() {
+        window.location.href = '/login';
+    });
+}
