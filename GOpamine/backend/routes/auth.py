@@ -19,16 +19,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH
 # Trỏ vào data/user.db
 DB_PATH = os.path.join(PROJECT_ROOT, 'data', 'user.db')
 
-print(f"\n--- [AUTH DEBUG] ---")
-print(f"📂 Project Root: {PROJECT_ROOT}")
-print(f"🔌 Database Path: {DB_PATH}")
-
-# Kiểm tra file tồn tại
-if os.path.exists(DB_PATH):
-    print("✅ File user.db CÓ tồn tại.")
-else:
-    print("❌ [CRITICAL] File user.db KHÔNG tồn tại! Hệ thống sẽ tự tạo mới (nhưng có thể thiếu bảng).")
-
 def get_db_connection():
     try:
         conn = sqlite3.connect(DB_PATH)
