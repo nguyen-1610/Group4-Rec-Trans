@@ -314,10 +314,10 @@ class AStarRouter:
             # 3. Danh sách hãng xe để so sánh
             comparison_options = [
                 {"id": "grab_bike", "name": "GrabBike", "mode": "ride_hailing_bike", "brand": "Grab"},
-                {"id": "be_bike", "name": "BeBike", "mode": "ride_hailing_bike", "brand": "Be"},
+                {"id": "be_bike", "name": "BeBike", "mode": "ride_hailing_bike", "brand": "beBike"},  # ← "beBike" (match DB)
                 {"id": "xanh_bike", "name": "XanhSM Bike", "mode": "ride_hailing_bike", "brand": "Xanh SM"},
                 {"id": "grab_car", "name": "GrabCar", "mode": "ride_hailing_car_4", "brand": "Grab"},
-                {"id": "be_car", "name": "BeCar", "mode": "ride_hailing_car_4", "brand": "Be"},
+                {"id": "be_car", "name": "BeCar", "mode": "ride_hailing_car_4", "brand": "beCar"},  # ← "beCar" (match DB)
                 {"id": "xanh_car", "name": "XanhSM Taxi", "mode": "ride_hailing_car_4", "brand": "Xanh SM"},
                 {"id": "bus", "name": "Xe Buýt", "mode": "bus", "brand": None},
             ]
