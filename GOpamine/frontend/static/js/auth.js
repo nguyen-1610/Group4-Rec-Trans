@@ -164,6 +164,87 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // ============================================================
+    // [NÂNG CẤP] XỬ LÝ ĐĂNG NHẬP MẠNG XÃ HỘI (DYNAMIC SIMULATION)
+    // ============================================================
+    
+    // Hàm sinh dữ liệu ngẫu nhiên (Để demo tính năng đa người dùng)
+    function generateRandomUser(provider) {
+        const randomId = Math.floor(Math.random() * 10000); // Số ngẫu nhiên 0-9999
+        const providerName = provider.charAt(0).toUpperCase() + provider.slice(1); // Google/Facebook
+        
+        return {
+            name: `${providerName} User ${randomId}`,      // VD: Google User 4521
+            email: `user_${randomId}@${provider}.demo`,    // VD: user_4521@google.demo
+            social_id: `${provider}_${randomId}`,          // VD: google_4521
+            provider: provider
+        };
+    }
+
+    const googleBtns = document.querySelectorAll('.google-btn');
+    const facebookBtns = document.querySelectorAll('.facebook-btn');
+
+    // Hàm xử lý chung
+    async function handleSocialLogin(provider) {
+        
+        // 1. Sinh dữ liệu người dùng MỚI mỗi lần bấm
+        const userData = generateRandomUser(provider);
+
+        // 2. Hiện hộp thoại giả lập "Đang kết nối..."
+        let timerInterval;
+        Swal.fire({
+            title: `Đang kết nối ${provider === 'google' ? 'Google' : 'Facebook'}...`,
+            html: `Đang xác thực tài khoản: <b>${userData.email}</b>`,
+            timer: 1500,
+            timerProgressBar: true,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+            willClose: () => {
+                clearInterval(timerInterval);
+            }
+        }).then(async (result) => {
+            if (result.dismiss === Swal.DismissReason.timer) {
+                try {
+                    // 3. Gửi về Backend (Backend sẽ tự tạo User mới vào DB)
+                    const response = await fetch(`${API_BASE}/api/login-social`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userData)
+                    });
+
+                    const resData = await response.json();
+
+                    if (resData.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Thành công!',
+                            text: `Chào mừng ${userData.name}!`,
+                            showConfirmButton: false,
+                            timer: 1500
+                        }).then(() => {
+                            window.location.href = '/';
+                        });
+                    } else {
+                        alert("Lỗi Social: " + resData.message);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Lỗi kết nối Social Login.");
+                }
+            }
+        });
+    }
+
+    // Gán sự kiện (Giữ nguyên)
+    googleBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => { e.preventDefault(); handleSocialLogin('google'); });
+    });
+
+    facebookBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => { e.preventDefault(); handleSocialLogin('facebook'); });
+    });
 });
 
 // Login page specific translations

@@ -535,6 +535,32 @@
         div:where(.swal2-icon).swal2-success [class^=swal2-success-line] {
             background-color: #3C7363 !important;
         }
+
+        /* === [BỔ SUNG] SWEETALERT2 CUSTOM STYLES === */
+        /* 1. Căn giữa tuyệt đối cho hộp thoại */
+        div:where(.swal2-container) {
+            display: grid !important;
+            place-items: center !important;
+            z-index: 10000 !important; /* Nổi lên trên cùng */
+        }
+        
+        /* 2. Đổi màu nút "Đăng xuất" thành xanh GOpamine */
+        div:where(.swal2-container) button:where(.swal2-styled).swal2-confirm {
+            background-color: #3C7363 !important;
+            box-shadow: 0 0 0 3px rgba(60, 115, 99, 0.2) !important;
+        }
+
+        /* 3. Đổi màu nút "Hủy" */
+        div:where(.swal2-container) button:where(.swal2-styled).swal2-cancel {
+            background-color: #d33 !important;
+        }
+
+        /* 4. Đổi màu icon (Dấu chấm hỏi / Tích xanh) */
+        div:where(.swal2-icon).swal2-question,
+        div:where(.swal2-icon).swal2-success {
+            border-color: #3C7363 !important;
+            color: #3C7363 !important;
+        }
     </style>
 </head>
 <body>
@@ -829,52 +855,72 @@
             });
         }
 
-        // === LOGOUT FUNCTION ===
+        // === LOGOUT FUNCTION (NÂNG CẤP SWEETALERT2) ===
         async function handleLogout() {
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/logout', {
+                const response = await fetch('/api/logout', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include' // Quan trọng: gửi cookies cùng request
+                    headers: { 'Content-Type': 'application/json' },
                 });
 
                 const result = await response.json();
 
                 if (result.success) {
-                    // Đăng xuất thành công -> reload trang hoặc chuyển về home
-                    alert('Đăng xuất thành công!');
-                    window.location.href = '/'; // Chuyển về trang chủ
+                    // --- [THAY ĐỔI 1] Hộp thoại Thành công ---
+                    Swal.fire({
+                        title: 'Đã đăng xuất!',
+                        text: 'Hẹn gặp lại bạn.',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        backdrop: `rgba(0,0,0,0.4)` // Làm tối nền
+                    }).then(() => {
+                        window.location.href = '/';
+                    });
                 } else {
-                    alert('Lỗi đăng xuất: ' + (result.message || 'Không xác định'));
+                    // Xử lý lỗi đẹp hơn
+                    Swal.fire('Lỗi', result.message || 'Không xác định', 'error');
                 }
             } catch (error) {
                 console.error('Logout Error:', error);
-                alert('Lỗi hệ thống: ' + error.message);
+                Swal.fire('Lỗi hệ thống', error.message, 'error');
             }
+        }
+
+        // --- [THAY ĐỔI 2] Hàm xác nhận Đăng xuất ---
+        function confirmLogout(e) {
+            e.preventDefault();
+            
+            // Hộp thoại xác nhận (Nằm giữa, màu xanh)
+            Swal.fire({
+                title: 'Bạn muốn đăng xuất?',
+                text: "Bạn sẽ cần đăng nhập lại để xem lịch trình đã lưu.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Đăng xuất',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#3C7363', // Màu xanh GOpamine
+                cancelButtonColor: '#d33',     // Màu đỏ cho nút Hủy
+                reverseButtons: true,          // Đảo nút Hủy sang trái
+                backdrop: `rgba(0,0,0,0.4)`
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    handleLogout();
+                }
+            });
         }
 
         // === GẮN SỰ KIỆN CHO NÚT LOGOUT (DESKTOP & MOBILE) ===
         const logoutBtn = document.getElementById('logoutBtn');
         const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
 
+        // Ghi đè sự kiện cũ bằng hàm confirmLogout mới
         if (logoutBtn) {
-            logoutBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (confirm('Bạn có chắc muốn đăng xuất?')) {
-                    handleLogout();
-                }
-            });
+            logoutBtn.addEventListener('click', confirmLogout);
         }
 
         if (mobileLogoutBtn) {
-            mobileLogoutBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (confirm('Bạn có chắc muốn đăng xuất?')) {
-                    handleLogout();
-                }
-            });
+            mobileLogoutBtn.addEventListener('click', confirmLogout);
         }
     </script>
 
