@@ -2,6 +2,15 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import os
 import sys
+
+# Lấy đường dẫn thư mục hiện tại (routes)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Lấy đường dẫn thư mục cha (backend)
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+# Thêm thư mục cha vào đường dẫn tìm kiếm của Python
+sys.path.insert(0, parent_dir)
+
+from utils.database import PostgresConnection
 from feedback import feedback_bp, get_all_reviews
 from astar import create_api_blueprint
 from routing import form_bp
@@ -16,8 +25,6 @@ from transport_routes import transport_bp
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-DB_PATH = os.path.join(BASE_DIR, 'data', 'tourism-landmarks.db')
 
 app = Flask(
     __name__,
@@ -36,11 +43,11 @@ login_manager.login_view = 'login' # Nếu chưa login thì đá về trang logi
 def load_user(user_id):
     conn = get_db_connection()
     # Lưu ý: Cột ID trong DB là user_id
-    user_row = conn.execute("SELECT * FROM User WHERE user_id = ?", (user_id,)).fetchone()
+    user_row = conn.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
     conn.close()
     
     if user_row:
-        return User(
+        return users(
             user_id=user_row['user_id'], 
             email=user_row['email'], 
             username=user_row['username'],
@@ -59,7 +66,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 # Bước này giúp app nhận diện các đường dẫn '/feedback' và '/api/submit-review'
 app.register_blueprint(feedback_bp)
 app.register_blueprint(chatbot_bp)
-app.register_blueprint(create_api_blueprint(DB_PATH))
+app.register_blueprint(create_api_blueprint(None))
 app.register_blueprint(form_bp)
 app.register_blueprint(auth_bp)
 
