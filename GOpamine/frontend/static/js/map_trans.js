@@ -203,46 +203,54 @@ document.addEventListener('DOMContentLoaded', async function() {
 
             const result = await response.json();
 
+            // ... bên trong hàm recalculateRoute, đoạn sau khi await response.json() ...
+
             if (result.success) {
                 let routeData = result.data;
                 let finalCoords = [];
                 let totalDist = 0;
                 let optimizedWaypoints = [];
+                
+                // [THÊM MỚI] Biến để chứa segments
+                let routeSegments = null; 
 
                 if (isMultiStop) {
                     totalDist = routeData.total_distance_km;
-                    
-                    // Backend trả về danh sách đã tối ưu
-                    // Logic cập nhật state để giao diện input nhảy theo thứ tự mới
                     optimizedWaypoints = routeData.optimized_order || validWaypoints;
-                    currentWaypoints = optimizedWaypoints; // [QUAN TRỌNG] Đồng bộ state
-                    renderInputPanel(); // Vẽ lại input theo thứ tự mới
+                    currentWaypoints = optimizedWaypoints;
+                    renderInputPanel();
                     
                     if (routeData.segments) {
+                        // [THÊM MỚI] Lưu segments vào biến
+                        routeSegments = routeData.segments;
+
+                        // Gom tọa độ để tính bounds (vùng hiển thị)
                         routeData.segments.forEach(seg => {
                             if (seg.geometry) finalCoords = finalCoords.concat(seg.geometry);
                         });
                     }
                 } else {
-                    // Xử lý 2 điểm
                     totalDist = routeData.distance_km;
                     finalCoords = routeData.route_coordinates;
-                    // Với 2 điểm, thứ tự chính là thứ tự trong mảng
                     optimizedWaypoints = validWaypoints; 
                 }
-                //Lưu lại đường đi
-                globalRouteCoords = finalCoords;
-                // Vẽ Map
-                drawRouteOnMap(finalCoords, null, null, optimizedWaypoints);
-                
-                // Tính tiền
-                await fetchAndRenderTransportOptions(totalDist);
 
-                // Lưu Storage
+                globalRouteCoords = finalCoords;
+
+                // [SỬA LẠI] Truyền thêm tham số routeSegments vào cuối
+                drawRouteOnMap(finalCoords, null, null, optimizedWaypoints, routeSegments);
+                
+                // ... (các đoạn code tính tiền, lưu storage giữ nguyên) ...
+                
+                // [SỬA LẠI] Lưu storage cần thêm segments để khi F5 vẫn còn màu
                 const newStorage = {
                     start_place: optimizedWaypoints[0],
                     end_place: optimizedWaypoints[optimizedWaypoints.length - 1],
                     route_coordinates: finalCoords,
+                    
+                    // Thêm dòng này:
+                    segments: routeSegments, 
+                    
                     distance_km: totalDist,
                     waypoints: optimizedWaypoints,
                     vehicle: getStoredRouteFromStorage()?.vehicle || { type: 'car' }
@@ -267,34 +275,71 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     
 
-    function drawRouteOnMap(coords, start, end, waypoints) {
-        routeLayerGroup.clearLayers(); 
+    // Thay thế hàm drawRouteOnMap cũ bằng hàm này
+function drawRouteOnMap(coords, start, end, waypoints, segments = null) {
+    routeLayerGroup.clearLayers(); 
 
-        const pointsToDraw = (waypoints && waypoints.length > 0) ? waypoints : [start, end];
+    // 1. VẼ ĐƯỜNG ĐI (POLYLINE)
+    // Nếu có thông tin segments (đa điểm), vẽ nhiều màu
+    if (segments && segments.length > 0) {
+        // Bảng màu để luân phiên (Xanh -> Đỏ -> Tím -> Xanh lá -> Cam)
+        const colors = ['#4285f4', '#ea4335', '#9c27b0', '#34a853', '#ff6d00'];
 
-        pointsToDraw.forEach((point, index) => {
-            if (!point || typeof point !== 'object') return;
+        segments.forEach((seg, index) => {
+            if (seg.geometry && seg.geometry.length > 0) {
+                // Đảo ngược [lon, lat] từ OSRM thành [lat, lon] cho Leaflet
+                const latlngs = seg.geometry.map(c => [c[1], c[0]]);
+                
+                // Chọn màu dựa theo số thứ tự (chia lấy dư để lặp lại màu nếu quá nhiều chặng)
+                const color = colors[index % colors.length];
 
-            const label = String.fromCharCode(65 + index);
-            let color = '#fbbc04'; 
-            if (index === 0) color = '#4285f4'; 
-            else if (index === pointsToDraw.length - 1) color = '#ea4335';
-
-            const lat = parseFloat(point.lat);
-            const lng = parseFloat(point.lon || point.lng);
-            
-            if (!isNaN(lat) && !isNaN(lng)) {
-                createCustomMarker(map, lat, lng, color, label, point.name);
+                // Vẽ viền trắng (tạo hiệu ứng nổi)
+                L.polyline(latlngs, { color: 'white', weight: 8, opacity: 0.8 }).addTo(routeLayerGroup);
+                
+                // Vẽ đường chính có màu
+                L.polyline(latlngs, { color: color, weight: 5, opacity: 1 })
+                 .addTo(routeLayerGroup)
+                 .bindPopup(`<b>Chặng ${index + 1}:</b> ${seg.from_name} ➝ ${seg.to_name}<br>Dài: ${seg.distance_km} km`);
             }
         });
-
-        if (coords && coords.length > 0) {
-            const latlngs = coords.map(c => [c[1], c[0]]);
-            L.polyline(latlngs, { color: 'white', weight: 7, opacity: 0.8 }).addTo(routeLayerGroup);
-            const mainLine = L.polyline(latlngs, { color: '#4285f4', weight: 5 }).addTo(routeLayerGroup);
-            map.fitBounds(mainLine.getBounds(), { paddingTopLeft: [20, 20], paddingBottomRight: [20, 250] });
-        }
+    } 
+    // Nếu không có segments (chạy 2 điểm bình thường), vẽ 1 màu xanh như cũ
+    else if (coords && coords.length > 0) {
+        const latlngs = coords.map(c => [c[1], c[0]]);
+        L.polyline(latlngs, { color: 'white', weight: 7, opacity: 0.8 }).addTo(routeLayerGroup);
+        const mainLine = L.polyline(latlngs, { color: '#4285f4', weight: 5 }).addTo(routeLayerGroup);
+        
+        // Zoom map để thấy toàn bộ đường
+        map.fitBounds(mainLine.getBounds(), { paddingTopLeft: [20, 20], paddingBottomRight: [20, 250] });
     }
+
+    // 2. VẼ MARKER (ĐIỂM A, B, C...)
+    const pointsToDraw = (waypoints && waypoints.length > 0) ? waypoints : [start, end];
+
+    pointsToDraw.forEach((point, index) => {
+        if (!point || typeof point !== 'object') return;
+
+        const label = String.fromCharCode(65 + index); // A, B, C...
+        
+        // Màu marker khớp với màu đường (nếu thích), hoặc giữ logic cũ
+        let color = '#fbbc04'; // Mặc định vàng
+        if (index === 0) color = '#4285f4'; // Start xanh
+        else if (index === pointsToDraw.length - 1) color = '#ea4335'; // End đỏ
+
+        const lat = parseFloat(point.lat);
+        const lng = parseFloat(point.lon || point.lng);
+        
+        if (!isNaN(lat) && !isNaN(lng)) {
+            createCustomMarker(map, lat, lng, color, label, point.name);
+        }
+    });
+
+    // Nếu vẽ theo segments, cần fitBounds thủ công vì không có biến mainLine
+    if (segments && segments.length > 0 && coords && coords.length > 0) {
+         const allLatlngs = coords.map(c => [c[1], c[0]]);
+         map.fitBounds(L.latLngBounds(allLatlngs), { paddingTopLeft: [20, 20], paddingBottomRight: [20, 250] });
+    }
+}
 
     async function fetchAndRenderTransportOptions(distanceKm) {
         try {
@@ -541,29 +586,49 @@ async function handleBusSelection() {
     if (!storedRouteJson) return alert("Lỗi: Không tìm thấy dữ liệu hành trình.");
     
     const storedRoute = JSON.parse(storedRouteJson);
-    const rawStart = storedRoute.start_place || storedRoute.start;
-    const rawEnd = storedRoute.end_place || storedRoute.end || (storedRoute.destinations ? storedRoute.destinations[storedRoute.destinations.length - 1] : null);
+    const waypoints = storedRoute.waypoints; // Lấy danh sách điểm đã tối ưu từ localStorage
 
-    if (!rawStart || !rawEnd) return alert("Lỗi: Dữ liệu tọa độ không hợp lệ.");
-
-    const payload = {
-        start: { lat: parseFloat(rawStart.lat), lon: parseFloat(rawStart.lon || rawStart.lng) },
-        end: { lat: parseFloat(rawEnd.lat), lon: parseFloat(rawEnd.lon || rawEnd.lng) }
-    };
-
+    // UI Loading
     const priceEl = document.querySelector('.option-card[onclick*="handleBusSelection"] .mode-price');
     const originalText = priceEl ? priceEl.textContent : "";
     if (priceEl) priceEl.textContent = "⏳...";
 
     try {
-        const response = await fetch('/api/bus/find', {
+        let url, payload;
+        
+        // KIỂM TRA: Nếu có nhiều hơn 2 điểm -> Gọi API Đa điểm
+        if (waypoints && waypoints.length > 2) {
+            url = '/api/bus/plan-multi-trip';
+            payload = { waypoints: waypoints };
+        } else {
+            // Logic cũ (2 điểm)
+            const rawStart = storedRoute.start_place || waypoints[0];
+            const rawEnd = storedRoute.end_place || waypoints[waypoints.length - 1];
+            url = '/api/bus/find';
+            payload = {
+                start: { lat: parseFloat(rawStart.lat), lon: parseFloat(rawStart.lon || rawStart.lng) },
+                end: { lat: parseFloat(rawEnd.lat), lon: parseFloat(rawEnd.lon || rawEnd.lng) }
+            };
+        }
+
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
+        
         const res = await response.json();
+        
         if (res.success) {
-            drawSmartBusRoute(res.data, payload.start, payload.end);
+            // Nếu là đa điểm, res.data sẽ có cấu trúc { legs: [...] }
+            // Nếu là đơn điểm, res.data là object chi tiết luôn
+            // -> Ta thống nhất gọi hàm vẽ và truyền đúng format
+            if (res.type === 'multi_stop') {
+                drawMultiStopBusRoute(res.data.legs, waypoints);
+            } else {
+                // Tương thích ngược với hàm vẽ đơn cũ
+                drawSmartBusRoute(res.data, payload.start, payload.end);
+            }
         } else {
             alert("⚠️ " + res.error);
         }
@@ -627,3 +692,58 @@ function createCustomMarker(map, lat, lng, color, label, popupContent) {
 
 window.goToPreviousPage = () => window.history.back();
 window.goBack = () => window.location.href = '/chatbot';
+
+function drawMultiStopBusRoute(legs, waypoints) {
+    routeLayerGroup.clearLayers(); // Xóa đường cũ
+
+    // 1. Vẽ các điểm dừng chính (A, B, C...)
+    waypoints.forEach((wp, index) => {
+        const label = String.fromCharCode(65 + index); // A, B, C...
+        let color = '#fbbc04'; // Điểm giữa (Vàng)
+        if (index === 0) color = '#4285f4'; // Start (Xanh)
+        else if (index === waypoints.length - 1) color = '#ea4335'; // End (Đỏ)
+
+        createCustomMarker(map, wp.lat, wp.lon || wp.lng, color, label, `<b>${wp.name}</b>`);
+    });
+
+    // 2. Vẽ từng chặng xe buýt
+    legs.forEach((leg, index) => {
+        // Mỗi leg là kết quả của 1 lần tìm đường đơn (A->B)
+        
+        // A. Đi bộ đầu chặng
+        // leg.walk_to_start là tọa độ trạm đón
+        // waypoints[index] là điểm bắt đầu của chặng này
+        const startPt = waypoints[index];
+        const walkToLine = [[startPt.lat, startPt.lon || startPt.lng], leg.walk_to_start];
+        L.polyline(walkToLine, { color: 'gray', dashArray: '5, 10', weight: 4 }).addTo(routeLayerGroup);
+
+        // B. Đường xe buýt chạy
+        if (leg.segments) {
+            leg.segments.forEach(seg => {
+                if (seg.type === 'bus') {
+                    // Random màu nhẹ để phân biệt các chặng khác nhau nếu thích
+                    const segColor = index % 2 === 0 ? '#FF9800' : '#E65100'; 
+                    L.polyline(seg.path, { color: segColor, weight: 6, opacity: 0.9 })
+                     .addTo(routeLayerGroup)
+                     .bindPopup(`<b>Chặng ${index + 1}: Tuyến ${seg.name}</b><br>${leg.description}`);
+                }
+            });
+        }
+
+        // C. Đi bộ cuối chặng
+        // leg.walk_from_end là trạm xuống
+        // waypoints[index+1] là điểm đến của chặng này
+        const endPt = waypoints[index+1];
+        const walkFromLine = [leg.walk_from_end, [endPt.lat, endPt.lon || endPt.lng]];
+        L.polyline(walkFromLine, { color: 'gray', dashArray: '5, 10', weight: 4 }).addTo(routeLayerGroup);
+
+        // D. Marker Trạm Bus (Icon nhỏ)
+        const busIcon = L.divIcon({ html: '🚌', className: 'bus-marker', iconSize: [24, 24] });
+        L.marker(leg.walk_to_start, {icon: busIcon}).addTo(routeLayerGroup).bindPopup(`<b>Đón chặng ${index+1}: ${leg.start_stop}</b>`);
+        L.marker(leg.walk_from_end, {icon: busIcon}).addTo(routeLayerGroup).bindPopup(`<b>Xuống chặng ${index+1}: ${leg.end_stop}</b>`);
+    });
+
+    // Zoom fit toàn bộ lộ trình
+    const bounds = L.latLngBounds(waypoints.map(wp => [wp.lat, wp.lon || wp.lng]));
+    map.fitBounds(bounds, { padding: [50, 50] });
+}

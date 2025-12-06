@@ -10,7 +10,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 # ---------------------------------------------
 
-from backend.utils.bus_routing import find_smart_bus_route
+from backend.utils.bus_routing import find_smart_bus_route, plan_multi_stop_bus_trip
 
 bus_bp = Blueprint('bus_api', __name__, url_prefix='/api/bus')
 
@@ -47,3 +47,24 @@ def find_route():
         print("❌ [API CRASH] Lỗi nghiêm trọng xảy ra:")
         traceback.print_exc() # In toàn bộ vết lỗi ra Terminal
         return jsonify({'success': False, 'error': f"Server Error: {str(e)}"})
+    
+@bus_bp.route('/plan-multi-trip', methods=['POST'])
+def plan_multi_trip():
+    print("\n-------------------------------------------------")
+    print("📡 [API REQUEST] Tìm Bus Đa Điểm!")
+    try:
+        data = request.get_json()
+        waypoints = data.get('waypoints') # Mong đợi một mảng các điểm
+        
+        if not waypoints or not isinstance(waypoints, list):
+            return jsonify({'success': False, 'error': 'Dữ liệu waypoints không hợp lệ'})
+
+        print(f"📍 Nhận được {len(waypoints)} điểm dừng.")
+        
+        # Gọi hàm xử lý đa điểm
+        result = plan_multi_stop_bus_trip(waypoints)
+        return jsonify(result)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})

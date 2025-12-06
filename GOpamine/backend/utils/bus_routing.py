@@ -144,3 +144,49 @@ def find_smart_bus_route(start_coords, end_coords):
         'success': False, 
         'error': 'Không tìm thấy tuyến đi thẳng phù hợp giữa 2 điểm này.'
     }
+
+# Tìm đa điểm
+def plan_multi_stop_bus_trip(waypoints):
+    """
+    Input: Danh sách các điểm [{'lat':..., 'lon':...}, ...] theo thứ tự đã tối ưu
+    Output: Tổng hợp lộ trình từng chặng
+    """
+    if not waypoints or len(waypoints) < 2:
+        return {'success': False, 'error': 'Cần ít nhất 2 điểm để tìm đường.'}
+
+    total_segments = []
+    
+    # Lặp qua từng cặp điểm: (0->1), (1->2), (2->3)...
+    for i in range(len(waypoints) - 1):
+        start_node = waypoints[i]
+        end_node = waypoints[i+1]
+        
+        # Chuẩn hóa key (đề phòng lúc thì 'lng', lúc thì 'lon')
+        s_coords = {'lat': float(start_node['lat']), 'lon': float(start_node.get('lon', start_node.get('lng')))}
+        e_coords = {'lat': float(end_node['lat']), 'lon': float(end_node.get('lon', end_node.get('lng')))}
+
+        print(f"🚌 Đang tìm Bus chặng {i+1}: {s_coords} -> {e_coords}")
+        
+        # Gọi lại hàm tìm đường đơn lẻ cũ
+        result = find_smart_bus_route(s_coords, e_coords)
+        
+        if result['success']:
+            # Đánh dấu đây là chặng thứ mấy
+            result['data']['step_index'] = i
+            total_segments.append(result['data'])
+        else:
+            # Nếu 1 chặng không có xe buýt, trả về lỗi hoặc fallback
+            # Ở đây mình return lỗi luôn để báo người dùng
+            return {
+                'success': False, 
+                'error': f"Không tìm thấy xe buýt cho chặng {i+1} (từ điểm {i+1} đến {i+2}). Vui lòng chọn phương tiện khác cho chặng này."
+            }
+
+    return {
+        'success': True,
+        'type': 'multi_stop',
+        'data': {
+            'total_legs': len(total_segments),
+            'legs': total_segments # Mảng chứa chi tiết từng chặng A->B, B->C
+        }
+    }
