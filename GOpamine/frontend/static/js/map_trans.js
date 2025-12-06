@@ -4,6 +4,10 @@
  * - Hỗ trợ nhập liệu nhiều điểm (A, B, C...) động.
  * - Đồng bộ hoàn toàn giữa Form Input và Map Marker.
  */
+// --- 1. KHAI BÁO BIẾN TOÀN CỤC (Để ai cũng dùng được) ---
+var map;
+var routeLayerGroup;
+var globalRouteCoords = [];
 
 document.addEventListener('DOMContentLoaded', async function() {
     
@@ -11,14 +15,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 1. KHỞI TẠO BẢN ĐỒ & LAYER
     // =========================================================================
     
-    let routeLayerGroup = L.layerGroup();
-    // [STATE MỚI] Quản lý danh sách điểm bằng mảng
+    // Gán giá trị cho biến toàn cục (đừng dùng 'let' hay 'const' ở đây nữa)
+    map = L.map('map',  { zoomControl: false, zoom: 13 } );
+    routeLayerGroup = L.layerGroup().addTo(map);
     let currentWaypoints = [
         { lat: null, lon: null, name: '' }, // Điểm A (Start)
         { lat: null, lon: null, name: '' }  // Điểm B (End mặc định)
     ];
 
-    const map = L.map('map', { zoomControl: false, zoom: 13 });
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap', maxZoom: 19
@@ -42,10 +46,15 @@ document.addEventListener('DOMContentLoaded', async function() {
                 name: wp.name
             }));
 
+            // [FIX QUAN TRỌNG] KHÔI PHỤC BIẾN TOÀN CỤC TỪ STORAGE
+            // Nếu thiếu dòng này, khi F5 biến này sẽ rỗng -> Không quay về Car được
+            globalRouteCoords = storedRoute.route_coordinates || []; 
+            console.log("✅ Đã khôi phục lộ trình cũ:", globalRouteCoords.length, "điểm");
+
             // Vẽ Map ngay
             drawRouteOnMap(storedRoute.route_coordinates, null, null, currentWaypoints);
             
-            // Render Bảng giá
+            // ... (Phần render bảng giá giữ nguyên) ...
             updateAllVehicleCardsDefault();
             await fetchAndRenderTransportOptions(storedRoute.distance_km);
             
@@ -221,7 +230,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                     // Với 2 điểm, thứ tự chính là thứ tự trong mảng
                     optimizedWaypoints = validWaypoints; 
                 }
-
+                //Lưu lại đường đi
+                globalRouteCoords = finalCoords;
                 // Vẽ Map
                 drawRouteOnMap(finalCoords, null, null, optimizedWaypoints);
                 
@@ -255,26 +265,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 5. CÁC HÀM TIỆN ÍCH KHÁC (GIỮ NGUYÊN)
     // =========================================================================
 
-    function createCustomMarker(map, lat, lng, color, label, popupContent) {
-        const svgIcon = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
-                <path fill="${color}" d="M16 0C7.163 0 0 7.163 0 16c0 12 16 26 16 26s16-14 16-26C32 7.163 24.837 0 16 0z" stroke="white" stroke-width="2"/>
-                <circle cx="16" cy="16" r="10" fill="white" opacity="0.2"/>
-                <text x="50%" y="21" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">${label}</text>
-            </svg>`;
-
-        const icon = L.divIcon({
-            html: svgIcon,
-            className: 'custom-svg-marker',
-            iconSize: [32, 42],
-            iconAnchor: [16, 42],
-            popupAnchor: [0, -45]
-        });
-
-        L.marker([lat, lng], { icon: icon, zIndexOffset: 1000 })
-            .addTo(routeLayerGroup)
-            .bindPopup(`<div style="text-align:center; font-weight:bold; color:${color}">${label}. ${popupContent}</div>`);
-    }
+    
 
     function drawRouteOnMap(coords, start, end, waypoints) {
         routeLayerGroup.clearLayers(); 
@@ -357,16 +348,33 @@ document.addEventListener('DOMContentLoaded', async function() {
                 `<span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px; margin-right:3px;">${l}</span>`
             ).join('');
 
+            // 1. Kiểm tra xem đây có phải là xe buýt không
+            const isBus = item.mode_name.toLowerCase().includes('bus') || 
+                          item.mode_name.toLowerCase().includes('buýt') || 
+                          item.mode_name.toLowerCase().includes('bus map');
+
+            // 2. Chuẩn bị các thuộc tính chỉ dành cho Bus
+            // Nếu là Bus -> thêm sự kiện onclick, nếu không -> rỗng
+            const clickEvent = isBus ? 'onclick="handleBusSelection()"' : 'onclick="restoreGeneralRoute()"';
+            // Nếu là Bus -> con trỏ chuột hình bàn tay, nếu không -> mặc định
+            const cursorStyle = isBus ? 'cursor: pointer; border: 1px solid #4285f4;' : ''; 
+            // Thêm dòng chữ nhỏ gợi ý người dùng bấm vào
+            const busHint = isBus ? '<br><span style="font-size:11px; color:#4285f4; font-weight:normal;">(Bấm để xem lộ trình)</span>' : '';
+
+            // 3. Tạo HTML (Giữ nguyên toàn bộ cấu trúc cũ của bạn)
             const cardHtml = `
                 <div class="option-card" 
+                     ${clickEvent} 
+                     style="${cursorStyle}"
                      data-vehicle="${item.mode_name}" 
                      data-price="${item.display_price}" 
                      data-time="${item.duration} phút"
                      data-score="${item.score}">
+                    
                     <div class="option-left">
                         <div class="vehicle-icon" style="font-size: 20px;">${icon}</div>
                         <div class="vehicle-info">
-                            <h4>${item.mode_name}</h4>
+                            <h4>${item.mode_name} ${busHint}</h4>
                             <p>
                                 <span style="font-weight:bold;">${item.duration} phút</span> • ${distanceKm.toFixed(1)} km
                                 <br>
@@ -382,6 +390,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     </div>
                 </div>
             `;
+            
             container.insertAdjacentHTML('beforeend', cardHtml);
         });
 
@@ -406,8 +415,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     function getStoredRouteFromStorage() {
         try { return JSON.parse(localStorage.getItem('selectedRoute')); } catch { return null; }
     }
-
-    // Logic Kéo thả Bottom Sheet
+// Logic Kéo thả Bottom Sheet
     const dragHandle = document.getElementById('dragHandle');
     const panel = document.getElementById('vehicleOptionsPanel');
     if (dragHandle && panel) {
@@ -432,90 +440,190 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
     }
-});
+
+    // ===========================================
+    // FIX: HÀM KHÔI PHỤC ĐƯỜNG ĐI (Phải nằm Ở ĐÂY để thấy currentWaypoints)
+    // ===========================================
+    // ===========================================
+    // FIX: HÀM KHÔI PHỤC ĐƯỜNG ĐI (CAR/MOTO)
+    // ===========================================
+    window.restoreGeneralRoute = function() {
+        console.log("🚗 Sự kiện: Chuyển về chế độ xem đường chính (Car/Moto)");
+        
+        // 1. Debug kiểm tra dữ liệu
+        if (!globalRouteCoords || globalRouteCoords.length === 0) {
+            console.warn("⚠️ globalRouteCoords đang rỗng! (Có thể do chưa tính đường hoặc chưa load từ storage)");
+            // Thử cứu vãn bằng cách lấy từ storage lần nữa
+            const bk = getStoredRouteFromStorage();
+            if (bk && bk.route_coordinates) {
+                globalRouteCoords = bk.route_coordinates;
+            } else {
+                return; // Chịu thua
+            }
+        }
+
+        // 2. Xóa sạch các layer cũ (bao gồm cả đường Bus, trạm Bus, icon đi bộ...)
+        routeLayerGroup.clearLayers();
+
+        // 3. Vẽ lại đường đi chính
+        // Lưu ý: currentWaypoints lấy từ scope của DOMContentLoaded
+        drawRouteOnMap(globalRouteCoords, null, null, currentWaypoints);
+        
+        console.log("✅ Đã vẽ lại đường đi chính.");
+    };
+
+}); // --- KẾT THÚC DOMContentLoaded (Dòng này cực quan trọng) ---
+
+// =========================================================================
+// 6. CÁC HÀM GLOBAL (Nằm ngoài cùng)
+// =========================================================================
 
 window.switchTab = (arg1, arg2) => {
     const tabName = (typeof arg1 === 'string') ? arg1 : arg2;
     if (tabName === 'ai' || tabName === 'chatbot') window.location.href = '/chatbot';
 };
+
+// [FIX] Sửa lại hàm confirmRoute bị lồng nhau
 window.confirmRoute = function() {
-    // =============================================================================
-    // 7. GLOBAL FUNCTIONS (ĐÃ CẬP NHẬT LOGIC CHUYỂN APP)
-    // =============================================================================
-    
-    // Danh sách liên kết của các hãng (Bạn có thể cập nhật link xịn hơn nếu có)
     const BRAND_LINKS = {
-        'grab': 'https://www.grab.com/vn/download/',   // Trang tải Grab
-        'be': 'https://be.com.vn/',                    // Trang chủ Be
-        'xanh': 'https://www.xanhsm.com/',             // Trang chủ Xanh SM
-        'bus': 'https://busmap.vn/',                   // BusMap
-        'vinbus': 'https://vinbus.vn/',                // VinBus
-        'google': 'https://www.google.com/maps/dir/'   // Google Maps (cho xe cá nhân)
+        'grab': 'https://www.grab.com/vn/download/',
+        'be': 'https://be.com.vn/',
+        'xanh': 'https://www.xanhsm.com/',
+        'bus': 'https://busmap.vn/',
+        'vinbus': 'https://vinbus.vn/',
+        'google': 'https://www.google.com/maps/dir/'
     };
     
-    window.confirmRoute = function() {
-        // 1. Tìm thẻ xe đang được chọn
-        const selectedCard = document.querySelector('.option-card.selected');
-        
-        if (!selectedCard) {
-            // Nếu có SweetAlert2 thì dùng, không thì dùng alert thường
-            if (typeof Swal !== 'undefined') {
-                Swal.fire('Chưa chọn xe', 'Vui lòng chọn một phương tiện để tiếp tục', 'warning');
-            } else {
-                alert("Vui lòng chọn một phương tiện!");
-            }
-            return;
-        }
-        
-        // 2. Lấy thông tin xe
-        const vehicleName = selectedCard.dataset.vehicle.toLowerCase(); // VD: "grabcar 4 chỗ"
-        let targetUrl = '';
+    // 1. Tìm thẻ xe đang được chọn
+    const selectedCard = document.querySelector('.option-card.selected');
     
-        // 3. Logic định tuyến (Routing Logic)
-        if (vehicleName.includes('grab')) {
-            targetUrl = BRAND_LINKS.grab;
-        } 
-        else if (vehicleName.includes('be') && !vehicleName.includes('bến')) { 
-            // Tránh nhầm với "Bến xe"
-            targetUrl = BRAND_LINKS.be;
-        } 
-        else if (vehicleName.includes('xanh') || vehicleName.includes('gsm')) {
-            targetUrl = BRAND_LINKS.xanh;
-        } 
-        else if (vehicleName.includes('buýt') || vehicleName.includes('bus')) {
-            targetUrl = BRAND_LINKS.bus;
-        } 
-        else {
-            // Với xe máy cá nhân hoặc đi bộ -> Mở Google Maps chỉ đường
-            // Lấy tọa độ điểm đến từ biến toàn cục (nếu có) hoặc mở Maps trống
-            targetUrl = BRAND_LINKS.google;
-        }
+    if (!selectedCard) {
+        if (typeof Swal !== 'undefined') Swal.fire('Chưa chọn xe', 'Vui lòng chọn một phương tiện!', 'warning');
+        else alert("Vui lòng chọn một phương tiện!");
+        return;
+    }
     
-        // 4. Xác nhận và Chuyển trang
-        const confirmMessage = `Bạn đã chọn ${selectedCard.dataset.vehicle}.\nChúng tôi sẽ chuyển bạn đến ứng dụng của hãng để đặt xe.`;
-        
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: 'Xác nhận chuyển hướng',
-                text: `Mở ứng dụng/website của ${selectedCard.dataset.vehicle}?`,
-                icon: 'info',
-                showCancelButton: true,
-                confirmButtonColor: '#3C7363',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Đi ngay',
-                cancelButtonText: 'Hủy'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.open(targetUrl, '_blank'); // Mở tab mới
-                }
-            });
-        } else {
-            // Fallback nếu không có SweetAlert2
-            if (confirm(confirmMessage)) {
-                window.open(targetUrl, '_blank');
-            }
-        }
-    };
+    // 2. Lấy thông tin xe
+    const vehicleName = selectedCard.dataset.vehicle.toLowerCase();
+    let targetUrl = BRAND_LINKS.google; // Mặc định
+
+    if (vehicleName.includes('grab')) targetUrl = BRAND_LINKS.grab;
+    else if (vehicleName.includes('be') && !vehicleName.includes('bến')) targetUrl = BRAND_LINKS.be;
+    else if (vehicleName.includes('xanh') || vehicleName.includes('gsm')) targetUrl = BRAND_LINKS.xanh;
+    else if (vehicleName.includes('buýt') || vehicleName.includes('bus')) targetUrl = BRAND_LINKS.bus;
+
+    // 3. Xác nhận
+    const confirmMessage = `Mở ứng dụng ${selectedCard.dataset.vehicle}?`;
+    
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Chuyển hướng',
+            text: confirmMessage,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonText: 'Đi ngay',
+            confirmButtonColor: '#3C7363'
+        }).then((result) => {
+            if (result.isConfirmed) window.open(targetUrl, '_blank');
+        });
+    } else {
+        if (confirm(confirmMessage)) window.open(targetUrl, '_blank');
+    }
 };
+
+// ===========================================
+// BUS LOGIC (Giữ nguyên)
+// ===========================================
+
+async function handleBusSelection() {
+    console.log("🚌 Đang lấy lộ trình xe buýt...");
+    const storedRouteJson = localStorage.getItem('selectedRoute');
+    if (!storedRouteJson) return alert("Lỗi: Không tìm thấy dữ liệu hành trình.");
+    
+    const storedRoute = JSON.parse(storedRouteJson);
+    const rawStart = storedRoute.start_place || storedRoute.start;
+    const rawEnd = storedRoute.end_place || storedRoute.end || (storedRoute.destinations ? storedRoute.destinations[storedRoute.destinations.length - 1] : null);
+
+    if (!rawStart || !rawEnd) return alert("Lỗi: Dữ liệu tọa độ không hợp lệ.");
+
+    const payload = {
+        start: { lat: parseFloat(rawStart.lat), lon: parseFloat(rawStart.lon || rawStart.lng) },
+        end: { lat: parseFloat(rawEnd.lat), lon: parseFloat(rawEnd.lon || rawEnd.lng) }
+    };
+
+    const priceEl = document.querySelector('.option-card[onclick*="handleBusSelection"] .mode-price');
+    const originalText = priceEl ? priceEl.textContent : "";
+    if (priceEl) priceEl.textContent = "⏳...";
+
+    try {
+        const response = await fetch('/api/bus/find', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const res = await response.json();
+        if (res.success) {
+            drawSmartBusRoute(res.data, payload.start, payload.end);
+        } else {
+            alert("⚠️ " + res.error);
+        }
+    } catch (e) {
+        console.error("❌ Lỗi:", e);
+        alert("Lỗi kết nối: " + e.message);
+    } finally {
+        if (priceEl) priceEl.textContent = originalText;
+    }
+}
+
+function drawSmartBusRoute(data, startPt, endPt) {
+    routeLayerGroup.clearLayers();
+
+    // A. Đi bộ ra trạm
+    const walkToLine = [[startPt.lat, startPt.lon], data.walk_to_start];
+    L.polyline(walkToLine, { color: 'gray', dashArray: '10, 10', weight: 4 }).addTo(routeLayerGroup);
+    createCustomMarker(map, startPt.lat, startPt.lon, '#4285f4', 'A', '<b>Vị trí của bạn</b>');
+
+    // B. Các chặng Bus
+    if (data.segments) {
+        data.segments.forEach(seg => {
+            if (seg.type === 'bus') {
+                L.polyline(seg.path, { color: seg.color || '#FF9800', weight: 6, opacity: 0.9 })
+                 .addTo(routeLayerGroup).bindPopup(`<b>Tuyến ${seg.name}</b>`);
+            } else if (seg.type === 'transfer') {
+                L.marker([seg.lat, seg.lng], {
+                    icon: L.divIcon({ html: '🔄', className: 'transfer-icon', iconSize: [24, 24], style: 'font-size:20px;' })
+                }).addTo(routeLayerGroup).bindPopup("Trạm trung chuyển");
+            }
+        });
+    }
+
+    // C. Đi bộ về đích
+    const walkFromLine = [data.walk_from_end, [endPt.lat, endPt.lon]];
+    L.polyline(walkFromLine, { color: 'gray', dashArray: '10, 10', weight: 4 }).addTo(routeLayerGroup);
+    createCustomMarker(map, endPt.lat, endPt.lon, '#ea4335', 'B', '<b>Điểm đến</b>');
+
+    // D. Marker Trạm Bus
+    const busIcon = L.divIcon({ html: '🚌', className: 'bus-marker', iconSize: [30, 30], iconAnchor: [15, 15] });
+    L.marker(data.walk_to_start, {icon: busIcon}).addTo(routeLayerGroup).bindPopup(`<b>Trạm đón: ${data.start_stop}</b>`).openPopup();
+    L.marker(data.walk_from_end, {icon: busIcon}).addTo(routeLayerGroup).bindPopup(`<b>Trạm xuống: ${data.end_stop}</b>`);
+
+    const bounds = L.latLngBounds([walkToLine[0], data.walk_from_end]);
+    map.fitBounds(bounds, { padding: [50, 50] });
+}
+
+function createCustomMarker(map, lat, lng, color, label, popupContent) {
+    const svgIcon = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+            <path fill="${color}" d="M16 0C7.163 0 0 7.163 0 16c0 12 16 26 16 26s16-14 16-26C32 7.163 24.837 0 16 0z" stroke="white" stroke-width="2"/>
+            <circle cx="16" cy="16" r="10" fill="white" opacity="0.2"/>
+            <text x="50%" y="21" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">${label}</text>
+        </svg>`;
+    const icon = L.divIcon({
+        html: svgIcon, className: 'custom-svg-marker', iconSize: [32, 42], iconAnchor: [16, 42], popupAnchor: [0, -45]
+    });
+    L.marker([lat, lng], { icon: icon, zIndexOffset: 1000 }).addTo(routeLayerGroup)
+        .bindPopup(`<div style="text-align:center; font-weight:bold; color:${color}">${label}. ${popupContent}</div>`);
+}
+
 window.goToPreviousPage = () => window.history.back();
 window.goBack = () => window.location.href = '/chatbot';
