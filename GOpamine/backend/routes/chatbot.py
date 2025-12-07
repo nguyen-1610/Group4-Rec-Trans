@@ -290,91 +290,105 @@ ROUTER = AStarRouter()
 
 # --- TÌM VÀ THAY THẾ TOÀN BỘ HÀM build_advanced_pricing_context ---
 
+# ... (Giữ nguyên các import ở trên) ...
+
+# --- TÌM VÀ THAY THẾ HÀM build_advanced_pricing_context BẰNG CODE DƯỚI ĐÂY ---
+
 def build_advanced_pricing_context(form_data):
     """
     Sử dụng AStarRouter để tính toán lộ trình & Gọi BusRouter để lấy tuyến xe buýt chính xác.
+    Đồng bộ hóa logic inputs để khớp với Map.
     """
     try:
-        start_id = form_data.get('start_id')
-        dest_ids = form_data.get('destination_ids')
+        # 1. LẤY DỮ LIỆU LINH HOẠT (Coordinates > Name > ID)
+        # Map thường gửi object 'start' chứa {lat, lon, name}
+        start_input = form_data.get('start') or form_data.get('start_id') or form_data.get('origin')
         
-        if not start_id or not dest_ids:
+        # Destinations cũng tương tự
+        dest_input = form_data.get('destinations') or form_data.get('destination_ids')
+
+        if not start_input or not dest_input:
+            print("⚠️ [Context] Thiếu thông tin điểm đi/đến trong form_data")
             return None
 
         is_sv = is_student(form_data)
 
-        # 1. Gọi AStarRouter (Logic cũ)
+        # 2. GỌI ROUTER (KHÔNG ÉP KIỂU INT)
+        # Để Router tự xử lý (nó đã hỗ trợ Dict và String ở file astar.py trước đó)
         result = ROUTER.plan_multi_stop_trip(
-            start_id=int(start_id),
-            destination_ids=[int(x) for x in dest_ids],
+            start_id=start_input, 
+            destination_ids=dest_input,
             is_student=is_sv
         )
 
         if not result['success']:
+            print(f"❌ [Context] Router tính toán thất bại: {result.get('error')}")
             return None
 
         data = result['data']
-        summary = data.get('summary', []) # Đã sort từ rẻ -> đắt
+        summary = data.get('summary', [])
         segments = data.get('segments', [])
-        
-        # Lấy danh sách điểm đã tối ưu để tìm bus
         optimized_waypoints = data.get('optimized_order', [])
 
-        # 2. Xây dựng context cơ bản
+        # 3. XÂY DỰNG CONTEXT TEXT
         lines = [
-            "\n[DỮ LIỆU LỘ TRÌNH & BẢNG GIÁ CÁC HÃNG XE]",
-            f"- Tổng hành trình: {data['total_distance_km']} km (qua {len(segments)} chặng di chuyển).",
-            "- BẢNG GIÁ ƯỚC TÍNH (Tổng chuyến đi):"
+            "\n=== DỮ LIỆU LỘ TRÌNH CHÍNH XÁC TỪ HỆ THỐNG (BẮT BUỘC DÙNG) ===",
+            f"- Tổng hành trình: {data['total_distance_km']} km.",
+            f"- Lộ trình tối ưu: {' -> '.join([p['name'] for p in optimized_waypoints]) if optimized_waypoints else 'N/A'}",
+            "- BẢNG GIÁ ƯỚC TÍNH:"
         ]
         
-        # Liệt kê tất cả các hãng để người dùng chọn
         for item in summary: 
             icon = "🚌" if "Buýt" in item['name'] else ("🏍️" if "Bike" in item['name'] else "🚗")
             lines.append(f"  {icon} {item['name']}: {item['display_total']}")
 
-        lines.append("\n- Chi tiết từng chặng (Tham khảo):")
-        for seg in segments:
-            # Lấy giá của phương tiện rẻ nhất (thường là bus) và đắt nhất (car) để làm khoảng giá
-            prices = seg.get('prices', {})
-            # Ví dụ lấy giá GrabBike để hiển thị mẫu
-            grab_bike = prices.get('grab_bike', {}).get('display', 'N/A')
-            lines.append(f"  + {seg['from_name']} -> {seg['to_name']} ({seg['distance_km']}km) | GrabBike: ~{grab_bike}")
-
         # ============================================================
-        # [THÊM MỚI] GỌI LOGIC TÌM BUS ĐỂ CHÈN VÀO CONTEXT
+        # 4. LOGIC XE BUÝT (ĐÃ ĐỒNG BỘ VỚI MAP)
         # ============================================================
         if optimized_waypoints and len(optimized_waypoints) >= 2:
             try:
+                # Gọi đúng hàm mà API Map đang dùng
                 bus_result = plan_multi_stop_bus_trip(optimized_waypoints)
                 
                 if bus_result['success']:
-                    lines.append("\n[DỮ LIỆU XE BUÝT THỰC TẾ TỪ HỆ THỐNG - HÃY DÙNG THÔNG TIN NÀY CHO CÂU TRẢ LỜI]:")
+                    lines.append("\n=== CHI TIẾT TUYẾN XE BUÝT (AI PHẢI GỢI Ý ĐÚNG TUYẾN NÀY) ===")
                     legs = bus_result['data'].get('legs', [])
                     
                     for i, leg in enumerate(legs):
-                        route_name = leg.get('route_name', 'Không rõ')
+                        # Lấy thông tin chi tiết nhất để AI không "chém gió"
+                        route_name = leg.get('route_name', 'Tuyến Bus')
+                        # Lọc số tuyến (VD: "01 - Bến Thành" -> lấy "01")
                         bus_no = route_name.split(' - ')[0] if ' - ' in route_name else route_name
-                        start_stop = leg.get('start_stop', '')
-                        end_stop = leg.get('end_stop', '')
                         
-                        lines.append(f"  + Chặng {i+1}: Hãy gợi ý đi **Tuyến {bus_no}** ({route_name}).")
-                        lines.append(f"    - Đón tại: {start_stop}")
-                        lines.append(f"    - Xuống tại: {end_stop}")
+                        start_stop = leg.get('start_stop', 'Trạm đón')
+                        end_stop = leg.get('end_stop', 'Trạm xuống')
+                        
+                        lines.append(f"📍 Chặng {i+1} ({leg.get('start_stop')} -> {leg.get('end_stop')}):")
+                        lines.append(f"   👉 Bắt buộc đi: **Xe buýt số {bus_no}** ({route_name})")
+                        lines.append(f"   - Đón tại: {start_stop}")
+                        lines.append(f"   - Xuống tại: {end_stop}")
+                        
+                        # Thêm cảnh báo đi bộ nếu có
+                        if leg.get('walk_to_start'):
+                             lines.append(f"   - (Lưu ý: Cần đi bộ ra trạm đón)")
+
                 else:
-                    lines.append("\n[Lưu ý về Bus]: Hệ thống không tìm thấy tuyến xe buýt đi thẳng phù hợp cho lộ trình này.")
+                    lines.append("\n[Hệ thống]: Không tìm thấy tuyến xe buýt đi thẳng. Hãy khuyên người dùng đi Grab hoặc Be.")
             
             except Exception as e:
                 print(f"[Bus Context Error]: {e}")
         # ============================================================
 
-        lines.append("\n[Hết dữ liệu - Hãy tư vấn dựa trên bảng giá và thông tin xe buýt thực tế ở trên]")
+        lines.append("\n[YÊU CẦU]: Trả lời ngắn gọn, tập trung vào lộ trình và giá tiền ở trên. Nếu hỏi về xe buýt, hãy chỉ rõ số tuyến và trạm đón/xuống như dữ liệu cung cấp.")
         
         return "\n".join(lines)
 
     except Exception as e:
         print(f"[Advanced Pricing Error] {e}")
+        import traceback
+        traceback.print_exc()
         return None
-
+    
 def is_student(form_data):
     marker = str(form_data.get("passengers", "")).strip().lower()
     return "sinh viên" in marker
