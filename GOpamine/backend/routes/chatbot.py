@@ -1,14 +1,20 @@
 import math
 import os
 from importlib import util as importlib_util
-
 from flask import Blueprint, request, jsonify
 from gemini_handler import GeminiBot
 import uuid
-
 from pricing_score import UserRequest, WeatherContext, calculate_adaptive_scores
-
 from astar import AStarRouter
+#Import logic tìm xe buýt
+try:
+    from backend.utils.bus_routing import plan_multi_stop_bus_trip
+except ImportError:
+    # Fallback xử lý đường dẫn nếu chạy trực tiếp
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+    from backend.utils.bus_routing import plan_multi_stop_bus_trip
 
 ROUTER = AStarRouter()
 
@@ -263,9 +269,30 @@ def build_pricing_context(form_data, weather_payload, traffic_payload):
         return None
 
 
+# --- TÌM ĐẾN ĐẦU FILE VÀ THÊM IMPORT ---
+from gemini_handler import GeminiBot
+import uuid
+from pricing_score import UserRequest, WeatherContext, calculate_adaptive_scores
+from astar import AStarRouter
+
+# [THÊM] Import logic tìm xe buýt
+try:
+    from backend.utils.bus_routing import plan_multi_stop_bus_trip
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+    from backend.utils.bus_routing import plan_multi_stop_bus_trip
+
+ROUTER = AStarRouter()
+
+# ... (Các phần khác giữ nguyên) ...
+
+# --- TÌM VÀ THAY THẾ TOÀN BỘ HÀM build_advanced_pricing_context ---
+
 def build_advanced_pricing_context(form_data):
     """
-    Sử dụng AStarRouter để tính toán và so sánh giá các hãng (Grab, Be, XanhSM, Bus).
+    Sử dụng AStarRouter để tính toán lộ trình & Gọi BusRouter để lấy tuyến xe buýt chính xác.
     """
     try:
         start_id = form_data.get('start_id')
@@ -276,7 +303,7 @@ def build_advanced_pricing_context(form_data):
 
         is_sv = is_student(form_data)
 
-        # Gọi AStarRouter
+        # 1. Gọi AStarRouter (Logic cũ)
         result = ROUTER.plan_multi_stop_trip(
             start_id=int(start_id),
             destination_ids=[int(x) for x in dest_ids],
@@ -289,8 +316,11 @@ def build_advanced_pricing_context(form_data):
         data = result['data']
         summary = data.get('summary', []) # Đã sort từ rẻ -> đắt
         segments = data.get('segments', [])
+        
+        # Lấy danh sách điểm đã tối ưu để tìm bus
+        optimized_waypoints = data.get('optimized_order', [])
 
-        # Xây dựng context cho Gemini
+        # 2. Xây dựng context cơ bản
         lines = [
             "\n[DỮ LIỆU LỘ TRÌNH & BẢNG GIÁ CÁC HÃNG XE]",
             f"- Tổng hành trình: {data['total_distance_km']} km (qua {len(segments)} chặng di chuyển).",
@@ -309,8 +339,35 @@ def build_advanced_pricing_context(form_data):
             # Ví dụ lấy giá GrabBike để hiển thị mẫu
             grab_bike = prices.get('grab_bike', {}).get('display', 'N/A')
             lines.append(f"  + {seg['from_name']} -> {seg['to_name']} ({seg['distance_km']}km) | GrabBike: ~{grab_bike}")
-        
-        lines.append("[Hết dữ liệu - Hãy tư vấn dựa trên bảng giá các hãng ở trên]")
+
+        # ============================================================
+        # [THÊM MỚI] GỌI LOGIC TÌM BUS ĐỂ CHÈN VÀO CONTEXT
+        # ============================================================
+        if optimized_waypoints and len(optimized_waypoints) >= 2:
+            try:
+                bus_result = plan_multi_stop_bus_trip(optimized_waypoints)
+                
+                if bus_result['success']:
+                    lines.append("\n[DỮ LIỆU XE BUÝT THỰC TẾ TỪ HỆ THỐNG - HÃY DÙNG THÔNG TIN NÀY CHO CÂU TRẢ LỜI]:")
+                    legs = bus_result['data'].get('legs', [])
+                    
+                    for i, leg in enumerate(legs):
+                        route_name = leg.get('route_name', 'Không rõ')
+                        bus_no = route_name.split(' - ')[0] if ' - ' in route_name else route_name
+                        start_stop = leg.get('start_stop', '')
+                        end_stop = leg.get('end_stop', '')
+                        
+                        lines.append(f"  + Chặng {i+1}: Hãy gợi ý đi **Tuyến {bus_no}** ({route_name}).")
+                        lines.append(f"    - Đón tại: {start_stop}")
+                        lines.append(f"    - Xuống tại: {end_stop}")
+                else:
+                    lines.append("\n[Lưu ý về Bus]: Hệ thống không tìm thấy tuyến xe buýt đi thẳng phù hợp cho lộ trình này.")
+            
+            except Exception as e:
+                print(f"[Bus Context Error]: {e}")
+        # ============================================================
+
+        lines.append("\n[Hết dữ liệu - Hãy tư vấn dựa trên bảng giá và thông tin xe buýt thực tế ở trên]")
         
         return "\n".join(lines)
 
