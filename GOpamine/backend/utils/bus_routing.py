@@ -1,26 +1,22 @@
 import sqlite3
 import math
 import os
-import sys
+import requests # Cần import thư viện này để gọi OSRM
+import json
 
 # =========================================================
-# 1. HÀM TÌM ĐƯỜNG DẪN DB (Đã được kiểm chứng)
+# 1. HÀM TÌM ĐƯỜNG DẪN DB
 # =========================================================
 def get_db_path():
-    # Lấy đường dẫn file này: backend/utils/bus_routing.py
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # Logic tìm file: Đi ngược lên 2 cấp (utils -> backend -> GOpamine -> data)
+    # Logic tìm file: utils -> backend -> GOpamine -> data
     db_path = os.path.abspath(os.path.join(current_dir, '../../data/busmap.db'))
     
-    # Kiểm tra lần cuối
     if not os.path.exists(db_path):
-        # Fallback cho trường hợp cấu trúc lạ
         fallback = os.path.abspath(os.path.join(current_dir, '../data/busmap.db'))
         if os.path.exists(fallback): return fallback
         print(f"❌ [CRITICAL] Không tìm thấy DB tại: {db_path}")
         return None
-        
     return db_path
 
 def get_db():
@@ -31,7 +27,7 @@ def get_db():
     return conn
 
 # =========================================================
-# 2. LOGIC TÌM ĐƯỜNG (Logic chiến thắng từ file test.py)
+# 2. LOGIC TÍNH KHOẢNG CÁCH
 # =========================================================
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -41,6 +37,53 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
+def fetch_road_geometry(stops_list):
+    """
+    Input: Danh sách tọa độ các trạm [[lat, lon], [lat, lon]...]
+    Output: Danh sách tọa độ chi tiết bám theo mặt đường (Geometry)
+    """
+    try:
+        # Nếu ít hơn 2 trạm thì không vẽ được đường
+        if not stops_list or len(stops_list) < 2:
+            return stops_list
+
+        # OSRM yêu cầu format: lon,lat;lon,lat (Lưu ý: lon trước lat sau)
+        # Giới hạn URL của OSRM khoảng vài nghìn ký tự, nên nếu quá nhiều trạm cần chia nhỏ hoặc lọc bớt.
+        # Ở đây ta lấy tối đa 25 điểm (Start, End và các trạm giữa) để OSRM nối.
+        
+        # Chiến thuật: Luôn lấy điểm đầu, điểm cuối, và rải đều các điểm giữa
+        MAX_POINTS = 20
+        if len(stops_list) > MAX_POINTS:
+            step = len(stops_list) // MAX_POINTS
+            filtered_stops = stops_list[::step]
+            # Đảm bảo luôn có điểm cuối cùng
+            if filtered_stops[-1] != stops_list[-1]:
+                filtered_stops.append(stops_list[-1])
+        else:
+            filtered_stops = stops_list
+
+        coords_str = ";".join([f"{lon},{lat}" for lat, lon in filtered_stops])
+        
+        # Gọi API OSRM (Profile driving để xe buýt chạy trên đường nhựa)
+        url = f"http://router.project-osrm.org/route/v1/driving/{coords_str}?overview=full&geometries=geojson"
+        
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data['code'] == 'Ok':
+                # OSRM trả về [lon, lat], ta cần đảo lại thành [lat, lon] cho Leaflet
+                geometry = data['routes'][0]['geometry']['coordinates']
+                return [[c[1], c[0]] for c in geometry]
+    except Exception as e:
+        print(f"⚠️ Lỗi OSRM Bus Polyline: {e}. Dùng đường thẳng thay thế.")
+    
+    # Nếu lỗi, trả về đường thẳng nối các trạm như cũ (Fallback)
+    return stops_list
+
+# =========================================================
+# 4. CÁC HÀM TRUY VẤN DB
+# =========================================================
+
 def get_route_info(conn, route_id):
     try:
         return conn.execute("SELECT RouteName, RouteNo, OutBoundDescription, InBoundDescription FROM route_info WHERE RouteId = ?", (route_id,)).fetchone()
@@ -48,7 +91,7 @@ def get_route_info(conn, route_id):
         return None
 
 def get_path_for_route(conn, route_id, direction, start_order, end_order):
-    # Lấy tọa độ các trạm nằm giữa điểm đi và điểm đến để vẽ đường
+    # Lấy tọa độ các trạm nằm giữa điểm đi và điểm đến
     query = """
         SELECT Lat, Lng 
         FROM stations 
@@ -57,19 +100,23 @@ def get_path_for_route(conn, route_id, direction, start_order, end_order):
         ORDER BY StationOrder ASC
     """
     rows = conn.execute(query, (route_id, direction, start_order, end_order)).fetchall()
-    return [[r['Lat'], r['Lng']] for r in rows]
+    
+    # [FIX] Thay vì trả về luôn, ta đưa list này qua OSRM để làm mềm đường
+    raw_stops = [[r['Lat'], r['Lng']] for r in rows]
+    
+    print(f"   🛤️ Đang tính geometry cho {len(raw_stops)} trạm...")
+    smooth_path = fetch_road_geometry(raw_stops)
+    return smooth_path
 
 def find_smart_bus_route(start_coords, end_coords):
     print(f"\n🔍 [WEB REQUEST] Tìm từ {start_coords} đến {end_coords}")
     conn = get_db()
     
-    # 1. Lấy tất cả trạm
     try:
         all_stops = conn.execute("SELECT StationId, StationName, Lat, Lng, RouteId, StationOrder, StationDirection FROM stations").fetchall()
     except Exception as e:
         return {'success': False, 'error': f"Lỗi đọc DB: {str(e)}"}
 
-    # 2. Lọc ứng viên (Bán kính 3km - như test)
     limit_dist = 3.0 
     start_candidates = []
     end_candidates = []
@@ -77,28 +124,23 @@ def find_smart_bus_route(start_coords, end_coords):
     for stop in all_stops:
         d_s = haversine(start_coords['lat'], start_coords['lon'], stop['Lat'], stop['Lng'])
         if d_s <= limit_dist:
-            s = dict(stop)
-            s['dist'] = d_s
+            s = dict(stop); s['dist'] = d_s
             start_candidates.append(s)
 
         d_e = haversine(end_coords['lat'], end_coords['lon'], stop['Lat'], stop['Lng'])
         if d_e <= limit_dist:
-            e = dict(stop)
-            e['dist'] = d_e
+            e = dict(stop); e['dist'] = d_e
             end_candidates.append(e)
 
     if not start_candidates or not end_candidates:
-        return {'success': False, 'error': f'Không có trạm xe buýt nào gần bạn (3km).'}
+        return {'success': False, 'error': 'Không có trạm xe buýt nào gần bạn (3km).'}
 
-    # 3. Khớp tuyến (Logic Match)
     best_direct = None
     min_walk = float('inf')
 
     for s in start_candidates:
         for e in end_candidates:
-            # Điều kiện vàng: Cùng tuyến, Cùng chiều
             if s['RouteId'] == e['RouteId'] and s['StationDirection'] == e['StationDirection']:
-                # Điều kiện vàng: Trạm đón đứng trước trạm xuống
                 if s['StationOrder'] < e['StationOrder']:
                     total_walk = s['dist'] + e['dist']
                     if total_walk < min_walk:
@@ -109,20 +151,15 @@ def find_smart_bus_route(start_coords, end_coords):
         s_stop, e_stop = best_direct
         print(f"   ✅ Tìm thấy tuyến ID: {s_stop['RouteId']}")
         
-        # Lấy thông tin
         r_info = get_route_info(conn, s_stop['RouteId'])
-        
-        route_no = "Bus"
-        route_name = "Tuyến xe buýt"
+        route_no = r_info['RouteNo'] if r_info else "Bus"
+        route_name = r_info['RouteName'] if r_info else "Unknown"
         desc = "Lộ trình đi thẳng"
-        
         if r_info:
-            route_no = r_info['RouteNo'] if r_info['RouteNo'] else "Bus"
-            route_name = r_info['RouteName'] if r_info['RouteName'] else "Unknown"
             raw_desc = r_info['OutBoundDescription'] if s_stop['StationDirection'] == 0 else r_info['InBoundDescription']
             if raw_desc: desc = raw_desc
 
-        # Lấy đường vẽ
+        # Hàm này giờ đã trả về đường cong mềm mại
         path = get_path_for_route(conn, s_stop['RouteId'], s_stop['StationDirection'], s_stop['StationOrder'], e_stop['StationOrder'])
         
         conn.close()
@@ -140,53 +177,37 @@ def find_smart_bus_route(start_coords, end_coords):
             }
         }
     conn.close()
-    return {
-        'success': False, 
-        'error': 'Không tìm thấy tuyến đi thẳng phù hợp giữa 2 điểm này.'
-    }
+    return {'success': False, 'error': 'Không tìm thấy tuyến đi thẳng phù hợp.'}
 
 # Tìm đa điểm
 def plan_multi_stop_bus_trip(waypoints):
-    """
-    Input: Danh sách các điểm [{'lat':..., 'lon':...}, ...] theo thứ tự đã tối ưu
-    Output: Tổng hợp lộ trình từng chặng
-    """
     if not waypoints or len(waypoints) < 2:
-        return {'success': False, 'error': 'Cần ít nhất 2 điểm để tìm đường.'}
+        return {'success': False, 'error': 'Cần ít nhất 2 điểm.'}
 
     total_segments = []
     
-    # Lặp qua từng cặp điểm: (0->1), (1->2), (2->3)...
     for i in range(len(waypoints) - 1):
         start_node = waypoints[i]
         end_node = waypoints[i+1]
         
-        # Chuẩn hóa key (đề phòng lúc thì 'lng', lúc thì 'lon')
         s_coords = {'lat': float(start_node['lat']), 'lon': float(start_node.get('lon', start_node.get('lng')))}
         e_coords = {'lat': float(end_node['lat']), 'lon': float(end_node.get('lon', end_node.get('lng')))}
 
-        print(f"🚌 Đang tìm Bus chặng {i+1}: {s_coords} -> {e_coords}")
+        print(f"🚌 Bus Chặng {i+1}: {s_coords} -> {e_coords}")
         
-        # Gọi lại hàm tìm đường đơn lẻ cũ
         result = find_smart_bus_route(s_coords, e_coords)
         
         if result['success']:
-            # Đánh dấu đây là chặng thứ mấy
             result['data']['step_index'] = i
             total_segments.append(result['data'])
         else:
-            # Nếu 1 chặng không có xe buýt, trả về lỗi hoặc fallback
-            # Ở đây mình return lỗi luôn để báo người dùng
-            return {
-                'success': False, 
-                'error': f"Không tìm thấy xe buýt cho chặng {i+1} (từ điểm {i+1} đến {i+2}). Vui lòng chọn phương tiện khác cho chặng này."
-            }
+            return {'success': False, 'error': f"Không tìm thấy Bus chặng {i+1}."}
 
     return {
         'success': True,
         'type': 'multi_stop',
         'data': {
             'total_legs': len(total_segments),
-            'legs': total_segments # Mảng chứa chi tiết từng chặng A->B, B->C
+            'legs': total_segments
         }
     }
