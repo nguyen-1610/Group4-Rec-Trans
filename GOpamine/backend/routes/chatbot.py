@@ -277,18 +277,19 @@ def build_advanced_pricing_context(form_data):
     Sử dụng AStarRouter để tính toán và so sánh giá các hãng (Grab, Be, XanhSM, Bus).
     """
     try:
-        start_id = form_data.get('start_id')
-        dest_ids = form_data.get('destination_ids')
+        start_input = form_data.get('origin') or form_data.get('start_id')
+        dest_input = form_data.get('destinations') or form_data.get('destination_ids')
         
-        if not start_id or not dest_ids:
+        if not start_input or not dest_input:
+            print("[Pricing] Thiếu thông tin điểm đi/đến trong form_data")
             return None
 
         is_sv = is_student(form_data)
 
         # Gọi AStarRouter
         result = ROUTER.plan_multi_stop_trip(
-            start_id=int(start_id),
-            destination_ids=[int(x) for x in dest_ids],
+            start_id=start_input,
+            destination_ids=dest_input,
             is_student=is_sv
         )
 
@@ -326,7 +327,6 @@ def build_advanced_pricing_context(form_data):
         # ============================================================
         if optimized_waypoints and len(optimized_waypoints) >= 2:
             try:
-                # Gọi hàm core logic (giống hệt Map đang gọi)
                 bus_result = plan_multi_stop_bus_trip(optimized_waypoints)
                 
                 if bus_result['success']:
@@ -336,18 +336,17 @@ def build_advanced_pricing_context(form_data):
                     legs = bus_result['data'].get('legs', [])
                     
                     for i, leg in enumerate(legs):
-                        # Lấy tên tuyến và xử lý chuỗi để AI dễ đọc
                         route_name = leg.get('route_name', 'Không rõ')
                         bus_no = route_name.split(' - ')[0] if ' - ' in route_name else route_name
                         
                         start_stop = leg.get('start_stop', 'Trạm không xác định')
                         end_stop = leg.get('end_stop', 'Trạm không xác định')
                         
-                        # Format văn bản rõ ràng cho AI
                         lines.append(f"  * Chặng {i+1}: Đi **Tuyến {bus_no}** ({route_name})")
                         lines.append(f"    - Đi bộ ra trạm đón: {start_stop}")
                         lines.append(f"    - Xuống xe tại trạm: {end_stop}")
                 else:
+                    # Nếu Map tìm ra mà ở đây không tìm ra thì rất lạ, nhưng cứ handle
                     lines.append("\n[Lưu ý về Bus]: Hệ thống xác nhận KHÔNG có tuyến xe buýt đi thẳng phù hợp cho lộ trình này.")
             
             except Exception as e:
@@ -360,6 +359,8 @@ def build_advanced_pricing_context(form_data):
 
     except Exception as e:
         print(f"[Advanced Pricing Error] {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def is_student(form_data):
