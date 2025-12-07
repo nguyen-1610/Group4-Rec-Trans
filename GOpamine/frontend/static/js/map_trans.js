@@ -696,7 +696,7 @@ window.goBack = () => window.location.href = '/chatbot';
 function drawMultiStopBusRoute(legs, waypoints) {
     routeLayerGroup.clearLayers(); // Xóa đường cũ
 
-    // 1. Vẽ các điểm dừng chính (A, B, C...)
+    // 1. Vẽ các điểm dừng chính (A, B, C...) - GIỮ NGUYÊN
     waypoints.forEach((wp, index) => {
         const label = String.fromCharCode(65 + index); // A, B, C...
         let color = '#fbbc04'; // Điểm giữa (Vàng)
@@ -706,23 +706,33 @@ function drawMultiStopBusRoute(legs, waypoints) {
         createCustomMarker(map, wp.lat, wp.lon || wp.lng, color, label, `<b>${wp.name}</b>`);
     });
 
+    // --- [THÊM MỚI] Định nghĩa Icon Trạm Chờ (Transfer) ---
+    const transferIcon = L.divIcon({
+        html: '🚏', 
+        className: 'transfer-marker', 
+        iconSize: [32, 32], // Kích thước khung tròn
+        iconAnchor: [16, 16] // Tâm icon
+    });
+
+    // Icon xe buýt thường (cho điểm đầu/cuối hành trình)
+    const busIcon = L.divIcon({ html: '🚌', className: 'bus-marker', iconSize: [24, 24] });
+
     // 2. Vẽ từng chặng xe buýt
     legs.forEach((leg, index) => {
-        // Mỗi leg là kết quả của 1 lần tìm đường đơn (A->B)
-        
-        // A. Đi bộ đầu chặng
-        // leg.walk_to_start là tọa độ trạm đón
-        // waypoints[index] là điểm bắt đầu của chặng này
+        const isFirstLeg = index === 0;
+        const isLastLeg = index === legs.length - 1;
+
+        // A. Đi bộ đầu chặng (Nét đứt)
         const startPt = waypoints[index];
         const walkToLine = [[startPt.lat, startPt.lon || startPt.lng], leg.walk_to_start];
         L.polyline(walkToLine, { color: 'gray', dashArray: '5, 10', weight: 4 }).addTo(routeLayerGroup);
 
-        // B. Đường xe buýt chạy
+        // B. Đường xe buýt chạy (Nét liền)
         if (leg.segments) {
             leg.segments.forEach(seg => {
                 if (seg.type === 'bus') {
-                    // Random màu nhẹ để phân biệt các chặng khác nhau nếu thích
-                    const segColor = index % 2 === 0 ? '#FF9800' : '#E65100'; 
+                    // [SỬA] Dùng 1 màu cam thống nhất cho tất cả tuyến
+                    const segColor = '#FF9800'; 
                     L.polyline(seg.path, { color: segColor, weight: 6, opacity: 0.9 })
                      .addTo(routeLayerGroup)
                      .bindPopup(`<b>Chặng ${index + 1}: Tuyến ${seg.name}</b><br>${leg.description}`);
@@ -730,17 +740,28 @@ function drawMultiStopBusRoute(legs, waypoints) {
             });
         }
 
-        // C. Đi bộ cuối chặng
-        // leg.walk_from_end là trạm xuống
-        // waypoints[index+1] là điểm đến của chặng này
+        // C. Đi bộ cuối chặng (Nét đứt)
         const endPt = waypoints[index+1];
         const walkFromLine = [leg.walk_from_end, [endPt.lat, endPt.lon || endPt.lng]];
         L.polyline(walkFromLine, { color: 'gray', dashArray: '5, 10', weight: 4 }).addTo(routeLayerGroup);
 
-        // D. Marker Trạm Bus (Icon nhỏ)
-        const busIcon = L.divIcon({ html: '🚌', className: 'bus-marker', iconSize: [24, 24] });
-        L.marker(leg.walk_to_start, {icon: busIcon}).addTo(routeLayerGroup).bindPopup(`<b>Đón chặng ${index+1}: ${leg.start_stop}</b>`);
-        L.marker(leg.walk_from_end, {icon: busIcon}).addTo(routeLayerGroup).bindPopup(`<b>Xuống chặng ${index+1}: ${leg.end_stop}</b>`);
+        // D. Vẽ Marker Trạm (Logic mới cho Transfer)
+        
+        // --- Marker Đón (Pick-up) ---
+        // Nếu là chặng đầu tiên: Dùng icon Bus 🚌
+        // Nếu là chặng giữa (vừa đi bộ từ trạm trước sang): Dùng icon Trạm 🚏
+        const pickupIcon = isFirstLeg ? busIcon : transferIcon;
+        L.marker(leg.walk_to_start, {icon: pickupIcon})
+         .addTo(routeLayerGroup)
+         .bindPopup(`<b>${isFirstLeg ? 'Bắt đầu' : 'Đổi tuyến'}: Đón xe ${leg.start_stop}</b>`);
+
+        // --- Marker Xuống (Drop-off) ---
+        // Nếu là chặng cuối cùng: Dùng icon Bus 🚌
+        // Nếu là chặng giữa (xuống để đổi tuyến): Dùng icon Trạm 🚏
+        const dropoffIcon = isLastLeg ? busIcon : transferIcon;
+        L.marker(leg.walk_from_end, {icon: dropoffIcon})
+         .addTo(routeLayerGroup)
+         .bindPopup(`<b>${isLastLeg ? 'Kết thúc' : 'Đổi tuyến'}: Xuống xe ${leg.end_stop}</b>`);
     });
 
     // Zoom fit toàn bộ lộ trình

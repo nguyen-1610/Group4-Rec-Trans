@@ -481,3 +481,23 @@ div:where(.swal2-container) {
 div:where(.swal2-popup) {
     margin: auto !important;
 }
+
+/* Style cho icon trạm chuyển tuyến (Transfer) */
+.transfer-marker {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: none !important; /* Bỏ nền */
+    border: none !important;     /* Bỏ viền */
+    box-shadow: none !important; /* Bỏ bóng đổ khung */
+    font-size: 28px !important;  /* Tăng kích thước icon lên xíu cho dễ nhìn */
+    z-index: 1000 !important;    /* Luôn nổi lên trên */
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); /* Thêm bóng nhẹ cho chính icon để nổi bật */
+}
+
+/* Hiệu ứng khi di chuột vào */
+.transfer-marker:hover {
+    transform: scale(1.2); /* Phóng to nhẹ */
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
