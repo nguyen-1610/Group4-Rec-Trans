@@ -117,7 +117,7 @@ def find_smart_bus_route(start_coords, end_coords):
     except Exception as e:
         return {'success': False, 'error': f"Lỗi đọc DB: {str(e)}"}
 
-    limit_dist = 3.0 
+    limit_dist = 5.0 
     start_candidates = []
     end_candidates = []
 

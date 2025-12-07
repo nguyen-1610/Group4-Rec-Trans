@@ -10,6 +10,15 @@ from pricing_score import UserRequest, WeatherContext, calculate_adaptive_scores
 
 from astar import AStarRouter
 
+# [THÊM] Import logic tìm xe buýt (Bộ não của hệ thống Bus)
+try:
+    from backend.utils.bus_routing import plan_multi_stop_bus_trip
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+    from backend.utils.bus_routing import plan_multi_stop_bus_trip
+
 ROUTER = AStarRouter()
 
 def _load_realtime_module():
@@ -290,6 +299,9 @@ def build_advanced_pricing_context(form_data):
         summary = data.get('summary', []) # Đã sort từ rẻ -> đắt
         segments = data.get('segments', [])
 
+        # Lấy danh sách điểm đã tối ưu để tìm bus (Đây là danh sách chuẩn mà Map đang dùng)
+        optimized_waypoints = data.get('optimized_order', [])
+
         # Xây dựng context cho Gemini
         lines = [
             "\n[DỮ LIỆU LỘ TRÌNH & BẢNG GIÁ CÁC HÃNG XE]",
@@ -310,6 +322,38 @@ def build_advanced_pricing_context(form_data):
             grab_bike = prices.get('grab_bike', {}).get('display', 'N/A')
             lines.append(f"  + {seg['from_name']} -> {seg['to_name']} ({seg['distance_km']}km) | GrabBike: ~{grab_bike}")
         
+        # [QUAN TRỌNG] GỌI LOGIC TÌM BUS CHÍNH CHỦ TỪ BUS_ROUTING
+        # ============================================================
+        if optimized_waypoints and len(optimized_waypoints) >= 2:
+            try:
+                # Gọi hàm core logic (giống hệt Map đang gọi)
+                bus_result = plan_multi_stop_bus_trip(optimized_waypoints)
+                
+                if bus_result['success']:
+                    lines.append("\n[⚡ DỮ LIỆU XE BUÝT CHÍNH XÁC TỪ HỆ THỐNG - BẮT BUỘC DÙNG]:")
+                    lines.append("(AI Lưu ý: Không được tự bịa ra tuyến khác, chỉ dùng thông tin dưới đây)")
+                    
+                    legs = bus_result['data'].get('legs', [])
+                    
+                    for i, leg in enumerate(legs):
+                        # Lấy tên tuyến và xử lý chuỗi để AI dễ đọc
+                        route_name = leg.get('route_name', 'Không rõ')
+                        bus_no = route_name.split(' - ')[0] if ' - ' in route_name else route_name
+                        
+                        start_stop = leg.get('start_stop', 'Trạm không xác định')
+                        end_stop = leg.get('end_stop', 'Trạm không xác định')
+                        
+                        # Format văn bản rõ ràng cho AI
+                        lines.append(f"  * Chặng {i+1}: Đi **Tuyến {bus_no}** ({route_name})")
+                        lines.append(f"    - Đi bộ ra trạm đón: {start_stop}")
+                        lines.append(f"    - Xuống xe tại trạm: {end_stop}")
+                else:
+                    lines.append("\n[Lưu ý về Bus]: Hệ thống xác nhận KHÔNG có tuyến xe buýt đi thẳng phù hợp cho lộ trình này.")
+            
+            except Exception as e:
+                print(f"[Bus Context Error]: {e}")
+        # ============================================================
+
         lines.append("[Hết dữ liệu - Hãy tư vấn dựa trên bảng giá các hãng ở trên]")
         
         return "\n".join(lines)
