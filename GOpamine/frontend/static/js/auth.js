@@ -166,85 +166,54 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ============================================================
-    // [NÂNG CẤP] XỬ LÝ ĐĂNG NHẬP MẠNG XÃ HỘI (DYNAMIC SIMULATION)
+    // [CẬP NHẬT] CHUYỂN ĐỔI SANG REAL OAUTH2 (PRODUCTION MODE)
+    // Code này sẽ ghi đè logic giả lập cũ khi người dùng bấm nút
     // ============================================================
     
-    // Hàm sinh dữ liệu ngẫu nhiên (Để demo tính năng đa người dùng)
-    function generateRandomUser(provider) {
-        const randomId = Math.floor(Math.random() * 10000); // Số ngẫu nhiên 0-9999
-        const providerName = provider.charAt(0).toUpperCase() + provider.slice(1); // Google/Facebook
+    // Tìm lại các nút DOM
+    const realGoogleBtns = document.querySelectorAll('.google-btn');
+    const realFacebookBtns = document.querySelectorAll('.facebook-btn');
+
+    function triggerRealOAuth(provider) {
+        // Hiển thị loading nhẹ để người dùng biết đang chuyển trang
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Đang chuyển hướng...',
+                text: `Đang kết nối tới ${provider === 'google' ? 'Google' : 'Facebook'}`,
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+        }
         
-        return {
-            name: `${providerName} User ${randomId}`,      // VD: Google User 4521
-            email: `user_${randomId}@${provider}.demo`,    // VD: user_4521@google.demo
-            social_id: `${provider}_${randomId}`,          // VD: google_4521
-            provider: provider
-        };
+        // Chuyển hướng trình duyệt sang route Python vừa viết
+        // Route này sẽ lo việc đẩy sang Google/FB
+        window.location.href = `${API_BASE}/api/login/${provider}`;
     }
 
-    const googleBtns = document.querySelectorAll('.google-btn');
-    const facebookBtns = document.querySelectorAll('.facebook-btn');
-
-    // Hàm xử lý chung
-    async function handleSocialLogin(provider) {
-        
-        // 1. Sinh dữ liệu người dùng MỚI mỗi lần bấm
-        const userData = generateRandomUser(provider);
-
-        // 2. Hiện hộp thoại giả lập "Đang kết nối..."
-        let timerInterval;
-        Swal.fire({
-            title: `Đang kết nối ${provider === 'google' ? 'Google' : 'Facebook'}...`,
-            html: `Đang xác thực tài khoản: <b>${userData.email}</b>`,
-            timer: 1500,
-            timerProgressBar: true,
-            didOpen: () => {
-                Swal.showLoading();
-            },
-            willClose: () => {
-                clearInterval(timerInterval);
-            }
-        }).then(async (result) => {
-            if (result.dismiss === Swal.DismissReason.timer) {
-                try {
-                    // 3. Gửi về Backend (Backend sẽ tự tạo User mới vào DB)
-                    const response = await fetch(`${API_BASE}/api/login-social`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(userData)
-                    });
-
-                    const resData = await response.json();
-
-                    if (resData.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Thành công!',
-                            text: `Chào mừng ${userData.name}!`,
-                            showConfirmButton: false,
-                            timer: 1500
-                        }).then(() => {
-                            window.location.href = '/';
-                        });
-                    } else {
-                        alert("Lỗi Social: " + resData.message);
-                    }
-                } catch (err) {
-                    console.error(err);
-                    alert("Lỗi kết nối Social Login.");
-                }
-            }
+    // Gán đè sự kiện onclick (Phương pháp này mạnh hơn addEventListener 
+    // vì nó thay thế hoàn toàn hành vi cũ của element nếu gán trực tiếp)
+    
+    if (realGoogleBtns.length > 0) {
+        realGoogleBtns.forEach(btn => {
+            // Clone nút để xóa sạch các event listener cũ (nếu muốn chắc chắn 100%)
+            // Hoặc gán onclick như sau để chạy song song/ưu tiên
+            btn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation(); // Ngăn chặn event cũ
+                triggerRealOAuth('google');
+            };
         });
     }
 
-    // Gán sự kiện (Giữ nguyên)
-    googleBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => { e.preventDefault(); handleSocialLogin('google'); });
-    });
-
-    facebookBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => { e.preventDefault(); handleSocialLogin('facebook'); });
-    });
+    if (realFacebookBtns.length > 0) {
+        realFacebookBtns.forEach(btn => {
+            btn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                triggerRealOAuth('facebook');
+            };
+        });
+    }
 });
 
 // Login page specific translations
