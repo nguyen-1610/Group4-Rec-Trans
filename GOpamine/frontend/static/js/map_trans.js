@@ -256,7 +256,9 @@ document.addEventListener('DOMContentLoaded', async function() {
                     vehicle: getStoredRouteFromStorage()?.vehicle || { type: 'car' }
                 };
                 localStorage.setItem('selectedRoute', JSON.stringify(newStorage));
-
+                // Đây là dòng lệnh kích hoạt việc hiển thị bảng giá ngay lập tức
+                await fetchAndRenderTransportOptions(totalDist);
+                
             } else {
                 alert("Không tìm thấy đường đi: " + (result.error || "Lỗi server"));
                 // Reset lại UI nếu lỗi để không bị treo loading
