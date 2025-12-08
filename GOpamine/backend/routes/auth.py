@@ -3,10 +3,9 @@ import os
 import uuid
 import sys
 from datetime import datetime
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify, make_response, url_for, session, current_app, redirect
 from flask_login import login_user, logout_user, login_required, current_user, UserMixin
 # Bổ sung các module cần thiết nếu chưa có
-from flask import url_for, session, current_app, redirect
 # [BỔ SUNG IMPORT CHO OAUTH]
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
@@ -82,18 +81,6 @@ def check_table_exists():
     except Exception as e:
         print(f"❌ Lỗi kiểm tra bảng: {e}")
         return False
-
-# --- XỬ LÝ CORS ---
-@auth_bp.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-    return response
-
-@auth_bp.route('/api/<path:path>', methods=['OPTIONS'])
-def handle_options(path):
-    return jsonify({'status': 'ok'})
 
 # --- CLASS USER ---
 class User(UserMixin):
@@ -336,18 +323,15 @@ def auth_callback(provider):
             
             # Tạo Profile mặc định (Quan trọng để không lỗi app)
             cursor.execute("""
-                INSERT INTO UserProfile (user_id, default_budget, priority)
+                INSERT INTO UserProfile (user_id, default_mode, age_group)
                 VALUES (?, 0, 'balanced')
             """, (final_user_id,))
             conn.commit()
         
+        db_user = conn.execute("SELECT * FROM User WHERE user_id = ?", (final_user_id,)).fetchone()
         conn.close()
 
         # Đăng nhập Flask-Login
-        conn2 = get_db_connection()
-        db_user = conn2.execute("SELECT * FROM User WHERE user_id = ?", (final_user_id,)).fetchone()
-        conn2.close()
-
         user_obj = User(
             user_id=db_user['user_id'], 
             email=db_user['email'], 
