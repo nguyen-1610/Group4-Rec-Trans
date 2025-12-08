@@ -6,17 +6,10 @@ from feedback import feedback_bp, get_all_reviews
 from astar import create_api_blueprint
 from routing import form_bp
 
-# [BỔ SUNG IMPORT CHO OAUTH]
-from authlib.integrations.flask_client import OAuth
-from dotenv import load_dotenv
-
-# Tự động load biến môi trường từ file .env ngay khi app chạy
-load_dotenv()
-
 # 2. IMPORT TỪ CHATBOT.PY
 from chatbot import chatbot_bp
 from flask_login import LoginManager
-from auth import auth_bp, User, get_db_connection
+from auth import auth_bp, User, get_db_connection, setup_oauth
 
 from transport_routes import transport_bp
 
@@ -33,6 +26,7 @@ app = Flask(
 )
 
 from flask import redirect, request # Đảm bảo đã import redirect và request ở đầu file
+setup_oauth(app)
 
 @app.before_request
 def redirect_to_localhost():
@@ -65,36 +59,6 @@ def load_user(user_id):
         )
     return None
 # ---------------------
-
-# ==============================================================================
-# [BỔ SUNG] CẤU HÌNH OAUTH2 (GOOGLE & FACEBOOK) TỪ .ENV
-# ==============================================================================
-oauth = OAuth(app)
-
-# 1. Đăng ký Google
-oauth.register(
-    name='google',
-    client_id=os.getenv('OAUTH_CLIENT_ID'),         # Đọc từ .env
-    client_secret=os.getenv('OAUTH_CLIENT_SECRET'), # Đọc từ .env
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
-
-# 2. Đăng ký Facebook
-oauth.register(
-    name='facebook',
-    client_id=os.getenv('FB_CLIENT_ID'),             # Đọc từ .env (Theo yêu cầu của bạn)
-    client_secret=os.getenv('FB_CLIENT_SECRET'),     # Đọc từ .env
-    access_token_url='https://graph.facebook.com/oauth/access_token',
-    access_token_params=None,
-    authorize_url='https://www.facebook.com/dialog/oauth',
-    authorize_params=None,
-    api_base_url='https://graph.facebook.com/',
-    client_kwargs={'scope': 'email public_profile'}
-)
-
-# [QUAN TRỌNG] Gắn oauth vào extensions để auth.py có thể gọi lại (current_app.extensions['oauthlib'])
-app.extensions['oauthlib'] = oauth
 
 CORS(app)
 
