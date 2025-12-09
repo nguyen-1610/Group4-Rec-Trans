@@ -7,6 +7,78 @@
 
 document.addEventListener('DOMContentLoaded', async function() {
     
+    // 1. KHỞI TẠO TỪ ĐIỂN NGÔN NGỮ
+    const i18n = {
+        vi: {
+            map_add_stop: "Thêm điểm đến",
+            map_consult_ai: "Tư Vấn Với AI",
+            map_select_btn: "Chọn",
+            map_unit_min: "phút",
+            map_unit_km: "km",
+            map_loading: "Đang tính toán...",
+            map_alert_select: "Vui lòng chọn một phương tiện!",
+            map_alert_route_error: "Không tìm thấy đường đi:",
+            ph_start: "Nhập điểm đi...",
+            ph_dest: "Tìm kiếm địa điểm",
+            lbl_vehicle: "Xe",
+            lbl_price: "Giá",
+
+            // Tên phương tiện
+            mode_walking: "Đi bộ",
+            mode_bus: "Xe buýt",
+            mode_motorbike: "Xe máy",
+            mode_car: "Ô tô",
+            
+            // Các tag/nhãn
+            tag_cheap: "Rẻ",
+            tag_fast: "Nhanh",
+            tag_saving: "Tiết kiệm",
+            tag_eco: "Xe điện",
+        },
+        en: {
+            map_add_stop: "Add Destination",
+            map_consult_ai: "Ask AI Assistant",
+            map_select_btn: "Select",
+            map_unit_min: "min",
+            map_unit_km: "km",
+            map_loading: "Calculating...",
+            map_alert_select: "Please select a vehicle!",
+            map_alert_route_error: "Route not found:",
+            ph_start: "Enter start point...",
+            ph_dest: "Search destination",
+            lbl_vehicle: "Vehicle",
+            lbl_price: "Price",
+            // Vehicle names
+            mode_walking: "Walking",
+            mode_bus: "Bus",
+            mode_motorbike: "Motorbike",
+            mode_car: "Car",
+            
+            // Tags
+            tag_cheap: "Cheap",
+            tag_fast: "Fast",
+            tag_saving: "Saving",
+            tag_eco: "Electric",
+        }
+    };
+
+    // 2. HÀM LẤY TEXT DỊCH (Helper)
+    window.getTrans = function(key) {
+        // Lấy ngôn ngữ từ localStorage (lưu từ trang Home)
+        const lang = localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi';
+        const dict = i18n[lang] || i18n['vi'];
+        return dict[key] || key;
+    };
+
+    // 3. HÀM DỊCH GIAO DIỆN TĨNH (Chạy 1 lần khi load)
+    function applyStaticTranslations() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            el.textContent = window.getTrans(key);
+        });
+    }
+    applyStaticTranslations();
+
     // =========================================================================
     // 1. KHỞI TẠO BẢN ĐỒ & LAYER
     // =========================================================================
@@ -350,34 +422,70 @@ document.addEventListener('DOMContentLoaded', async function() {
             return `<img src="${path}${imgName}" class="brand-logo-img" alt="${name}">`;
         };
 
+        // Hàm hỗ trợ dịch tên xe (Mapping)
+        const translateModeName = (originalName) => {
+            const n = originalName.toLowerCase();
+            // Nếu là tên hãng (Grab, Be, Xanh) thì giữ nguyên, chỉ dịch loại xe chung
+            if (n.includes('đi bộ') || n.includes('walk')) return window.getTrans('mode_walking');
+            if (n.includes('buýt') || n.includes('bus')) return window.getTrans('mode_bus');
+            // Với các hãng xe công nghệ, ta thường giữ nguyên tên thương hiệu (GrabBike, XanhSM...)
+            // Nhưng nếu muốn dịch phần đuôi (Bike/Car) thì xử lý thêm ở đây.
+            // Hiện tại ta ưu tiên dịch các loại cơ bản user phàn nàn.
+            return originalName; 
+        };
+
         backendResults.forEach(item => {
             const icon = getIcon(item.mode_name);
+            // --- [LOGIC DỊCH THUẬT] ---
+            // 1. Dịch đơn vị thời gian (phút / min)
+            const durationText = `${item.duration} ${window.getTrans('map_unit_min')}`;
+
+            // 1. Dịch Tên phương tiện (Fix lỗi "Đi bộ" khi đang EN)
+            const displayModeName = translateModeName(item.mode_name);
+
+            // 2. Dịch các nhãn (tags)
+            const tagsHtml = item.labels.map(l => {
+                let labelText = l;
+                const lowerL = l.toLowerCase();
+                
+                // Map các từ khóa tiếng Việt sang key từ điển
+                if (lowerL.includes("tiết kiệm")) labelText = window.getTrans('tag_saving');
+                else if (lowerL.includes("nhanh") || lowerL.includes("fast")) labelText = window.getTrans('tag_fast');
+                else if (lowerL.includes("rẻ")) labelText = window.getTrans('tag_cheap');
+                else if (lowerL.includes("điện") || lowerL.includes("eco")) labelText = window.getTrans('tag_eco');
+                
+                
+                return `<span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px; margin-right:3px;">${labelText}</span>`;
+            }).join('');
+
             const scoreColor = item.score >= 8.5 ? '#4caf50' : (item.score >= 6 ? '#ff9800' : '#f44336');
-            const tagsHtml = item.labels.map(l => 
-                `<span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px; margin-right:3px;">${l}</span>`
-            ).join('');
 
             const cardHtml = `
                 <div class="option-card" 
                      data-vehicle="${item.mode_name}" 
                      data-price="${item.display_price}" 
-                     data-time="${item.duration} phút"
+                     data-time="${item.duration} ${window.getTrans('map_unit_min')}"
                      data-score="${item.score}">
+                    
                     <div class="option-left">
                         <div class="vehicle-icon" style="font-size: 20px;">${icon}</div>
                         <div class="vehicle-info">
-                            <h4>${item.mode_name}</h4>
-                            <p>
-                                <span style="font-weight:bold;">${item.duration} phút</span> • ${distanceKm.toFixed(1)} km
-                                <br>
-                                <div style="margin-top:2px;">${tagsHtml}</div>
-                            </p>
+                            <h4 style="margin: 0 0 4px 0;">${displayModeName}</h4>
+                            
+                            <div style="font-size: 13px; color: #555; line-height: 1.4;">
+                                <span style="font-weight:bold; color:#333;">${durationText}</span> • ${distanceKm.toFixed(1)} ${window.getTrans('map_unit_km')}
+                                
+                                <div style="margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
+                                    ${tagsHtml}
+                                </div>
+                            </div>
                         </div>
                     </div>
+
                     <div class="option-right">
-                        <div class="price" style="font-weight: bold; font-size: 14px;">${item.display_price}</div>
+                        <div class="price" style="font-weight: bold; font-size: 15px; color:#2c3e50;">${item.display_price}</div>
                         <div class="vehicle-score-new" style="color: ${scoreColor}; display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 4px; font-size: 13px; font-weight: bold;">
-                            <span style="color: #FFD700; font-size: 16px;">★</span> ${item.score}/10
+                            <span style="color: #FFD700; font-size: 14px;">★</span> ${item.score}/10
                         </div>
                     </div>
                 </div>
@@ -460,9 +568,14 @@ window.confirmRoute = function() {
         if (!selectedCard) {
             // Nếu có SweetAlert2 thì dùng, không thì dùng alert thường
             if (typeof Swal !== 'undefined') {
-                Swal.fire('Chưa chọn xe', 'Vui lòng chọn một phương tiện để tiếp tục', 'warning');
+                // [SỬA] Dùng getTrans
+                Swal.fire(
+                    window.getTrans('alert_title_select'), 
+                    window.getTrans('map_alert_select'), 
+                    'warning'
+                );
             } else {
-                alert("Vui lòng chọn một phương tiện!");
+                    alert(window.getTrans('map_alert_select'));
             }
             return;
         }
@@ -496,22 +609,20 @@ window.confirmRoute = function() {
         
         if (typeof Swal !== 'undefined') {
             Swal.fire({
-                title: 'Xác nhận chuyển hướng',
-                text: `Mở ứng dụng/website của ${selectedCard.dataset.vehicle}?`,
+                title: window.getTrans('alert_title_redirect'),
+                text: `${window.getTrans('alert_desc_redirect')} ${selectedCard.dataset.vehicle}?`,
                 icon: 'info',
                 showCancelButton: true,
                 confirmButtonColor: '#3C7363',
                 cancelButtonColor: '#d33',
-                confirmButtonText: 'Đi ngay',
-                cancelButtonText: 'Hủy'
+                confirmButtonText: window.getTrans('btn_go'),
+                cancelButtonText: window.getTrans('btn_cancel')
             }).then((result) => {
-                if (result.isConfirmed) {
-                    window.open(targetUrl, '_blank'); // Mở tab mới
-                }
+                if (result.isConfirmed) window.open(targetUrl, '_blank');
             });
         } else {
             // Fallback nếu không có SweetAlert2
-            if (confirm(confirmMessage)) {
+            if (confirm(`${window.getTrans('alert_desc_redirect')} ${selectedCard.dataset.vehicle}?`)) {
                 window.open(targetUrl, '_blank');
             }
         }

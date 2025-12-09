@@ -540,23 +540,6 @@ body {
 }
 
 /* ============================================== */
-/* FIX GỢI Ý DROP-DOWN (CHUẨN GOOGLE MAPS) */
-/* ============================================== */
-
-
-/* --- BỔ SUNG: CĂN GIỮA HỘP THOẠI CHUYỂN APP (SWEETALERT2) --- */
-div:where(.swal2-container) {
-    display: grid !important;
-    place-items: center !important; /* Căn giữa tuyệt đối cả dọc và ngang */
-    z-index: 10000 !important;      /* Đảm bảo nổi lên trên cùng */
-}
-
-/* Đảm bảo hộp thoại không bị dính lên top */
-div:where(.swal2-popup) {
-    margin: auto !important;
-}
-
-/* ============================================== */
 /* FIX FINAL: GIAO DIỆN GỢI Ý & ICON (CHUẨN 100%) */
 /* ============================================== */
 
@@ -619,3 +602,40 @@ div:where(.swal2-popup) {
     align-items: center !important;
     justify-content: center !important;
 }
+/* =========================================
+   [NEW] SWEETALERT2 STYLES (MOVED FROM HTML)
+   ========================================= */
+
+/* --- BỔ SUNG: CĂN GIỮA HỘP THOẠI CHUYỂN APP (SWEETALERT2) --- */
+div:where(.swal2-container) {
+    display: grid !important;
+    place-items: center !important; /* Căn giữa tuyệt đối cả dọc và ngang */
+    z-index: 10000 !important;      /* Đảm bảo nổi lên trên cùng */
+}
+
+/* Đảm bảo hộp thoại không bị dính lên top */
+div:where(.swal2-popup) {
+    margin: auto !important;
+}
+
+div:where(.swal2-container) {
+    display: grid !important;
+    place-items: center !important;
+    z-index: 10000 !important;
+}
+
+div:where(.swal2-container) button:where(.swal2-styled).swal2-confirm {
+    background-color: #3C7363 !important;
+    box-shadow: 0 0 0 3px rgba(60, 115, 99, 0.2) !important;
+}
+
+div:where(.swal2-icon).swal2-info {
+    border-color: #3C7363 !important;
+    color: #3C7363 !important;
+}
+
+div:where(.swal2-popup) {
+    font-family: inherit !important;
+    border-radius: 12px !important;
+}
+
