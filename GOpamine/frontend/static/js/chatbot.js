@@ -10,6 +10,15 @@ let sessionId = null;
 const CHAT_HISTORY_PREFIX = 'chatHistory:';
 let historyKey = null;
 
+// === HÀM HỖ TRỢ ĐA NGÔN NGỮ ===
+function getTrans(key) {
+    const lang = localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi';
+    if (window.translations && window.translations[lang] && window.translations[lang][key]) {
+        return window.translations[lang][key];
+    }
+    return key; // Trả về key gốc nếu không tìm thấy
+}
+
 // === HÀM KIỂM TRA ĐĂNG NHẬP ===
 function isUserLoggedIn() {
     return document.querySelector('.user-profile-container') !== null;
@@ -119,24 +128,55 @@ function showWelcomeMessage() {
 }
 
 function generateAutoPrompt(formData) {
-    let prompt = "Tôi muốn được tư vấn về lộ trình di chuyển. ";
+    // 1. Kiểm tra ngôn ngữ hiện tại
+    const lang = localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi';
+    const isEn = lang === 'en';
+
+    // 2. Định nghĩa bộ từ vựng (Templates)
+    const t = {
+        intro: isEn ? "I would like advice on a travel route. " : "Tôi muốn được tư vấn về lộ trình di chuyển. ",
+        origin: isEn ? "My starting point is " : "Điểm xuất phát của tôi là ",
+        dest_single: isEn ? "I want to go to " : "Tôi muốn đi đến ",
+        dest_multi: isEn ? "I want to visit the following places: " : "Tôi muốn đi đến các điểm sau: ",
+        budget: isEn ? "Budget: " : "Ngân sách: ",
+        currency: isEn ? " VND. " : " VNĐ. ",
+        passengers: isEn ? "Passengers: " : "Số khách: ",
+        pref: isEn ? "Priorities: " : "Ưu tiên: ",
+        closing: isEn 
+            ? "Can you suggest suitable transport modes and routes? Please answer in English." 
+            : "Bạn có thể tư vấn phương tiện và lộ trình phù hợp không?"
+    };
+
+    // 3. Ráp câu (Logic giữ nguyên như cũ)
+    let prompt = t.intro;
     
     if (formData.origin) {
         const originName = typeof formData.origin === 'string' ? formData.origin : formData.origin.name || '';
-        if (originName) prompt += `Điểm xuất phát của tôi là ${originName}. `;
+        if (originName) prompt += `${t.origin}${originName}. `;
     }
     
     if (formData.destinations && formData.destinations.length > 0) {
         const destNames = formData.destinations.map(dest => typeof dest === 'string' ? dest : dest.name).filter(Boolean);
-        if (destNames.length === 1) prompt += `Tôi muốn đi đến ${destNames[0]}. `;
-        else if (destNames.length > 1) prompt += `Tôi muốn đi đến các điểm sau: ${destNames.join(', ')}. `;
+        if (destNames.length === 1) prompt += `${t.dest_single}${destNames[0]}. `;
+        else if (destNames.length > 1) prompt += `${t.dest_multi}${destNames.join(', ')}. `;
     }
     
-    if (formData.budget) prompt += `Ngân sách: ${parseInt(formData.budget).toLocaleString('vi-VN')} VNĐ. `;
-    if (formData.passengers) prompt += `Số khách: ${formData.passengers}. `;
-    if (formData.preferences && formData.preferences.length > 0) prompt += `Ưu tiên: ${formData.preferences.join(', ')}. `;
+    if (formData.budget) {
+        prompt += `${t.budget}${parseInt(formData.budget).toLocaleString('vi-VN')}${t.currency}`;
+    }
     
-    prompt += "Bạn có thể tư vấn phương tiện và lộ trình phù hợp không?";
+    if (formData.passengers) {
+        prompt += `${t.passengers}${formData.passengers}. `;
+    }
+    
+    if (formData.preferences && formData.preferences.length > 0) {
+        // Lưu ý: Các từ khóa trong preferences có thể vẫn là Tiếng Việt (do lưu từ Form)
+        // Nhưng Gemini sẽ tự hiểu được ngữ cảnh này.
+        prompt += `${t.pref}${formData.preferences.join(', ')}. `;
+    }
+    
+    prompt += t.closing;
+    
     return prompt;
 }
 
@@ -165,7 +205,7 @@ async function sendMessageToBackend(message, allowRetry = true) {
     typingIndicator.className = 'bot-message typing-indicator';
     typingIndicator.innerHTML = `
         <div class="bot-avatar"><img src="../static/image/logo.jpg" alt="bot-avatar"></div>
-        <div class="message-bubble">Đang suy nghĩ...</div>
+        <div class="message-bubble">${getTrans('status_typing')}</div>
     `;
     chatContainer.appendChild(typingIndicator);
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -199,7 +239,7 @@ async function sendMessageToBackend(message, allowRetry = true) {
         errorMessage.className = 'bot-message';
         errorMessage.innerHTML = `
             <div class="bot-avatar"><img src="../static/image/logo.jpg" alt="bot-avatar"></div>
-            <div class="message-bubble" style="background: #ffebee; color: #c62828;">❌ Lỗi: ${error.message}</div>
+            <div class="message-bubble" style="background: #ffebee; color: #c62828;">❌ Lỗi: ${getTrans('error_prefix')} ${error.message}</div>
         `;
         chatContainer.appendChild(errorMessage);
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -353,8 +393,8 @@ async function handleLogout() {
         if (result.success) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
-                    title: 'Đã đăng xuất!',
-                    text: 'Hẹn gặp lại bạn.',
+                    title: getTrans('logout_success_title'),
+                    text: getTrans('logout_success_text'),
                     icon: 'success',
                     timer: 1500,
                     showConfirmButton: false
@@ -383,19 +423,19 @@ if (logoutBtn) {
 
         if (typeof Swal !== 'undefined') {
             Swal.fire({
-                title: 'Đăng xuất?',
-                text: "Lịch sử chat sẽ bị xóa.",
+                title: getTrans('logout_confirm_title'),
+                text: getTrans('logout_confirm_text'),
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#3C7363',
                 cancelButtonColor: '#d33',
-                confirmButtonText: 'Đăng xuất',
-                cancelButtonText: 'Hủy'
+                confirmButtonText: getTrans('btn_confirm'),
+                cancelButtonText: getTrans('btn_cancel')
             }).then((result) => {
                 if (result.isConfirmed) doLogout();
             });
         } else {
-            if (confirm('Bạn có chắc muốn đăng xuất? Lịch sử chat sẽ bị xóa.')) doLogout();
+            if (confirm(getTrans('logout_confirm_text'))) doLogout();
         }
     });
 }
