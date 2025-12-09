@@ -146,15 +146,42 @@ async function sendAutoPrompt() {
         if (!pendingFormDataStr) return;
         
         const formData = JSON.parse(pendingFormDataStr);
-        console.log('📋 Phát hiện form data, tạo prompt tự động...');
+
+        // --- LOGIC KIỂM TRA TRÙNG LẶP (FINGERPRINT) ---
+        
+        // 1. Tạo "chữ ký" cho dữ liệu mới
+        // (Đảm bảo bạn đã có hàm generateRouteSignature trong file này)
+        const currentSignature = generateRouteSignature(formData);
+        
+        // 2. Lấy "chữ ký" cũ
+        const lastSignature = localStorage.getItem('lastRouteSignature');
+        
+        // 3. Dọn dẹp dữ liệu chờ (Xóa ngay để tránh xử lý lại nếu user refresh)
         localStorage.removeItem('pendingFormData');
+
+        // 4. SO SÁNH: Nếu giống hệt nhau -> DỪNG (Im lặng)
+        if (currentSignature && currentSignature === lastSignature) {
+            console.log('🛑 Lộ trình trùng khớp. Không gửi gợi ý lại.');
+            return; 
+        }
+
+        // 5. Nếu khác -> Lưu chữ ký mới và tiếp tục
+        console.log('📋 Lộ trình thay đổi. Gửi gợi ý mới...');
+        localStorage.setItem('lastRouteSignature', currentSignature);
+        
+        // --- TẠO VÀ GỬI PROMPT ---
         
         const autoPrompt = generateAutoPrompt(formData);
+        
+        // Đợi UI ổn định xíu
         await new Promise(resolve => setTimeout(resolve, 500));
         
         if (sessionId) await sendMessageToBackend(autoPrompt);
+
     } catch (error) {
         console.error('❌ Error sending auto prompt:', error);
+        // Xóa để tránh lỗi lặp lại vô tận
+        localStorage.removeItem('pendingFormData');
     }
 }
 
@@ -312,7 +339,16 @@ function setupHeaderNavigation() {
     const backBtn = document.querySelector('.back-btn');
     const toggleBtns = document.querySelectorAll('.toggle-btn');
     
-    if (backBtn) backBtn.addEventListener('click', () => window.history.back());
+    if (backBtn) {
+        backBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Gọi hàm với danh sách các trang "con" cần né
+            // Nếu user vừa từ 'chatbot' hoặc 'map' quay lại Form, 
+            // nút Back này sẽ đưa họ về Home chứ KHÔNG quay lại Chatbot/Map nữa.
+            goToPreviousPage('/', ['chatbot', 'confirm']); 
+        });
+    }
     
     if (toggleBtns.length > 0) {
         toggleBtns.forEach(btn => {
@@ -324,6 +360,21 @@ function setupHeaderNavigation() {
 }
 setupHeaderNavigation();
 
+// 1. Đảm bảo hàm này CÓ mặt trong file chatbot.js (hoặc file utils chung)
+function goToPreviousPage(fallbackUrl = '/', ignorePaths = []) {
+    const currentDomain = window.location.origin;
+    const referrer = document.referrer;
+    const isInternal = referrer && referrer.indexOf(currentDomain) === 0;
+    const isIgnored = ignorePaths.some(path => referrer.includes(path));
+
+    if (isInternal && !isIgnored) {
+        window.history.back();
+    } else {
+        window.location.href = fallbackUrl;
+    }
+}
+
+// === PROFILE DROPDOWN TOGGLE ===
 const profileTrigger = document.getElementById('profileTrigger');
 const profileDropdown = document.getElementById('profileDropdown');
 
@@ -415,3 +466,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// === HÀM HỖ TRỢ SO SÁNH DỮ LIỆU ===
+function generateRouteSignature(formData) {
+    if (!formData) return '';
+
+    // 1. Lấy thông tin điểm đi
+    let originStr = '';
+    if (formData.origin) {
+        originStr = typeof formData.origin === 'string' 
+            ? formData.origin 
+            : `${formData.origin.name}_${formData.origin.lat}_${formData.origin.lon}`;
+    }
+
+    // 2. Lấy thông tin điểm đến (nối tất cả lại)
+    let destStr = '';
+    if (Array.isArray(formData.destinations)) {
+        destStr = formData.destinations.map(d => {
+            return typeof d === 'string' 
+                ? d 
+                : `${d.name}_${d.lat}_${d.lon}`;
+        }).join('|'); // Dùng dấu gạch đứng để ngăn cách
+    }
+
+    // Kết quả: "StartName_10.1_106.2||Dest1_10.3_106.4|Dest2..."
+    return `${originStr}||${destStr}`;
+}

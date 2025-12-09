@@ -517,5 +517,121 @@ window.confirmRoute = function() {
         }
     };
 };
-window.goToPreviousPage = () => window.history.back();
-window.goBack = () => window.location.href = '/chatbot';
+
+// =============================================================================
+// 8. LOGIC TƯ VẤN AI (ĐÃ CẬP NHẬT MULTI-STOP)
+// =============================================================================
+
+// =============================================================================
+// 8. LOGIC TƯ VẤN AI (FIX: GIẢ LẬP FORM DATA ĐỂ CHATBOT NHẬN DIỆN)
+// =============================================================================
+
+window.consultWithAI = async function() {
+    const btn = document.querySelector('.btn-secondary'); 
+    const originalText = btn ? btn.textContent : 'Tư Vấn Với AI';
+    
+    if (btn) {
+        btn.textContent = 'Đang kết nối AI...';
+        btn.disabled = true;
+    }
+
+    try {
+        // 1. Lấy dữ liệu lộ trình
+        const storedRouteJSON = localStorage.getItem('selectedRoute');
+        if (!storedRouteJSON) throw new Error("Chưa có dữ liệu lộ trình.");
+
+        const routeData = JSON.parse(storedRouteJSON);
+        const waypoints = routeData.waypoints; // [Start, Stop1, ..., End]
+
+        if (!waypoints || waypoints.length < 2) throw new Error("Lộ trình không hợp lệ.");
+
+        const origin = waypoints[0];
+        const destinations = waypoints.slice(1);
+
+        // 2. CHUẨN BỊ PAYLOAD (Quan trọng: Format giống hệt form.js)
+        // AI sẽ nhìn vào đây để biết user muốn gì
+        const aiFormData = {
+            origin: {
+                name: origin.name,
+                lat: origin.lat,
+                lon: origin.lon || origin.lng
+            },
+            destinations: destinations.map(wp => ({
+                name: wp.name,
+                lat: wp.lat,
+                lon: wp.lon || wp.lng
+            })),
+            // Các trường phụ trợ để AI không bị null
+            budget: 0, 
+            passengers: "1",
+            preferences: ["Tối ưu đường đi", "Tiết kiệm thời gian"], 
+            context_type: "route_consultation" // Cờ đánh dấu để AI biết là tư vấn map
+        };
+        
+        console.log('📦 Đóng gói dữ liệu Map -> Form Data:', aiFormData);
+
+        // 3. Gửi dữ liệu về Backend (Sync Session)
+        let sessionId = localStorage.getItem('sessionId');
+        if (sessionId) {
+            await fetch('/api/form', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    form_data: aiFormData
+                })
+            });
+        }
+
+        // 4. [QUAN TRỌNG NHẤT] Lưu vào localStorage key 'pendingFormData'
+        // Đây chính là thứ mà chatbot.js sẽ kiểm tra khi load trang!
+        localStorage.setItem('pendingFormData', JSON.stringify(aiFormData));
+        
+        // Đánh dấu thêm cờ này để chatbot biết không cần hỏi lại câu chào
+        localStorage.setItem('msg_context', 'map_consultation'); 
+
+        // 5. Chuyển trang
+        window.location.href = '/chatbot';
+
+    } catch (error) {
+        console.error("❌ Lỗi:", error);
+        alert(error.message);
+        if (btn) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+};
+// =============================================================================
+// 9. HÀM QUAY LẠI TRANG TRƯỚC (CẢI TIẾN)
+// =============================================================================
+
+function goToPreviousPage(fallbackUrl = '/', ignorePaths = []) {
+    const currentDomain = window.location.origin;
+    const referrer = document.referrer;
+
+    // 1. Kiểm tra cơ bản
+    const isInternal = referrer && referrer.indexOf(currentDomain) === 0;
+
+    // 2. Kiểm tra Vòng lặp
+    const isIgnored = ignorePaths.some(path => referrer.includes(path));
+
+    // LOGIC QUYẾT ĐỊNH
+    if (isInternal && !isIgnored) {
+        window.history.back();
+    } else {
+        console.log('🔄 Luồng không an toàn hoặc vòng lặp -> Về:', fallbackUrl);
+        window.location.href = fallbackUrl;
+    }
+}
+
+const backBtn = document.querySelector('.back-btn'); // Hoặc nút back trên map
+if (backBtn) {
+    backBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        // QUAN TRỌNG: Tại MAP mới cần chặn CHATBOT
+        // Logic: Nếu vừa từ Chatbot về đây -> Bấm back phát nữa thì về Home luôn.
+        goToPreviousPage('/', ['chatbot']); 
+    });
+}
