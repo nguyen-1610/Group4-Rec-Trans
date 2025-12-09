@@ -504,3 +504,118 @@ div:where(.swal2-popup) {
     font-family: inherit !important;
     border-radius: 12px !important;
 }
+
+.gps-center-btn {
+    position: absolute !important;
+    bottom: 100px;
+    right: 15px;
+    z-index: 2000 !important;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: white;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: #5f6368;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.gps-center-btn:hover {
+    background-color: #f1f3f4;
+    color: #4285f4;
+}
+
+.gps-center-btn svg {
+    fill: currentColor;
+    width: 24px;
+    height: 24px;
+}
+
+.gps-center-btn:hover {
+    background-color: #f1f3f4;
+    color: #4285f4;
+    transform: scale(1.1);
+}
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* 2. Style Chấm xanh (Blue Dot) */
+.user-location-marker {
+    background: transparent !important;
+    border: none !important;
+    z-index: 500 !important; /* Đảm bảo nổi lên trên các marker khác */
+    pointer-events: none;     /* Cho phép click xuyên qua để bấm vào bản đồ bên dưới */
+}
+
+.user-dot {
+    width: 16px;
+    height: 16px;
+    background-color: #4285f4;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1 4px rgba(0,0,0,0.3);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+}
+
+.user-pulse {
+    width: 48px;
+    height: 48px;
+    background-color: rgba(66, 133, 244, 0.25); /* Sóng xanh */
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse-ring 2.5s infinite;
+}
+
+/* --- BỔ SUNG: CHẤM MÀU XANH CHO ĐIỂM A (START POINT) --- */
+
+/* Class container cho marker Điểm A */
+.start-point-marker {
+    background: transparent !important;
+    border: none !important;
+    z-index: 8000 !important; /* Nổi cao, nhưng thấp hơn user-dot một xíu nếu muốn */
+    pointer-events: none;
+}
+
+/* Chấm tròn xanh dương (Giống style GPS cũ) */
+.blue-dot-a {
+    width: 18px;
+    height: 18px;
+    background-color: #4285f4; /* Xanh dương Google */
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+}
+
+/* Hiệu ứng sóng xanh (Pulse) để gây chú ý vào điểm A */
+.blue-pulse-a {
+    width: 48px;
+    height: 48px;
+    background-color: rgba(66, 133, 244, 0.25);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse-ring 2.5s infinite;
+}
+
+@keyframes pulse-ring {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    50% { opacity: 0.5; }
+    100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }}

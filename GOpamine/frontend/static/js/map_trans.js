@@ -79,6 +79,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     applyStaticTranslations();
 
+    // [STATE MỚI] Quản lý vị trí người dùng
+    let userLocationMarker = null; // Chấm tròn xanh
+    let userLocationCircle = null; // Vòng tròn sai số (Accuracy)
+    let isUserTracking = false;    // Trạng thái có đang bám theo người dùng không
     // =========================================================================
     // 1. KHỞI TẠO BẢN ĐỒ & LAYER
     // =========================================================================
@@ -192,6 +196,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         if (isValid) {
             recalculateRoute();
+        }
+
+        // [MỚI] Nếu cập nhật điểm đầu tiên (Index 0), hãy vẽ lại Chấm Xanh
+        if (index === 0) {
+            updateStartPointBlueDot();
         }
     }
 
@@ -540,12 +549,90 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
     }
+
+    
+    // =========================================================================
+    // [FINAL] LOGIC: 1 CHẤM XANH (GPS) & NÚT VỀ GHIM A
+    // =========================================================================
+
+    // 1. Icon Chấm Xanh (GPS Thực tế)
+    // Sử dụng đúng class .user-dot và .user-pulse mà bạn đã có trong CSS
+    const userGpsIcon = L.divIcon({
+        className: 'user-location-marker',
+        html: '<div class="user-pulse"></div><div class="user-dot"></div>',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
+    
+    // 2. Logic Hiển thị Chấm Xanh (Luôn chạy ngầm để biết mình đang ở đâu)
+    map.locate({ watch: true, enableHighAccuracy: true });
+
+    map.on('locationfound', function(e) {
+        // Chỉ vẽ chấm xanh tại vị trí thực. KHÔNG tự động bay camera.
+        if (!userLocationMarker) {
+            userLocationMarker = L.marker(e.latlng, { icon: userGpsIcon, zIndexOffset: 400 }).addTo(map);
+        } else {
+            userLocationMarker.setLatLng(e.latlng);
+        }
+    });
+
+    map.on('locationerror', function(e) {
+        console.warn("⚠️ GPS Error:", e.message);
+    });
+
+    // 3. Logic Nút Bấm: TRỎ VÀO GHIM A (Điểm xuất phát)
+    const recenterBtn = document.getElementById('btn-recenter-gps');
+    if (recenterBtn) {
+        // Icon Target/Mũi tên (SVG)
+        recenterBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24px" height="24px">
+                <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+            </svg>
+        `;
+        
+        recenterBtn.title = "Về điểm xuất phát"; 
+
+        recenterBtn.addEventListener('click', function() {
+            // Lấy tọa độ GHIM A (Điểm đầu tiên trong mảng currentWaypoints)
+            // Ghim A này được tạo ra bởi hàm drawRouteOnMap -> Nó là ghim màu xanh lá/đỏ trên bản đồ
+            const startPoint = currentWaypoints[0];
+
+            if (startPoint && startPoint.lat && startPoint.lon) {
+                // => CÓ ĐIỂM A: Bay thẳng tới đó
+                console.log("📍 Bay về Ghim A:", startPoint.name);
+                map.flyTo([startPoint.lat, startPoint.lon], 15, { animate: true, duration: 1.2 });
+                
+                // Hiệu ứng Toast báo cho user biết
+                if(typeof Swal !== 'undefined') {
+                    const Toast = Swal.mixin({
+                        toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
+                    });
+                    Toast.fire({ icon: 'info', title: 'Điểm xuất phát' });
+                }
+            } 
+            else if (userLocationMarker) {
+                // => KHÔNG CÓ ĐIỂM A: Bay về GPS (Dự phòng)
+                map.flyTo(userLocationMarker.getLatLng(), 16, { animate: true, duration: 1.2 });
+                
+                if(typeof Swal !== 'undefined') {
+                    const Toast = Swal.mixin({
+                        toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
+                    });
+                    Toast.fire({ icon: 'warning', title: 'Chưa có điểm xuất phát. Hiển thị vị trí thực.' });
+                }
+            } else {
+                 // Fallback cuối cùng: Thử kích hoạt lại GPS
+                 map.locate({ setView: true, maxZoom: 16 });
+            }
+        });
+    }
 });
 
 window.switchTab = (arg1, arg2) => {
     const tabName = (typeof arg1 === 'string') ? arg1 : arg2;
     if (tabName === 'ai' || tabName === 'chatbot') window.location.href = '/chatbot';
 };
+
 window.confirmRoute = function() {
     // =============================================================================
     // 7. GLOBAL FUNCTIONS (ĐÃ CẬP NHẬT LOGIC CHUYỂN APP)

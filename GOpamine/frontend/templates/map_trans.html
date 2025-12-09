@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" />
     
     <link rel="stylesheet" href="../static/css/map_trans.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -21,6 +22,9 @@
                 <button class="tab-btn active" onclick="switchTab('map')">Map</button>
                 <button class="tab-btn" onclick="switchTab('ai')">AI</button>
             </div>
+            <button class="gps-center-btn" id="btn-recenter-gps" title="Vị trí của tôi">
+                <i class="fas fa-crosshairs"></i>
+            </button>
         </div>
 
         <div class="map-search-overlay">
