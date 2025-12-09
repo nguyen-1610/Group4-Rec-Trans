@@ -11,22 +11,6 @@
     <link rel="stylesheet" href="../static/css/map_trans.css">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <style>
-        div:where(.swal2-container) {
-            display: grid !important;
-            place-items: center !important;
-            z-index: 10000 !important; /* Nổi lên trên bản đồ */
-        }
-        div:where(.swal2-container) button:where(.swal2-styled).swal2-confirm {
-            background-color: #3C7363 !important;
-            box-shadow: 0 0 0 3px rgba(60, 115, 99, 0.2) !important;
-        }
-        div:where(.swal2-icon).swal2-info {
-            border-color: #3C7363 !important;
-            color: #3C7363 !important;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
@@ -44,7 +28,7 @@
                 </div>
             
             <div class="add-stop-container">
-                <button id="add-stop-btn" class="add-stop-btn">
+                <button id="add-stop-btn" class="add-stop-btn" span data-i18n="map_add_stop">
                     <i class="fas fa-plus-circle"></i> Thêm điểm đến
                 </button>
             </div>
@@ -61,10 +45,10 @@
         </div>
 
     <div class="action-buttons">
-        <button class="btn btn-secondary" onclick="goBack()">
+        <button class="btn btn-secondary" onclick="goBack()" data-i18n="map_consult_ai">
             Tư Vấn Với AI
         </button>
-        <button class="btn btn-primary" onclick="confirmRoute()">
+        <button class="btn btn-primary" onclick="confirmRoute()" data-i18n="map_select_btn">
             Chọn
         </button>
     </div>

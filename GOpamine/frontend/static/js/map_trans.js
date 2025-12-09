@@ -519,3 +519,98 @@ window.confirmRoute = function() {
 };
 window.goToPreviousPage = () => window.history.back();
 window.goBack = () => window.location.href = '/chatbot';
+
+// ============================================================
+// [I18N] TỪ ĐIỂN & LOGIC CHO MAP (FIX FREEZING BUG)
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Khởi tạo từ điển
+    window.translations = window.translations || { vi: {}, en: {} };
+
+    if (window.translations) {
+        Object.assign(window.translations.vi, {
+            map_add_stop: "Thêm điểm đến",
+            map_consult_ai: "Tư Vấn Với AI",
+            map_select_btn: "Chọn",
+            map_unit_min: "phút",
+            map_loading: "Đang tính toán...",
+            map_alert_select: "Vui lòng chọn một phương tiện!"
+        });
+
+        Object.assign(window.translations.en, {
+            map_add_stop: "Add Destination",
+            map_consult_ai: "Ask AI Assistant",
+            map_select_btn: "Select",
+            map_unit_min: "min",
+            map_loading: "Calculating...",
+            map_alert_select: "Please select a vehicle to continue!"
+        });
+    }
+
+    // 2. Hàm lấy ngôn ngữ hiện tại
+    window.getCurrentLanguage = function() {
+        return localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi';
+    };
+
+    // 3. Logic dịch lại các Thẻ xe (AN TOÀN - KHÔNG GÂY TREO)
+    window.updateMapJS = function(lang) {
+        const t = window.translations[lang] || window.translations['vi'];
+        const unit = t.map_unit_min; // "phút" hoặc "min"
+
+        document.querySelectorAll('.option-card').forEach(card => {
+            const timeEl = card.querySelector('.vehicle-info p span:first-child'); 
+            if (timeEl) {
+                const text = timeEl.textContent; // Ví dụ: "45 phút"
+                
+                // [FIX LOOP] Chỉ cập nhật nếu text CHƯA chứa đơn vị mới
+                // Nếu đã là "45 min" rồi thì không gán lại nữa -> Ngăn vòng lặp
+                if (!text.includes(unit)) {
+                    const val = parseInt(text); 
+                    if (!isNaN(val)) {
+                        timeEl.textContent = `${val} ${unit}`;
+                    }
+                }
+            }
+        });
+        
+        // Cập nhật text các nút tĩnh (nếu cần)
+        const btnConsult = document.querySelector('button[data-i18n="map_consult_ai"]');
+        if (btnConsult) btnConsult.textContent = t.map_consult_ai;
+        
+        const btnSelect = document.querySelector('button[data-i18n="map_select_btn"]');
+        if (btnSelect) btnSelect.textContent = t.map_select_btn;
+    };
+
+    // 4. Lắng nghe đổi ngôn ngữ (nếu có nút switch)
+    const langSwitch = document.getElementById('langSwitch');
+    if (langSwitch) {
+        // Set trạng thái ban đầu
+        if (window.getCurrentLanguage() === 'vi') langSwitch.classList.add('active');
+        
+        langSwitch.addEventListener('click', () => {
+            setTimeout(() => {
+                const currentLang = window.getCurrentLanguage();
+                window.updateMapJS(currentLang);
+            }, 50);
+        });
+    }
+
+    // 5. Quan sát thay đổi DOM (MutationObserver) - ĐÃ ĐƯỢC VÁ LỖI
+    const vehicleContainer = document.querySelector('.vehicle-scroll-container');
+    if (vehicleContainer) {
+        const observer = new MutationObserver(() => {
+            const currentLang = window.getCurrentLanguage();
+            // Gọi hàm updateMapJS đã được vá lỗi logic bên trên
+            window.updateMapJS(currentLang);
+        });
+        
+        // Chỉ quan sát sự thay đổi của danh sách con (childList), không quan sát subtree quá sâu
+        observer.observe(vehicleContainer, { childList: true });
+    }
+    
+    // Chạy lần đầu ngay khi load
+    setTimeout(() => {
+        window.updateMapJS(window.getCurrentLanguage());
+    }, 100);
+});
