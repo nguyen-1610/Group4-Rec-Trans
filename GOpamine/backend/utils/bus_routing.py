@@ -2,6 +2,33 @@ import sqlite3
 import math
 import os
 import requests 
+import logging  
+from datetime import datetime  
+
+# ========== THÊM SETUP LOGGING ==========
+def setup_route_logger():
+    """Tạo logger riêng cho bus routing"""
+    log_dir = os.path.join(os.path.dirname(__file__), '../../logs')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    log_file = os.path.join(log_dir, f'bus_routing_{datetime.now().strftime("%Y%m%d")}.log')
+    
+    logger = logging.getLogger('bus_routing')
+    logger.setLevel(logging.INFO)
+    
+    # Tránh duplicate handlers
+    if not logger.handlers:
+        handler = logging.FileHandler(log_file, encoding='utf-8')
+        handler.setFormatter(logging.Formatter(
+            '%(asctime)s [%(levelname)s] %(message)s',
+            datefmt='%H:%M:%S'
+        ))
+        logger.addHandler(handler)
+    
+    return logger
+
+route_logger = setup_route_logger()
+# =========================================
 
 # =========================================================
 # 1. CẤU HÌNH & HÀM CƠ BẢN
@@ -49,50 +76,186 @@ def parse_path_string(path_str):
     return points
 
 def fetch_road_geometry_osrm(stops_list):
-    if not stops_list or len(stops_list) < 2: return stops_list
+    """
+    Gọi OSRM API để lấy đường đi thực tế
+    IMPROVED: Retry logic, better timeout, error handling
+    """
+    if not stops_list or len(stops_list) < 2:
+        return stops_list
+    
     final_geometry = []
     CHUNK_SIZE = 25
+    MAX_RETRIES = 2
+    
     for i in range(0, len(stops_list) - 1, CHUNK_SIZE - 1):
         chunk = stops_list[i : i + CHUNK_SIZE]
-        if len(chunk) < 2: continue
+        if len(chunk) < 2:
+            continue
+        
         coords_str = ";".join([f"{lon},{lat}" for lat, lon in chunk])
         url = f"http://router.project-osrm.org/route/v1/driving/{coords_str}?overview=full&geometries=geojson"
-        try:
-            resp = requests.get(url, timeout=1.0)
-            if resp.status_code == 200 and resp.json()['code'] == 'Ok':
-                geo = resp.json()['routes'][0]['geometry']['coordinates']
-                converted = [[p[1], p[0]] for p in geo]
-                if len(final_geometry) > 0: final_geometry.extend(converted[1:])
-                else: final_geometry.extend(converted)
-            else: final_geometry.extend(chunk)
-        except: final_geometry.extend(chunk)
+        
+        success = False
+        
+        for attempt in range(MAX_RETRIES):
+            try:
+                resp = requests.get(url, timeout=3.0)  # Tăng timeout
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    
+                    if data.get('code') == 'Ok':
+                        geo = data['routes'][0]['geometry']['coordinates']
+                        converted = [[p[1], p[0]] for p in geo]  # Swap lon/lat → lat/lon
+                        
+                        # Nối segment (tránh duplicate điểm)
+                        if len(final_geometry) > 0:
+                            final_geometry.extend(converted[1:])
+                        else:
+                            final_geometry.extend(converted)
+                        
+                        success = True
+                        break
+                    else:
+                        route_logger.warning(f"OSRM_CODE_ERROR | Code={data.get('code')} | Attempt={attempt+1}")
+                        
+            except requests.Timeout:
+                route_logger.warning(f"OSRM_TIMEOUT | Attempt={attempt+1}/{MAX_RETRIES}")
+                if attempt < MAX_RETRIES - 1:
+                    import time
+                    time.sleep(0.5)
+                    
+            except Exception as e:
+                route_logger.warning(f"OSRM_ERROR | Error={str(e)} | Attempt={attempt+1}")
+                break
+        
+        # Nếu tất cả retry đều fail → dùng đường thẳng
+        if not success:
+            route_logger.error(f"OSRM_FALLBACK_STRAIGHT | Chunk={i//CHUNK_SIZE}")
+            final_geometry.extend(chunk)
+    
     return final_geometry
 
 def get_official_path_from_db(conn, route_id, direction, start_order, end_order):
+    """
+    Lấy đường đi thực tế từ database với pathPoints
+    FIX: Thêm start station, detect gap, improve fallback
+    """
     try:
-        query = "SELECT pathPoints FROM stations WHERE RouteId = ? AND StationDirection = ? AND StationOrder >= ? AND StationOrder <= ? ORDER BY StationOrder ASC"
+        # ========== BƯỚC 1: LẤY TỌA ĐỘ TRẠM ĐẦU (CRITICAL!) ==========
+        start_station = conn.execute(
+            "SELECT Lat, Lng, StationName FROM stations WHERE RouteId=? AND StationDirection=? AND StationOrder=?",
+            (route_id, direction, start_order)
+        ).fetchone()
+        
+        if not start_station:
+            route_logger.error(f"MISSING_START | RouteID={route_id} Dir={direction} Order={start_order}")
+            raise Exception("Không tìm thấy trạm đầu")
+        
+        # Khởi tạo path với điểm đầu tiên
+        full_path = [[start_station[0], start_station[1]]]
+        route_logger.info(f"PATH_START | Route={route_id} | Station={start_station[2]} | Coord=[{start_station[0]:.6f}, {start_station[1]:.6f}]")
+        
+        # ========== BƯỚC 2: LẤY PATHPOINTS TỪ CÁC TRẠM ==========
+        query = """
+            SELECT StationOrder, StationName, pathPoints, Lat, Lng
+            FROM stations 
+            WHERE RouteId = ? AND StationDirection = ? 
+            AND StationOrder >= ? AND StationOrder < ?
+            ORDER BY StationOrder ASC
+        """
         rows = conn.execute(query, (route_id, direction, start_order, end_order)).fetchall()
-        full_path = []
-        has_path = False
+        
+        has_valid_path = False
+        total_gaps = 0
+        
         for row in rows:
-            if row[0]:
-                seg = parse_path_string(row[0])
-                if seg:
-                    full_path.extend(seg)
-                    has_path = True
-        end_node = conn.execute("SELECT Lat, Lng FROM stations WHERE RouteId=? AND StationDirection=? AND StationOrder=?", (route_id, direction, end_order)).fetchone()
-        if end_node: full_path.append([end_node[0], end_node[1]])
-
-        if has_path and len(full_path) > 1: return full_path
-    except: pass
-
+            order, name, path_str, lat, lng = row
+            
+            if path_str:
+                segment = parse_path_string(path_str)
+                
+                if segment and len(segment) > 0:
+                    # Kiểm tra ngắt quãng
+                    last_point = full_path[-1]
+                    first_new = segment[0]
+                    gap_distance = haversine(last_point[0], last_point[1], first_new[0], first_new[1])
+                    
+                    if gap_distance > 0.05:  # Ngắt quãng >50m
+                        total_gaps += 1
+                        route_logger.warning(
+                            f"GAP_DETECTED | Route={route_id} Order={order} | "
+                            f"Gap={gap_distance*1000:.0f}m | Station={name}"
+                        )
+                        # Nối thẳng bằng cách thêm tọa độ trạm làm điểm trung gian
+                        full_path.append([lat, lng])
+                    
+                    # Thêm segment vào path
+                    full_path.extend(segment)
+                    has_valid_path = True
+                else:
+                    # PathPoints parse fail → dùng tọa độ trạm
+                    route_logger.warning(f"PARSE_FAIL | Route={route_id} Order={order} | Station={name}")
+                    full_path.append([lat, lng])
+            else:
+                # Không có pathPoints → dùng tọa độ trạm
+                full_path.append([lat, lng])
+        
+        # ========== BƯỚC 3: THÊM TRẠM CUỐI ==========
+        end_station = conn.execute(
+            "SELECT Lat, Lng, StationName FROM stations WHERE RouteId=? AND StationDirection=? AND StationOrder=?",
+            (route_id, direction, end_order)
+        ).fetchone()
+        
+        if end_station:
+            last_point = full_path[-1]
+            dist_to_end = haversine(last_point[0], last_point[1], end_station[0], end_station[1])
+            
+            if dist_to_end > 0.01:  # Nếu còn cách >10m thì thêm
+                full_path.append([end_station[0], end_station[1]])
+                route_logger.info(f"PATH_END | Route={route_id} | Station={end_station[2]} | EndGap={dist_to_end*1000:.0f}m")
+        
+        # ========== KIỂM TRA CHẤT LƯỢNG PATH ==========
+        if has_valid_path and len(full_path) > 1:
+            route_logger.info(
+                f"PATH_SUCCESS | Route={route_id} | Points={len(full_path)} | "
+                f"Gaps={total_gaps} | Source=DATABASE"
+            )
+            return full_path
+        else:
+            route_logger.warning(f"PATH_INCOMPLETE | Route={route_id} | Points={len(full_path)} | Fallback to OSRM")
+            raise Exception("PathPoints không đầy đủ, chuyển sang OSRM")
+            
+    except Exception as e:
+        route_logger.warning(f"PATH_ERROR | Route={route_id} | Error={str(e)} | Using OSRM fallback")
+    
+    # ========== FALLBACK: DÙNG OSRM ==========
     try:
-        query = "SELECT Lat, Lng FROM stations WHERE RouteId=? AND StationDirection=? AND StationOrder >= ? AND StationOrder <= ? ORDER BY StationOrder ASC"
+        query = """
+            SELECT Lat, Lng FROM stations 
+            WHERE RouteId=? AND StationDirection=? 
+            AND StationOrder >= ? AND StationOrder <= ? 
+            ORDER BY StationOrder ASC
+        """
         rows = conn.execute(query, (route_id, direction, start_order, end_order)).fetchall()
-        raw = [[r[0], r[1]] for r in rows]
-        return fetch_road_geometry_osrm(raw)
-    except: return []
-
+        
+        if not rows:
+            route_logger.error(f"OSRM_NO_STATIONS | Route={route_id}")
+            return []
+        
+        raw_coords = [[r[0], r[1]] for r in rows]
+        osrm_path = fetch_road_geometry_osrm(raw_coords)
+        
+        route_logger.info(
+            f"PATH_SUCCESS | Route={route_id} | Points={len(osrm_path)} | "
+            f"Source=OSRM | Stations={len(rows)}"
+        )
+        return osrm_path
+        
+    except Exception as e:
+        route_logger.error(f"OSRM_FAIL | Route={route_id} | Error={str(e)}")
+        return []
+# =========================================================
 def get_route_no(conn, route_id):
     try:
         r = conn.execute("SELECT RouteNo FROM routes WHERE RouteId = ?", (route_id,)).fetchone()
@@ -104,6 +267,48 @@ def get_route_name(conn, route_id):
         r = conn.execute("SELECT RouteNo, RouteName FROM routes WHERE RouteId = ?", (route_id,)).fetchone()
         return f"{r[0]} - {r[1]}" if r else "Bus"
     except: return "Bus"
+
+def validate_route_quality(conn, route_id, direction):
+    """
+    Kiểm tra chất lượng tuyến trước khi sử dụng
+    Returns: (is_valid, error_message)
+    """
+    try:
+        # 1. Đếm số trạm
+        count = conn.execute(
+            "SELECT COUNT(*) FROM stations WHERE RouteId = ? AND StationDirection = ?",
+            (route_id, direction)
+        ).fetchone()[0]
+        
+        if count < 10:
+            route_name = get_route_name(conn, route_id)
+            error_msg = f"Tuyến {route_name} chỉ có {count} trạm (cần ≥10)"
+            # ========== LOG RA FILE ==========
+            route_logger.warning(f"REJECTED | RouteID={route_id} Dir={direction} | {error_msg}")
+            # =================================
+            
+            return (False, error_msg)
+        
+        # 2. Kiểm tra có pathPoints không (optional - có thể bỏ)
+        has_path = conn.execute(
+            "SELECT COUNT(*) FROM stations WHERE RouteId = ? AND StationDirection = ? AND pathPoints IS NOT NULL",
+            (route_id, direction)
+        ).fetchone()[0]
+        
+        # Nếu <50% trạm có pathPoints thì cảnh báo (nhưng vẫn cho qua)
+        if has_path < count * 0.5:
+            oute_name = get_route_name(conn, route_id)
+            # ========== LOG RA FILE ==========
+            route_logger.info(f"LOW_PATH | RouteID={route_id} Dir={direction} | {route_name} chỉ có {has_path}/{count} pathPoints")
+            # ==================================
+        
+        return (True, None)
+        
+    except Exception as e:
+        # ========== LOG LỖI ==========
+        route_logger.error(f"VALIDATE_ERROR | RouteID={route_id} Dir={direction} | {str(e)}")
+        # ============================
+        return (False, f"Lỗi kiểm tra tuyến: {str(e)}")
 
 # =========================================================
 # 3. THUẬT TOÁN TÌM ĐƯỜNG (REALISTIC SCORING)
@@ -122,6 +327,19 @@ def find_smart_bus_route(start_coords, end_coords):
             route_no_cache[rid] = get_route_no(conn, rid)
         return route_no_cache[rid] in BACKBONE_ROUTES
 
+     # ========== THÊM CACHE VALIDATION ==========
+    route_quality_cache = {}
+    def is_valid_route(rid, direction):
+        """Kiểm tra tuyến có đủ tiêu chuẩn không"""
+        key = (rid, direction)
+        if key not in route_quality_cache:
+            is_valid, error = validate_route_quality(conn, rid, direction)
+            route_quality_cache[key] = is_valid
+            if not is_valid:
+                print(f"❌ {error}")
+        return route_quality_cache[key]
+    # ==========================================
+    
     def get_nearby_routes(coords, radius_km):
         routes = {}
         for stop in all_stops:
@@ -129,6 +347,12 @@ def find_smart_bus_route(start_coords, end_coords):
             dist = haversine(coords['lat'], coords['lon'], s_lat, s_lng)
             if dist <= radius_km:
                 key = (stop[4], stop[6]) # RouteId, Direction
+                
+                # ========== THÊM CHECK Ở ĐÂY ==========
+                if not is_valid_route(stop[4], stop[6]):
+                    continue  # Bỏ qua tuyến không hợp lệ
+                # ==========================================
+                
                 if key not in routes or dist < routes[key]['dist']:
                     routes[key] = {
                         'StationId': stop[0], 'StationName': stop[1], 'Lat': s_lat, 'Lng': s_lng,
@@ -144,8 +368,20 @@ def find_smart_bus_route(start_coords, end_coords):
     if not e_close: e_close = get_nearby_routes(end_coords, 4.0)
 
     if not s_close or not e_close:
+        # ========== LOG THẤT BẠI ==========
+        route_logger.warning(
+            f"NOT_FOUND | Start={start_coords} End={end_coords} | "
+            f"StartRoutes={len(s_close)} EndRoutes={len(e_close)}"
+        )
+        # ==================================
+        
         conn.close()
-        return {'success': False, 'error': 'Không có xe buýt.'}
+        # ========== SỬA MESSAGE ==========
+        return {
+            'success': False, 
+            'error': 'Không tìm thấy tuyến xe bus phù hợp (chỉ hiển thị tuyến có ≥10 trạm). Vui lòng thử điểm khác hoặc mở rộng bán kính tìm kiếm.'
+        }
+        # =================================
 
     potential_solutions = []
     
@@ -232,6 +468,13 @@ def find_smart_bus_route(start_coords, end_coords):
     r_lbl = get_route_name(conn, best['data'][0]['RouteId'])
     print(f"   🏆 Chọn: {best['type'].upper()} ({r_lbl}) | Walk: {best['walk']:.2f}km | Score: {best['score']:.1f}")
 
+    # ========== LOG KẾT QUẢ ==========
+    route_logger.info(
+        f"FOUND | Type={best['type'].upper()} | Route={r_lbl} | "
+        f"Walk={best['walk']:.2f}km | Stops={best['stops']} | Score={best['score']:.1f}"
+    )
+    # =================================
+    
     if best['type'] == 'direct':
         return build_response(conn, best['data'][0], best['data'][1], 'direct')
     else:
