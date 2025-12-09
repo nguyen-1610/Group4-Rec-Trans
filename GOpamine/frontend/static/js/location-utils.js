@@ -113,6 +113,7 @@ function setupAutocomplete(inputElement, onPlaceSelected, onInputUpdated = () =>
     });
 }
 
+// Thay thế hàm displaySuggestions cũ bằng hàm này:
 function displaySuggestions(container, places, inputElement, onPlaceSelected) {
     if (places.length === 0) {
         container.innerHTML = '<div class="suggestion-item no-results">Không tìm thấy kết quả</div>';
@@ -121,14 +122,27 @@ function displaySuggestions(container, places, inputElement, onPlaceSelected) {
     }
     
     container.innerHTML = places.map(place => {
-        const shortName = place.name.split(',').slice(0, 2).join(',');
-        const icon = getPlaceIcon(place.type);
+        // [LOGIC MỚI] Tách chuỗi Tên và Địa chỉ thông minh hơn
+        // Dữ liệu Nominatim thường dạng: "Tên Riêng, Số Nhà, Đường, Phường, Quận..."
+        const parts = place.name.split(',');
+        
+        // Lấy phần đầu làm Tên chính (VD: Aeon Mall Tân Phú)
+        const title = parts[0].trim(); 
+        
+        // Lấy các phần còn lại làm địa chỉ chi tiết (VD: 30 Bờ Bao Tân Thắng...)
+        // Nếu không có phần sau thì dùng tạm loại địa điểm (VD: supermarket)
+        const address = parts.length > 1 ? parts.slice(1).join(',').trim() : place.type;
+
+        const icon = getPlaceIcon(place.type); // Hàm lấy icon có sẵn của bạn
+        
         return `
             <div class="suggestion-item" data-place='${JSON.stringify(place)}'>
-                <span class="suggestion-icon">${icon}</span>
-                <div class="suggestion-content">
-                    <div class="suggestion-name">${shortName}</div>
-                    <div class="suggestion-address">${place.type}</div>
+                <div class="sugg-icon-wrapper">
+                    ${icon}
+                </div>
+                <div class="sugg-text-wrapper">
+                    <div class="sugg-title">${title}</div>
+                    <div class="sugg-address">${address}</div>
                 </div>
             </div>
         `;
@@ -136,10 +150,12 @@ function displaySuggestions(container, places, inputElement, onPlaceSelected) {
     
     container.style.display = 'block';
     
+    // Giữ nguyên logic click
     container.querySelectorAll('.suggestion-item').forEach(item => {
         item.addEventListener('click', () => {
             const placeData = JSON.parse(item.dataset.place);
-            const shortName = placeData.name.split(',').slice(0, 2).join(',');
+            // Khi chọn thì chỉ lấy tên ngắn gọn đưa vào input cho đẹp
+            const shortName = placeData.name.split(',')[0].trim(); 
             inputElement.value = shortName;
             container.style.display = 'none';
             onPlaceSelected(placeData, inputElement);
@@ -346,10 +362,13 @@ function createRouteInputRow(index, placeData, isRemovable, onUpdate, onRemove) 
 
     container.innerHTML = `
         ${iconHtml}
-        <input type="text" class="map-input" 
-               placeholder="${index === 0 ? 'Chọn điểm đi' : 'Chọn điểm đến'}" 
-               value="${placeData.name || ''}" 
-               autocomplete="off">
+        <div class="input-wrapper-cell" style="flex: 1; position: relative;">
+            <input type="text" class="map-input" 
+                   placeholder="${index === 0 ? 'Chọn điểm đi' : 'Chọn điểm đến'}" 
+                   value="${placeData.name || ''}" 
+                   autocomplete="off"
+                   style="width: 100%; box-sizing: border-box;">
+        </div>
         ${removeBtnHtml}
     `;
 

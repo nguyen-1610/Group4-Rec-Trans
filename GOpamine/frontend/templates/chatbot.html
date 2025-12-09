@@ -10,11 +10,11 @@
 </head>
 <body>
     <div class="header">
-        <button class="back-btn" type="button">←</button>
+        <button class="back-btn" onclick="goToPreviousPage('/')" type="button">←</button>
         <div class="header-right">
             <div class="toggle-group">
-                <button class="toggle-btn" data-target="map" type="button">Map</button>
-                <button class="toggle-btn active" data-target="chatbot" type="button">AI</button>
+                <button class="toggle-btn" data-target="map" type="button" >Map</button>
+                <button class="toggle-btn active" data-target="chatbot" type="button" >AI</button>
             </div>
             
             {% if current_user.is_authenticated %}
@@ -34,7 +34,7 @@
                         <div class="dropdown-divider-profile"></div>
                         <a href="#" class="dropdown-item-profile" id="logoutBtn">
                             <i class="fas fa-sign-out-alt"></i>
-                            <span>Đăng xuất</span>
+                            <span data-i18n="logout">Đăng xuất</span>
                         </a>
                     </div>
                 </div>
@@ -48,7 +48,7 @@
 
     <div class="chat-container">
         <div class="message-group">
-            <div class="title-message">
+            <div class="title-message" data-i18n="chat_title">
                 Khi bạn cần một chuyến hành trình là lúc chúng tôi sẵn sàng.
             </div>
 
@@ -56,7 +56,7 @@
                 <div class="bot-avatar">
                     <img src="../static/image/logo.jpg" alt="bot-avatar" >
                 </div>
-                <div class="message-bubble">
+                <div class="message-bubble" data-i18n="chat_welcome">
                     Hãy cho tôi biết bạn muốn đi đâu? Tôi có thể gợi ý đường đi và phương tiện phù hợp với nhu cầu của bạn ^^
                 </div>
             </div>
@@ -66,16 +66,93 @@
     <div class="input-container">
         <button class="add-btn">+</button>
         <div class="input-wrapper">
-            <input type="text" class="chat-input" placeholder="Trò chuyện">
+            <input type="text" class="chat-input" placeholder="Trò chuyện" data-i18n-placeholder="chat_placeholder">
             <button class="send-btn"></button>
         </div>
     </div>
 
     <div class="suggestions-container">
-        <button class="suggestion-btn">Lộ trình hôm nay</button>
-        <button class="suggestion-btn">Tuyến đường</button>
-        <button class="suggestion-btn">Phương tiện</button>
+        <button class="suggestion-btn" data-i18n="sugg_route">Lộ trình hôm nay</button>
+        <button class="suggestion-btn" data-i18n="sugg_path">Tuyến đường</button>
+        <button class="suggestion-btn" data-i18n="sugg_transport">Phương tiện</button>
     </div>
+
+    <script>
+        // Mở rộng đối tượng translations từ base.html
+        if (!window.translations) window.translations = { vi: {}, en: {} };
+
+        // Định nghĩa thêm từ vựng cho trang Chatbot
+        const chatTranslations = {
+            vi: {
+                chat_title: "Khi bạn cần một chuyến hành trình là lúc chúng tôi sẵn sàng.",
+                chat_welcome: "Hãy cho tôi biết bạn muốn đi đâu? Tôi có thể gợi ý đường đi và phương tiện phù hợp với nhu cầu của bạn ^^",
+                chat_placeholder: "Trò chuyện",
+                sugg_route: "Lộ trình hôm nay",
+                sugg_path: "Tuyến đường",
+                sugg_transport: "Phương tiện",
+                // Các text dùng trong JS
+                status_typing: "Đang suy nghĩ...",
+                error_prefix: "Lỗi:",
+                logout_confirm_title: "Đăng xuất?",
+                logout_confirm_text: "Lịch sử chat sẽ bị xóa.",
+                btn_confirm: "Đăng xuất",
+                btn_cancel: "Hủy",
+                logout_success_title: "Đã đăng xuất!",
+                logout_success_text: "Hẹn gặp lại bạn."
+            },
+            en: {
+                chat_title: "When you need a journey, we are ready.",
+                chat_welcome: "Where do you want to go? I can suggest routes and transport options suitable for your needs ^^",
+                chat_placeholder: "Type a message...",
+                sugg_route: "Today's route",
+                sugg_path: "Directions",
+                sugg_transport: "Transport",
+                // JS texts
+                status_typing: "Thinking...",
+                error_prefix: "Error:",
+                logout_confirm_title: "Logout?",
+                logout_confirm_text: "Chat history will be cleared.",
+                btn_confirm: "Logout",
+                btn_cancel: "Cancel",
+                logout_success_title: "Logged out!",
+                logout_success_text: "See you again."
+            }
+        };
+
+        // 2. GỘP VÀO HỆ THỐNG DỊCH (Sửa lỗi ReferenceError tại đây)
+        if (!window.translations) window.translations = { vi: {}, en: {} };
+        Object.assign(window.translations.vi, chatTranslations.vi);
+        Object.assign(window.translations.en, chatTranslations.en);
+
+        // 3. HÀM DỊCH
+        function applyLanguage() {
+            const lang = localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi';
+            // Đảm bảo lấy đúng từ điển từ window.translations đã gộp
+            const dict = window.translations[lang] || window.translations['vi'];
+
+            // Dịch các thẻ có data-i18n
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key]) el.textContent = dict[key];
+            });
+
+            // Dịch placeholder
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (dict[key]) el.placeholder = dict[key];
+            });
+        }
+
+        // 4. CHẠY KHI LOAD TRANG
+        document.addEventListener('DOMContentLoaded', () => {
+            // A. Dịch ngay lập tức
+            applyLanguage();
+
+            
+        });
+
+    </script>
+
     <script src="../static/js/chatbot.js"></script>
 </body>
 </html>

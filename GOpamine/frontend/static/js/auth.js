@@ -164,6 +164,56 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // ============================================================
+    // [CẬP NHẬT] CHUYỂN ĐỔI SANG REAL OAUTH2 (PRODUCTION MODE)
+    // Code này sẽ ghi đè logic giả lập cũ khi người dùng bấm nút
+    // ============================================================
+    
+    // Tìm lại các nút DOM
+    const realGoogleBtns = document.querySelectorAll('.google-btn');
+    const realFacebookBtns = document.querySelectorAll('.facebook-btn');
+
+    function triggerRealOAuth(provider) {
+        // Hiển thị loading nhẹ để người dùng biết đang chuyển trang
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Đang chuyển hướng...',
+                text: `Đang kết nối tới ${provider === 'google' ? 'Google' : 'Facebook'}`,
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+        }
+        
+        // Chuyển hướng trình duyệt sang route Python vừa viết
+        // Route này sẽ lo việc đẩy sang Google/FB
+        window.location.href = `${API_BASE}/api/login/${provider}`;
+    }
+
+    // Gán đè sự kiện onclick (Phương pháp này mạnh hơn addEventListener 
+    // vì nó thay thế hoàn toàn hành vi cũ của element nếu gán trực tiếp)
+    
+    if (realGoogleBtns.length > 0) {
+        realGoogleBtns.forEach(btn => {
+            // Clone nút để xóa sạch các event listener cũ (nếu muốn chắc chắn 100%)
+            // Hoặc gán onclick như sau để chạy song song/ưu tiên
+            btn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation(); // Ngăn chặn event cũ
+                triggerRealOAuth('google');
+            };
+        });
+    }
+
+    if (realFacebookBtns.length > 0) {
+        realFacebookBtns.forEach(btn => {
+            btn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                triggerRealOAuth('facebook');
+            };
+        });
+    }
 });
 
 // Login page specific translations
