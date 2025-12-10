@@ -1,3 +1,7 @@
+// ========== BIẾN GLOBAL - Truy cập từ busmap.js ==========
+window.mapInstance = null;          // Leaflet map object
+window.routeLayerGroup = null;      // Layer group chứa routes
+window.originalVehicleListHTML = null; // Backup HTML list
 /**
  * 🚌 GOPamine - Map & Transport Logic (Multi-stop UI Version)
  * ===========================================================
@@ -90,7 +94,16 @@ document.addEventListener('DOMContentLoaded', async function() {
         { lat: null, lon: null, name: '' }  // Điểm B (End mặc định)
     ];
 
-    const map = L.map('map', { zoomControl: false, zoom: 13 });
+    const map = L.map('map', { zoomControl: false, zoom: 13 }).setView([10.8231, 106.6297], 13);
+    // Khi khởi tạo map:
+    window.mapInstance = map;
+    // ^^^^ GÁN VÀO WINDOW
+    
+    window.routeLayerGroup = L.layerGroup().addTo(window.mapInstance);
+    
+    // ✅ Khai báo global để busmap.js dùng
+    window.originalVehicleListHTML = null; // ✅ Khai báo global để busmap.js dùng
+  
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap', maxZoom: 19
@@ -494,6 +507,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
 
         setupCardSelectionEvents();
+        console.log('✅ Đã gắn event listeners cho', document.querySelectorAll('.option-card').length, 'cards');
         const firstCard = container.querySelector('.option-card');
         if(firstCard) firstCard.classList.add('selected');
     }
@@ -505,8 +519,56 @@ document.addEventListener('DOMContentLoaded', async function() {
     function setupCardSelectionEvents() {
         document.querySelectorAll('.option-card').forEach(card => {
             card.addEventListener('click', function() {
+                // 1. Highlight card
                 document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
                 this.classList.add('selected');
+
+                 // 2. ========== KIỂM TRA LOẠI XE ==========
+                const vehicleMode = this.getAttribute('data-vehicle') || '';
+                
+                console.log('🚗 Chọn phương tiện:', vehicleMode);
+                // 3. Nếu là BUS → Gọi logic riêng
+                 const isBusMode = vehicleMode.toLowerCase().includes('bus') 
+                    || vehicleMode.toLowerCase().includes('buýt')
+                    || vehicleMode.toLowerCase().includes('xe buýt');
+                    if (isBusMode) {
+                    console.log('🚌 Kích hoạt Bus logic...');
+
+                    if (typeof drawRouteOnMap === 'function') {
+                         // Tham số: (coords, start, end, waypoints)
+                        drawRouteOnMap([], null, null, currentWaypoints);
+                        console.log('✅ Đã refresh lại điểm A/B và xóa đường cũ');
+                    }
+
+                    // 2. Dọn dẹp phụ (Routing Machine Control nếu có)
+                    // Vì cái này thường không nằm trong routeLayerGroup nên phải xóa tay
+                    const map = (typeof getMapInstance === 'function') ? getMapInstance() : window.mapInstance;
+                    if (window.routingControl && map) {
+                        try { map.removeControl(window.routingControl); } catch (e) {}
+                        window.routingControl = null;
+                    }
+                    document.querySelectorAll('.leaflet-routing-container').forEach(el => el.remove());
+
+                    // ============================================================
+
+                    // ========== BACKUP HTML TRƯỚC KHI GỌI BUS ==========
+                    if (!window.originalVehicleListHTML) {
+                        const container = document.querySelector('.vehicle-scroll-container');
+                        window.originalVehicleListHTML = container.innerHTML;
+                    }
+                    // =================================================
+                    // Gọi hàm từ busmap.js
+                    if (typeof handleBusSelection === 'function') {
+                        handleBusSelection();
+                    } else {
+                        console.error('❌ Hàm handleBusSelection không tồn tại!');
+                    }
+                }
+                // 4. Các xe khác (Grab/Be) → Logic cũ
+                else {
+                    console.log('🚗 Xe Grab/Be - Giữ nguyên');
+                    // Code vẽ route Grab/Be của bạn (nếu có)
+                }
             });
         });
     }
@@ -540,6 +602,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
     }
+    // =========================================================================
+    window.drawRouteOnMap = drawRouteOnMap;
+    window.setupCardSelectionEvents = setupCardSelectionEvents;
+    
+    // Kiểm tra xem đã public thành công chưa
+    console.log("✅ Đã public hàm drawRouteOnMap và setupCardSelectionEvents");
 });
 
 window.switchTab = (arg1, arg2) => {
@@ -629,11 +697,7 @@ window.confirmRoute = function() {
     };
 };
 
-// =============================================================================
-// 8. LOGIC TƯ VẤN AI (ĐÃ CẬP NHẬT MULTI-STOP)
-// =============================================================================
-
-// =============================================================================
+//======================================================================
 // 8. LOGIC TƯ VẤN AI (FIX: GIẢ LẬP FORM DATA ĐỂ CHATBOT NHẬN DIỆN)
 // =============================================================================
 

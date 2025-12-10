@@ -27,7 +27,7 @@ bad_routes = conn.execute("""
     FROM routes r
     LEFT JOIN stations s ON r.RouteId = s.RouteId
     GROUP BY r.RouteId
-    HAVING StopCount < 10
+    HAVING StopCount < 13
     ORDER BY StopCount ASC
 """).fetchall()
 

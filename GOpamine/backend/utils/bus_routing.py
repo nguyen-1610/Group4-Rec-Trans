@@ -297,7 +297,7 @@ def validate_route_quality(conn, route_id, direction):
         
         # Nếu <50% trạm có pathPoints thì cảnh báo (nhưng vẫn cho qua)
         if has_path < count * 0.5:
-            oute_name = get_route_name(conn, route_id)
+            route_name = get_route_name(conn, route_id)
             # ========== LOG RA FILE ==========
             route_logger.info(f"LOW_PATH | RouteID={route_id} Dir={direction} | {route_name} chỉ có {has_path}/{count} pathPoints")
             # ==================================
@@ -313,7 +313,7 @@ def validate_route_quality(conn, route_id, direction):
 # =========================================================
 # 3. THUẬT TOÁN TÌM ĐƯỜNG (REALISTIC SCORING)
 # =========================================================
-def find_smart_bus_route(start_coords, end_coords):
+def find_smart_bus_route(start_coords, end_coords, **kwargs):
     print(f"\n🔍 [REALISTIC MODE] Tìm từ {start_coords} -> {end_coords}")
     conn = get_db()
     all_stops = conn.execute("SELECT StationId, StationName, Lat, Lng, RouteId, StationOrder, StationDirection FROM stations").fetchall()
@@ -462,48 +462,150 @@ def find_smart_bus_route(start_coords, end_coords):
         conn.close()
         return {'success': False, 'error': 'Không tìm thấy.'}
 
+    # Sắp xếp theo điểm
     potential_solutions.sort(key=lambda x: x['score'])
-    best = potential_solutions[0]
     
+    # [NEW] Lấy tham số limit từ parameter (mặc định 3)
+    limit = kwargs.get('limit', 3)
+    top_solutions = potential_solutions[:limit]
+    
+    # Log lựa chọn tốt nhất
+    best = top_solutions[0]
     r_lbl = get_route_name(conn, best['data'][0]['RouteId'])
-    print(f"   🏆 Chọn: {best['type'].upper()} ({r_lbl}) | Walk: {best['walk']:.2f}km | Score: {best['score']:.1f}")
-
-    # ========== LOG KẾT QUẢ ==========
+    print(f"   🏆 Tốt nhất: {best['type'].upper()} ({r_lbl}) | Walk: {best['walk']:.2f}km | Score: {best['score']:.1f}")
+    
     route_logger.info(
         f"FOUND | Type={best['type'].upper()} | Route={r_lbl} | "
         f"Walk={best['walk']:.2f}km | Stops={best['stops']} | Score={best['score']:.1f}"
     )
-    # =================================
     
-    if best['type'] == 'direct':
-        return build_response(conn, best['data'][0], best['data'][1], 'direct')
-    else:
-        return build_response(conn, best['data'][0], best['data'][1], 'transfer', best['data'][2])
+    # Build response cho từng option
+    final_results = []
+    for sol in top_solutions:
+        if sol['type'] == 'direct':
+            res = build_response(conn, sol['data'][0], sol['data'][1], 'direct')
+        else:
+            res = build_response(conn, sol['data'][0], sol['data'][1], 'transfer', sol['data'][2])
+        
+        if res['success']:
+            final_results.append(res['data'])
+    
+    conn.close()  # ✅ Đóng connection Ở ĐÂY, sau khi xong vòng lặp
+    
+    return {
+        'success': True,
+        'count': len(final_results),
+        'routes': final_results  # ✅ Đổi key từ 'data' → 'routes' cho rõ ràng
+    }
 
 def build_response(conn, s, e, type, trans=None):
+    """
+    Xây dựng object JSON trả về cho Frontend.
+    [CHANGE]: Không đóng connection ở đây để dùng cho vòng lặp.
+    """
     if type == 'direct':
         name = get_route_name(conn, s['RouteId'])
         path = get_official_path_from_db(conn, s['RouteId'], s['StationDirection'], s['StationOrder'], e['StationOrder'])
-        conn.close()
-        return {'success': True, 'type': 'direct', 'data': {'route_name': f"Xe {name}", 'description': f"Đi thẳng tuyến {name}", 'walk_to_start': [s['Lat'], s['Lng']], 'walk_from_end': [e['Lat'], e['Lng']], 'start_stop': s['StationName'], 'end_stop': e['StationName'], 'walk_distance': round((s.get('dist', 0) + e.get('dist', 0)) * 1000), 'segments': [{'type': 'bus', 'path': path, 'name': name, 'color': '#FF9800'}]}}
+
+        return {
+            'success': True, 
+            'type': 'direct', 
+            'data': {
+                'route_name': f"Xe {name}",
+                'description': f"Đi thẳng tuyến {name}",
+                # [NEW] Thêm ID để frontend phân biệt các option
+                'option_id': f"direct_{s['RouteId']}_{s['StationId']}",
+                
+                'walk_to_start': [s['Lat'], s['Lng']], 
+                'walk_from_end': [e['Lat'], e['Lng']], 
+                
+                'start_stop': s['StationName'], 
+                'end_stop': e['StationName'], 
+                
+                'station_start_coords': {'lat': s['Lat'], 'lng': s['Lng']},
+                'station_end_coords': {'lat': e['Lat'], 'lng': e['Lng']},
+               
+                'walk_distance': round((s.get('dist', 0) + e.get('dist', 0)) * 1000), 
+                'duration': round((len(path) * 0.1) + 10), # Ước lượng
+                
+                'score': 8.5,
+                'labels': ["Tiết kiệm", "Đi thẳng"],
+                'route_coordinates': path,
+                'segments': [{'type': 'bus', 'path': path, 'name': name, 'color': '#FF9800'}]
+            }
+        }
     else:
         name1 = get_route_name(conn, s['RouteId'])
         name2 = get_route_name(conn, e['RouteId'])
         path1 = get_official_path_from_db(conn, s['RouteId'], s['StationDirection'], s['StationOrder'], trans['Order1'])
         path2 = get_official_path_from_db(conn, e['RouteId'], e['StationDirection'], trans['Order2'], e['StationOrder'])
-        conn.close()
-        return {'success': True, 'type': 'transfer', 'data': {'route_name': f"Xe {name1} ➝ Xe {name2}", 'description': f"Đổi xe tại {trans['StationName']}", 'walk_to_start': [s['Lat'], s['Lng']], 'walk_from_end': [e['Lat'], e['Lng']], 'start_stop': s['StationName'], 'end_stop': e['StationName'], 'transfer_stop': trans['StationName'], 'walk_distance': round((s.get('dist', 0) + e.get('dist', 0)) * 1000), 'segments': [{'type': 'bus', 'path': path1, 'name': name1, 'color': '#4285F4'}, {'type': 'transfer', 'lat': trans['Lat'], 'lng': trans['Lng'], 'name': trans['StationName']}, {'type': 'bus', 'path': path2, 'name': name2, 'color': '#EA4335'}]}}
+        
+        return {
+            'success': True,
+            'type': 'transfer', 
+            'data': {
+                'route_name': f"Xe {name1} ➝ Xe {name2}", 
+                'description': f"Đổi xe tại {trans['StationName']}", 
+                # [NEW] Thêm ID
+                'option_id': f"trans_{s['RouteId']}_{e['RouteId']}",
+                'walk_to_start': [s['Lat'], s['Lng']],
+                'walk_from_end': [e['Lat'], e['Lng']], 
+                'start_stop': s['StationName'], 
+                'end_stop': e['StationName'], 
+                
+                'transfer_stop': trans['StationName'],
+                'station_start_coords': {'lat': s['Lat'], 'lng': s['Lng']},
+                'station_end_coords': {'lat': e['Lat'], 'lng': e['Lng']},
+                
+                'walk_distance': round((s.get('dist', 0) + e.get('dist', 0)) * 1000), 
+                'duration': round((len(path1) + len(path2)) * 0.1 + 20),
+                'display_price': "14,000đ",
+                'score': 6.5,
+                'labels': ["Phổ biến", "2 chuyến"],
+                'route_coordinates': path1 + path2,
+                
+                'segments': [
+                    {'type': 'bus', 'path': path1, 'name': name1, 'color': '#4285F4'}, 
+                    {'type': 'transfer', 'lat': trans['Lat'], 'lng': trans['Lng'], 'name': trans['StationName']},
+                    {'type': 'bus', 'path': path2, 'name': name2, 'color': '#EA4335'}
+                ]
+            }
+        }
 
 def plan_multi_stop_bus_trip(waypoints):
     if len(waypoints) < 2: return {'success': False, 'error': 'Cần >2 điểm'}
     legs = []
+    total_price = 0
+    full_route_coords = []
+    
     for i in range(len(waypoints)-1):
         res = find_smart_bus_route(
             {'lat': float(waypoints[i]['lat']), 'lon': float(waypoints[i].get('lon', waypoints[i].get('lng')))}, 
-            {'lat': float(waypoints[i+1]['lat']), 'lon': float(waypoints[i+1].get('lon', waypoints[i+1].get('lng')))}
+            {'lat': float(waypoints[i+1]['lat']), 'lon': float(waypoints[i+1].get('lon', waypoints[i+1].get('lng')))},
+            limit=1
         )
-        if res['success']: 
-            res['data']['step_index'] = i
-            legs.append(res['data'])
+        
+        if res['success'] and len(res['routes']) > 0: 
+            # Lấy option đầu tiên (tốt nhất)
+            best_leg = res['routes'][0]
+            best_leg['step_index'] = i
+            legs.append(best_leg)
+            
+            # Cộng dồn
+            full_route_coords.extend(best_leg['route_coordinates'])
+            try: total_price += int(str(best_leg['display_price']).replace('đ','').replace(',',''))
+            except: pass
+            
         else: return {'success': False, 'error': f"Chặng {i+1} không có xe bus."}
-    return {'success': True, 'type': 'multi_stop', 'data': {'legs': legs}}
+    return {
+        'success': True, 
+        'type': 'multi_stop', 
+        'data': {
+            'mode_name': "Hành trình Bus Đa Điểm",
+            'legs': legs,
+            'route_coordinates': full_route_coords,
+            'display_price': f"{total_price:,}đ",
+            'duration': sum(l['duration'] for l in legs),
+            'segments': legs[0]['segments'] # Fallback
+        }
+    }
