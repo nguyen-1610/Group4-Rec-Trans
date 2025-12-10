@@ -271,43 +271,58 @@ def get_route_name(conn, route_id):
 def validate_route_quality(conn, route_id, direction):
     """
     Kiểm tra chất lượng tuyến trước khi sử dụng
+    Tiêu chí: 
+    1. Đủ số trạm tối thiểu (tránh tuyến rác).
+    2. Các trạm phải liền mạch (không cách nhau quá xa theo đường chim bay).
     Returns: (is_valid, error_message)
     """
     try:
-        # 1. Đếm số trạm
-        count = conn.execute(
-            "SELECT COUNT(*) FROM stations WHERE RouteId = ? AND StationDirection = ?",
-            (route_id, direction)
-        ).fetchone()[0]
+        # CẤU HÌNH BỘ LỌC
+        MIN_STOPS = 5          # Giảm xuống 5 để không bị sót các tuyến ngắn
+        MAX_GAP_KM = 2.5       # Nếu 2 trạm liền kề cách nhau > 2.5km -> Loại
         
-        if count < 10:
-            route_name = get_route_name(conn, route_id)
-            error_msg = f"Tuyến {route_name} chỉ có {count} trạm (cần ≥10)"
-            # ========== LOG RA FILE ==========
-            route_logger.warning(f"REJECTED | RouteID={route_id} Dir={direction} | {error_msg}")
-            # =================================
-            
+        # 1. Lấy danh sách trạm và tọa độ (Sắp xếp theo thứ tự)
+        query = "SELECT StationName, Lat, Lng FROM stations WHERE RouteId = ? AND StationDirection = ? ORDER BY StationOrder"
+        stations = conn.execute(query, (route_id, direction)).fetchall()
+        
+        count = len(stations)
+        route_name = get_route_name(conn, route_id)
+
+        # 2. Kiểm tra số lượng trạm
+        if count < MIN_STOPS:
+            error_msg = f"Tuyến {route_name} quá ngắn: chỉ có {count} trạm (yêu cầu ≥{MIN_STOPS})"
+            route_logger.warning(f"REJECTED_SHORT | RouteID={route_id} | {error_msg}")
             return (False, error_msg)
         
-        # 2. Kiểm tra có pathPoints không (optional - có thể bỏ)
+        # 3. [NEW] Kiểm tra khoảng cách "nhảy cóc" giữa các trạm
+        # Nếu trạm A và trạm B cách nhau quá xa, nghĩa là database bị thiếu dữ liệu đường đi ở giữa
+        for i in range(count - 1):
+            # Trạm hiện tại
+            s1_name, lat1, lng1 = stations[i]
+            # Trạm kế tiếp
+            s2_name, lat2, lng2 = stations[i+1]
+            
+            # Tính khoảng cách chim bay
+            dist = haversine(lat1, lng1, lat2, lng2)
+            
+            if dist > MAX_GAP_KM:
+                error_msg = f"Phát hiện đứt quãng {dist:.2f}km giữa trạm '{s1_name}' và '{s2_name}'"
+                route_logger.warning(f"REJECTED_GAP | RouteID={route_id} | {error_msg}")
+                return (False, f"Tuyến {route_name} bị lỗi dữ liệu (ngắt quãng lớn)")
+
+        # 4. Kiểm tra PathPoints (Optional - Chỉ log cảnh báo chứ không loại)
         has_path = conn.execute(
             "SELECT COUNT(*) FROM stations WHERE RouteId = ? AND StationDirection = ? AND pathPoints IS NOT NULL",
             (route_id, direction)
         ).fetchone()[0]
         
-        # Nếu <50% trạm có pathPoints thì cảnh báo (nhưng vẫn cho qua)
-        if has_path < count * 0.5:
-            route_name = get_route_name(conn, route_id)
-            # ========== LOG RA FILE ==========
-            route_logger.info(f"LOW_PATH | RouteID={route_id} Dir={direction} | {route_name} chỉ có {has_path}/{count} pathPoints")
-            # ==================================
-        
+        if has_path < count * 0.3: # Nếu dưới 30% trạm có pathPoints
+            route_logger.info(f"LOW_QUALITY_PATH | RouteID={route_id} | Chỉ {has_path}/{count} trạm có pathPoints")
+
         return (True, None)
         
     except Exception as e:
-        # ========== LOG LỖI ==========
         route_logger.error(f"VALIDATE_ERROR | RouteID={route_id} Dir={direction} | {str(e)}")
-        # ============================
         return (False, f"Lỗi kiểm tra tuyến: {str(e)}")
 
 # =========================================================
@@ -465,9 +480,49 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
     # Sắp xếp theo điểm
     potential_solutions.sort(key=lambda x: x['score'])
     
-    # [NEW] Lấy tham số limit từ parameter (mặc định 3)
-    limit = kwargs.get('limit', 3)
-    top_solutions = potential_solutions[:limit]
+    # [NEW] LOGIC LỌC THÔNG MINH (SMART FILTERING)
+    # Thay vì lấy ngu ngơ top 3, ta sẽ chọn lọc kỹ càng
+    
+    final_picks = []
+ 
+    # AN TOÀN: Kiểm tra rỗng trước khi truy cập phần tử [0]
+    if potential_solutions:
+        # Luôn chọn phương án tốt nhất (Top 1)
+        best_option = potential_solutions[0]
+        final_picks.append(best_option)
+        
+        limit = kwargs.get('limit', 3)
+        # Duyệt qua các phương án còn lại để xem có nên lấy không
+        for sol in potential_solutions[1:]:
+            # Đã đủ số lượng cần tìm thì dừng
+            if len(final_picks) >= limit: 
+                break
+                
+            # 1. BỘ LỌC ĐI BỘ QUÁ XA (HARD LIMIT)
+            # Nếu tổng đi bộ > 1.5km -> Loại ngay lập tức (Tuyến 27 đi bộ 1.7km sẽ chết ở đây)
+            if sol['walk'] > 1.5:
+                continue
+
+            # 2. BỘ LỌC SO SÁNH (RELATIVE CHECK)
+            # Nếu phương án này phải đi bộ nhiều hơn phương án nhất quá 800m -> Loại
+            # Ví dụ: Tuyến 69 đi bộ 200m. Tuyến 27 đi bộ 1.1km (chênh 900m) -> Loại
+            if sol['walk'] > (best_option['walk'] + 0.8):
+                continue
+                
+            # 3. BỘ LỌC ĐIỂM SỐ (SCORE GAP)
+            # Nếu điểm số chênh lệch quá lớn so với top 1 (quá 200 điểm) -> Loại
+            if sol['score'] > (best_option['score'] + 200):
+                continue
+                
+            # Nếu vượt qua mọi bài test thì mới nhận
+            final_picks.append(sol)
+        # Gán lại vào top_solutions để code phía dưới xử lý tiếp
+        top_solutions = final_picks
+    else:
+        # Trường hợp không tìm thấy gì
+        top_solutions = []
+    
+    # --- KẾT THÚC ĐOẠN LỌC ---
     
     # Log lựa chọn tốt nhất
     best = top_solutions[0]
