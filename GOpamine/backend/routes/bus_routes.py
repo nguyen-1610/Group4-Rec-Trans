@@ -64,6 +64,61 @@ def plan_multi_trip():
         # Gọi hàm xử lý đa điểm
         result = plan_multi_stop_bus_trip(waypoints)
         return jsonify(result)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+# ========== THÊM ENDPOINT MỚI ==========
+@bus_bp.route('/validate-routes', methods=['GET'])
+def validate_all_routes():
+    """
+    API kiểm tra tất cả tuyến trong database
+    Dùng để debug/báo cáo chất lượng data
+    """
+    try:
+        from backend.utils.bus_routing import get_db, validate_route_quality, get_route_name
+        
+        conn = get_db()
+        all_routes = conn.execute("""
+            SELECT DISTINCT RouteId, StationDirection 
+            FROM stations 
+            ORDER BY RouteId, StationDirection
+        """).fetchall()
+        
+        valid = []
+        invalid = []
+        
+        for route_id, direction in all_routes:
+            is_valid, error = validate_route_quality(conn, route_id, direction)
+            route_name = get_route_name(conn, route_id)
+            
+            if is_valid:
+                valid.append({
+                    'route_id': route_id,
+                    'route_name': route_name,
+                    'direction': direction
+                })
+            else:
+                invalid.append({
+                    'route_id': route_id,
+                    'route_name': route_name,
+                    'direction': direction,
+                    'error': error
+                })
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'summary': {
+                'total': len(all_routes),
+                'valid': len(valid),
+                'invalid': len(invalid),
+                'valid_percentage': round(len(valid) / len(all_routes) * 100, 1)
+            },
+            'invalid_routes': invalid,
+            'valid_routes': valid
+        })
 
     except Exception as e:
         traceback.print_exc()
