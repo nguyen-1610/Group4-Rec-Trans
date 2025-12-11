@@ -206,11 +206,8 @@ async function handleBusSelection() {
         
         if (res.success) {
             // Check kỹ hơn để tránh lỗi undefined
-            if (res.routes && Array.isArray(res.routes) && res.routes.length > 1) {
+            if (res.routes && Array.isArray(res.routes) && res.routes.length > 0) {
                 renderBusOptionsList(res.routes, userStart, userEnd);
-            }
-            else if (res.routes && res.routes.length === 1) {
-                drawDetailedBusRoute(res.routes[0], userStart, userEnd);
             }
             else if (res.type === 'multi_stop') {
                 // Đảm bảo hàm này tồn tại trước khi gọi
