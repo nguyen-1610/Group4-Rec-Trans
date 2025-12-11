@@ -27,7 +27,7 @@ class AStarRouter:
     
     PROFILE_MAP = {
         'car': 'driving',
-        'moto': 'driving',
+        'moto': 'bike',
         'bus': 'driving'
     }
     
