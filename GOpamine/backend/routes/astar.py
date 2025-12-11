@@ -27,7 +27,7 @@ class AStarRouter:
     
     PROFILE_MAP = {
         'car': 'driving',
-        'moto': 'bike',
+        'moto': 'driving',
         'bus': 'driving'
     }
     
@@ -44,7 +44,6 @@ class AStarRouter:
         self.headers = {
             'User-Agent': 'GOpamine-Student-App/1.0 (student-project)'
         }
-        print("🚀 AStarRouter initialized (Mode: Nominatim + OSRM + TSP Brute Force)")
 
     def _retry_request(self, func, *args, **kwargs):
         """Helper: Thử lại request với exponential backoff"""

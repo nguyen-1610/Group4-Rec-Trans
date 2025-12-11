@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../static/css/form.css">
     <!-- Thêm Font Awesome cho icon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="container">
@@ -47,20 +48,21 @@
         </div>
 
         <div class="form-container">
-            <h1>Thiết lập lộ trình</h1>
+            <h1 data-i18n="form_title">Thiết lập lộ trình</h1>
             
             <div class="form-wrapper">
                 <div class="form-group">
-                    <label class="form-label">Điểm xuất phát</label>
+                    <label class="form-label" data-i18n="form_origin_label">Điểm xuất phát</label>
                     <div class="input-relative-wrapper" style="position: relative;">
                         <input type="text" 
                                placeholder="Nhập điểm đi hoặc chọn bên dưới..." 
                                id="origin-input" 
-                               autocomplete="off"> <div id="origin-dropdown" class="custom-dropdown hidden">
+                               autocomplete="off"
+                               data-i18n-placeholder="form_origin_ph"> <div id="origin-dropdown" class="custom-dropdown hidden">
                             <div class="dropdown-item gps-item" id="btn-use-gps">
                                 <span class="icon"> <i class="fas fa-map-marker-alt"></i> </span> <div class="item-text">
-                                    <span class="main">Sử dụng vị trí hiện tại</span>
-                                    <span class="sub">Nhấn để lấy tọa độ GPS</span>
+                                    <span class="main" data-i18n="form_gps_main">Sử dụng vị trí hiện tại</span>
+                                    <span class="sub" data-i18n="form_gps_sub">Nhấn để lấy tọa độ GPS</span>
                                 </div>
                             </div>
                 
@@ -72,14 +74,13 @@
                 </div>
 
                 <div class="form-group" id="destinations-group">
-                    <label class="form-label">
-                        Điểm đến
-                        <button class="add-btn" id="add-destination-btn">Thêm</button>
+                    <label class="form-label"> <span data-i18n="form_dest_label">Điểm đến</span>
+                        <button class="add-btn" id="add-destination-btn" data-i18n="form_add_btn">Thêm</button>
                     </label>
                     <div class="destinations-list">
                         <div class="destination-item">
                             <div class="destination-input-wrapper">
-                                <input type="text" placeholder="Tìm kiếm" class="destination-input" list="places-list" autocomplete="off">
+                                <input type="text" placeholder="Tìm kiếm" class="destination-input" list="places-list" autocomplete="off" data-i18n-placeholder="form_dest_ph">
                                 <div class="destination-controls">
                                     <div class="drag-handle">
                                         <span></span>
@@ -95,7 +96,7 @@
 
                 <div class="form-group">
                     <div class="budget-info">
-                        <span class="form-label">Ngân sách</span>
+                        <span class="form-label" data-i18n="form_budget_label">Ngân sách</span>
                         <span class="budget-value">đ0-1.000.000</span>
                     </div>
                     <input type="range" class="range-slider" min="0" max="1000000" value="1000000" step="1000">
@@ -103,43 +104,45 @@
 
                 <div class="form-group">
                         <div>
-                            <label class="form-label">Số hành khách</label>
-                            <input type="text" placeholder="Số hành khách">
+                            <label class="form-label" data-i18n="form_passenger_label">Số hành khách</label>
+                            <input type="text" id="passenger-input" placeholder="Số hành khách" data-i18n-placeholder="form_passenger_ph">
                         </div>
                 </div>
 
                 <div class="form-group">
-                    <button class="dropdown-header">
+                    <button class="dropdown-header" data-i18n="form_pref_header">
                         Ưu tiên
                     </button>
 
                     <div class="dropdown-content">
-                        <p class="dropdown-hint">Lựa chọn các ưu tiên theo sở thích của bạn dưới đây, hoặc thêm một ưu tiên bạn muốn.</p>
+                        <p class="dropdown-hint" data-i18n="form_pref_hint">Lựa chọn các ưu tiên theo sở thích của bạn dưới đây, hoặc thêm một ưu tiên bạn muốn.</p>
                         <div class="checkbox-item">
-                            <span>Tốc độ</span>
-                            <input type="checkbox" checked>
-                        </div>
-                        <div class="checkbox-item">
-                            <span>Tiết kiệm</span>
+                            <span data-i18n="pref_speed">Tốc độ</span>
                             <input type="checkbox">
                         </div>
                         <div class="checkbox-item">
-                            <span>Thoải mái</span>
-                            <input type="checkbox" checked>
-                        </div>
-                        <div class="checkbox-item">
-                            <span>An toàn</span>
-                            <input type="checkbox" checked>
-                        </div>
-                        <div class="checkbox-item">
-                            <span>Cân bằng</span>
+                            <span data-i18n="pref_saving">Tiết kiệm</span>
                             <input type="checkbox">
                         </div>
-                        <button class="add-preference">Thêm</button>
+                        <div class="checkbox-item">
+                            <span data-i18n="pref_comfort">Thoải mái</span>
+                            <input type="checkbox">
+                        </div>
+                        <div class="checkbox-item">
+                            <span data-i18n="pref_safety">An toàn</span>
+                            <input type="checkbox">
+                        </div>
+                        <div class="checkbox-item">
+                            <span data-i18n="pref_balanced">Cân bằng</span>
+                            <input type="checkbox">
+                        </div>
+                        <button class="add-preference" data-i18n="form_add_pref_btn">Thêm</button>
                     </div>
                 </div>
 
-                <button class="submit-btn">Hoàn tất</button>
+                <button class="submit-btn">
+                    <span data-i18n="form_submit_btn">Hoàn tất</span>
+                </button>
             </div>
         </div>
     </div>

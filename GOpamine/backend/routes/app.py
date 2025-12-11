@@ -5,11 +5,13 @@ import sys
 from feedback import feedback_bp, get_all_reviews
 from astar import create_api_blueprint
 from routing import form_bp
+from bus_routes import bus_bp
+
 
 # 2. IMPORT TỪ CHATBOT.PY
 from chatbot import chatbot_bp
 from flask_login import LoginManager
-from auth import auth_bp, User, get_db_connection
+from auth import auth_bp, User, get_db_connection, setup_oauth
 
 from transport_routes import transport_bp
 
@@ -24,6 +26,16 @@ app = Flask(
     template_folder=os.path.join(BASE_DIR, 'frontend', 'templates'),
     static_folder=os.path.join(BASE_DIR, 'frontend', 'static')
 )
+
+from flask import redirect, request # Đảm bảo đã import redirect và request ở đầu file
+setup_oauth(app)
+
+@app.before_request
+def redirect_to_localhost():
+    # Nếu truy cập bằng 127.0.0.1, chuyển ngay sang localhost
+    if '127.0.0.1' in request.host:
+        target_url = request.url.replace('127.0.0.1', 'localhost')
+        return redirect(target_url, code=301)
 
 app.secret_key = 'our_key'
 # Cấu hình Flask-Login
@@ -62,7 +74,7 @@ app.register_blueprint(chatbot_bp)
 app.register_blueprint(create_api_blueprint(DB_PATH))
 app.register_blueprint(form_bp)
 app.register_blueprint(auth_bp)
-
+app.register_blueprint(bus_bp)
 app.register_blueprint(transport_bp)
 
 # ========== ROUTES HTML ==========

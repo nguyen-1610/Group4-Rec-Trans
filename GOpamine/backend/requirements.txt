@@ -1,37 +1,31 @@
-# Core Flask
-Flask>=3.0.0
-Flask-CORS>=4.0.0
-Flask-WTF>=1.2.1
-WTForms>=3.1.1
-flask-login
+# --- Flask Framework & Tiện ích ---
+Flask
+Flask-CORS
+Flask-Login
+Flask-WTF
+WTForms
+python-dotenv
 
-# Database & Data
-pandas>=2.1.4
-python-dateutil>=2.8.2
+# --- AI (Google Gemini) ---
+google-generativeai
+nltk
 
-# HTTP & API
-requests>=2.31.0
+# --- Bản đồ & Thuật toán (cho astar.py và map_trans) ---
+folium
+geopy
+networkx
+osmnx
+# pandas thường đi kèm để xử lý dữ liệu bản đồ/Excel
+pandas
 
-# Map - OpenStreetMap
-folium>=0.15.0
-geopy>=2.4.1
-osmnx>=1.7.1
-networkx>=3.2.1
+# --- Cơ sở dữ liệu & Bảo mật (cho auth.py) ---
+bcrypt
+PyJWT
 
-# AI - Google Gemini
-google-generativeai>=0.3.2
-nltk>=3.8.1
+# --- HTTP Client ---
+requests
 
-# Security
-bcrypt>=4.1.2
-PyJWT>=2.8.0
-
-# Environment
-python-dotenv>=1.0.0
-
-# Production Server
-gunicorn>=21.2.0
-
-# Development (optional)
-pytest>=7.4.3
-black>=23.12.1
+# --- Các thư viện tiện ích khác ---
+gunicorn
+logging
+datetime

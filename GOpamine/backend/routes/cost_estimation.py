@@ -28,7 +28,7 @@ def load_price_config_from_db():
     if not conn: return config
     cursor = conn.cursor()
 
-    # Helper: Làm đẹp tên hãng
+    # 1. Helper: Làm đẹp tên hãng
     def prettify_brand(name):
         if not name: return "Standard"
         name_lower = name.lower().strip()
@@ -37,24 +37,34 @@ def load_price_config_from_db():
         if name_lower == "grab": return "Grab"
         return name.title()
 
-    # Helper: Ghép tên hiển thị
-    def format_display_name(raw_brand, seats, suffix):
+    # 2. Helper: Tạo tên hiển thị chuẩn (QUAN TRỌNG)
+    # Format: [Hãng] [Bike/Car] [Premium?] [(Số chỗ?)]
+    def create_display_name(mode_type, raw_brand, tier, seats=None):
         pretty_brand = prettify_brand(raw_brand)
-        # Hiển thị rõ số chỗ: "Grab Car (4 chỗ)"
-        return f"{pretty_brand} {suffix} ({seats} chỗ)"
+        
+        # Xử lý Tier: Nếu là Normal thì ẩn đi, nếu là Premium/Plus thì hiện ra
+        tier_display = "" if tier.lower() == "normal" else f" {tier}"
+        
+        if mode_type == "bike":
+            return f"{pretty_brand} Bike{tier_display}"
+        else: # car
+            return f"{pretty_brand} Car{tier_display} ({seats} chỗ)"
 
-    # A. Load Xe Máy
+    # A. Load Xe Máy (Tách riêng Normal/Premium)
     try:
         rows = cursor.execute("SELECT * FROM motorbike_pricing").fetchall()
         for row in rows:
             brand = row["brand"] or "Standard"
             tier = row["type"] or "Normal"
+            
+            # Key unique: brand + tier (để Grab Bike Normal và Premium không đè nhau)
             key = f"{brand}_{tier}".lower().replace(" ", "")
             
             config["motorbike"][key] = {
                 "brand": brand,
                 "tier": tier,
-                "display_name": f"{prettify_brand(brand)} Bike", 
+                # Gọi hàm tạo tên cho Bike
+                "display_name": create_display_name("bike", brand, tier),
                 "base_fare": row["base_price"],
                 "base_distance": row["base_distance_km"],
                 "price_per_km": row["per_km_after_base"],
@@ -62,23 +72,24 @@ def load_price_config_from_db():
             }
     except Exception: pass
 
-    # B. Load Ô tô (SỬ DỤNG CỘT NUMBER_OF_SEATS)
+    # B. Load Ô tô (Tách riêng Normal/Premium + Thêm chữ Car)
     try:
         rows = cursor.execute("SELECT * FROM car_pricing").fetchall()
         for row in rows:
             brand = row["brand"] or "Standard"
             tier = row["type"] or "Normal"
-            # [FIX] Lấy số ghế từ cột DB
-            seats = row["number_of_seats"] if "number_of_seats" in row.keys() else 4
+            # Lấy số ghế thực tế
+            seats = int(row["number_of_seats"]) if "number_of_seats" in row.keys() and row["number_of_seats"] else 4
             
-            # Tạo key unique để lưu config
-            key = f"{brand}_{seats}cho".lower().replace(" ", "")
+            # Key unique: brand + tier + seats
+            key = f"{brand}_{tier}_{seats}cho".lower().replace(" ", "")
             
             config["car"][key] = {
                 "brand": brand,
                 "tier": tier,
-                "seats": seats, # Lưu số ghế vào config để logic tính toán dùng
-                "display_name": format_display_name(brand, seats, "Car"),
+                "seats": seats,
+                # Gọi hàm tạo tên cho Car
+                "display_name": create_display_name("car", brand, tier, seats),
                 "base_fare": row["base_price"],
                 "base_distance": row["base_distance_km"],
                 "per_km_3_12": row["per_km_3_12"],
@@ -127,6 +138,9 @@ def calculate_single_car_price(cfg, distance_km, is_raining):
 # ==============================================================================
 # 4. CORE: TÍNH TIỀN (LỌC THEO SỐ GHẾ & LÀM TRÒN)
 # ==============================================================================
+# ==============================================================================
+# 4. CORE: TÍNH TIỀN (GOM NHÓM MIN ~ MAX)
+# ==============================================================================
 def calculate_transport_cost(mode, distance_km, is_student=False, is_raining=False, brand_name=None):
     
     # 1. Nhóm giá cố định
@@ -137,69 +151,52 @@ def calculate_transport_cost(mode, distance_km, is_student=False, is_raining=Fal
         return {"value": total, "display": f"{total:,}đ"}
 
     # 2. Nhóm Xe công nghệ
+    # Xác định đang tìm Bike hay Car
     vehicle_group = "motorbike" if "bike" in mode or "motor" in mode else "car"
     all_services = PRICE_CONFIG.get(vehicle_group, {})
     
     if not brand_name: return {"value": 0, "display": "N/A"}
 
-    # [FIX] Xác định loại xe yêu cầu dựa trên string mode
-    required_seats = None
+    # Xác định yêu cầu về ghế (Nếu là Car)
+    required_seats = 0
     if vehicle_group == "car":
-        if "car_7" in mode or "7 chỗ" in mode: required_seats = 7
-        elif "car_4" in mode or "4 chỗ" in mode: required_seats = 4
+        if "7" in mode: required_seats = 7
+        else: required_seats = 4 # Mặc định coi như tìm 4 chỗ nếu không nói gì
     
     prices = []
-    backup_4_seats = [] # Dùng để fallback
 
+    # --- QUÉT CONFIG ĐỂ TÌM TẤT CẢ CÁC TIER (Normal, Premium...) ---
     for key, cfg in all_services.items():
-        # Lọc Hãng
+        # 1. Lọc đúng Hãng
         if cfg['brand'].lower() != brand_name.lower(): continue
 
+        # 2. Nếu là Car, Lọc đúng Số Ghế
         if vehicle_group == "car":
-            # [FIX] Lọc theo cột 'seats' trong config (đã lấy từ DB)
-            current_seats = cfg.get('seats', 4)
-            
-            # Logic lọc:
-            # - Nếu cần 7 chỗ -> Chỉ lấy xe >= 7 chỗ
-            # - Nếu cần 4 chỗ -> Lấy xe 4 hoặc 5 chỗ
-            is_match = False
+            # Logic: Tìm xe 4 chỗ -> Lấy xe 4, 5 chỗ. Tìm 7 chỗ -> Lấy xe 7 chỗ.
+            seats = cfg.get('seats', 4)
             if required_seats == 7:
-                if current_seats >= 7: is_match = True
-            elif required_seats == 4:
-                if current_seats < 7: is_match = True
-            else:
-                is_match = True # Không yêu cầu cụ thể
+                if seats < 7: continue # Bỏ qua xe nhỏ
+            else: # Tìm 4 chỗ
+                if seats >= 7: continue # Bỏ qua xe to
 
-            # Tính giá
-            price_val = calculate_single_car_price(cfg, distance_km, is_raining)
-            
-            if is_match:
-                prices.append(price_val)
-            
-            # Lưu backup
-            if current_seats < 7:
-                backup_4_seats.append(price_val)
+            # Tính giá Car
+            val = calculate_single_car_price(cfg, distance_km, is_raining)
+            prices.append(val)
 
-        else: # Xe máy
-            # Logic cũ cho xe máy
+        else: 
+            # Tính giá Bike
             total = 0
             if distance_km <= cfg["base_distance"]: total = cfg["base_fare"]
             else: total = cfg["base_fare"] + ((distance_km - cfg["base_distance"]) * cfg["price_per_km"])
             if is_raining: total *= cfg.get("weather_surge", 1.0)
             prices.append(total)
 
-    # --- FALLBACK ---
-    if not prices and required_seats == 7 and backup_4_seats:
-        # Nếu không tìm thấy xe 7 chỗ, lấy giá xe 4 chỗ * 1.3
-        prices = [p * 1.3 for p in backup_4_seats]
-
+    # --- KẾT QUẢ ---
     if not prices: return {"value": 0, "display": "Chưa có giá"}
 
-    # --- LÀM TRÒN (ROUNDING) ---
+    # Tính toán Min ~ Max
     avg_raw = sum(prices) / len(prices)
-    
-    # [FIX] Làm tròn đến hàng nghìn (-3)
-    final_price = int(round(avg_raw, -3))
+    final_price = int(round(avg_raw, -3)) # Giá trị dùng để sort/chấm điểm
     
     min_p = int(round(min(prices), -3))
     max_p = int(round(max(prices), -3))
@@ -207,6 +204,7 @@ def calculate_transport_cost(mode, distance_km, is_student=False, is_raining=Fal
     if min_p == max_p:
         display_str = f"{final_price:,}đ"
     else:
+        # Hiển thị dạng khoảng giá: 25,000~35,000đ
         display_str = f"{min_p:,}~{max_p:,}đ"
 
     return {"value": final_price, "display": display_str}
