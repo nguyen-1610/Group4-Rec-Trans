@@ -143,12 +143,12 @@ def calculate_single_car_price(cfg, distance_km, is_raining):
 # ==============================================================================
 # 4. CORE: TÍNH TIỀN CHÍNH (Được gọi từ bên ngoài)
 # ==============================================================================
-def calculate_transport_cost(mode, distance_km, is_student=False, is_raining=False, brand_name=None):
+def calculate_transport_cost(mode, distance_km, is_raining=False, brand_name=None):
     
     # 1. Xử lý các loại phương tiện đặc biệt (Đi bộ, Bus)
     if mode == "walking": return {"value": 0, "display": "Miễn phí"}
     if mode == "bus":
-        price = 3000 if is_student else 7000 # Vé xe buýt
+        price = 7000 # Vé xe buýt
         # Nếu đi xa > 15km, giả định phải bắt 2 chuyến bus -> nhân đôi tiền
         total = price * 2 if distance_km > 15 else price
         return {"value": total, "display": f"{total:,}đ"}

@@ -342,32 +342,99 @@ function drawRouteOnMap(coords, start, end, waypoints, segments = null) {
 }
 
     async function fetchAndRenderTransportOptions(distanceKm) {
+    try {
+        // 🔧 FIX: Cách đọc formData tối ưu
+        let formData = null;
+        
+        // A. Ưu tiên 1: Lấy từ selectedRoute (nếu vừa submit form)
         try {
-            let priorities = ['saving', 'speed'];
-            try {
-                const formData = JSON.parse(localStorage.getItem('formData'));
-                if (formData?.preferences) priorities = formData.preferences;
-            } catch (e) {}
-
-            const response = await fetch('/api/compare-transport', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    distance_km: distanceKm,
-                    priorities: priorities,
-                    is_student: false 
-                })
-            });
-
-            const result = await response.json();
-            if (result.success && result.data) {
-                renderDynamicCards(result.data, distanceKm);
+            const storedRoute = JSON.parse(localStorage.getItem('selectedRoute'));
+            if (storedRoute && storedRoute.form_data) {
+                formData = storedRoute.form_data;
+                console.log('✅ FormData từ selectedRoute:', formData);
             }
-        } catch (error) {
-            console.error("Lỗi lấy giá xe:", error);
-            document.querySelector('.vehicle-scroll-container').innerHTML = '<div style="text-align:center; padding:10px;">Lỗi kết nối.</div>';
+        } catch (e) {
+            console.warn('⚠️ Không thể parse selectedRoute');
         }
+        
+        // B. Ưu tiên 2: Lấy từ pendingFormData (fallback)
+        if (!formData) {
+            try {
+                const pending = localStorage.getItem('pendingFormData');
+                if (pending) {
+                    formData = JSON.parse(pending);
+                    console.log('✅ FormData từ pendingFormData:', formData);
+                }
+            } catch (e) {
+                console.warn('⚠️ Không thể parse pendingFormData');
+            }
+        }
+        
+        // C. Nếu vẫn không có, dùng default
+        if (!formData) {
+            formData = {
+                preferences: ['saving', 'speed'],
+                budget: 1000000,
+                passengers: 1
+            };
+            console.warn('⚠️ FormData không tìm thấy, dùng default');
+        }
+
+        // 🔧 FIX: Parse dữ liệu chuẩn (xử lý string → number)
+        const priorities = Array.isArray(formData.preferences) 
+            ? formData.preferences 
+            : ['saving', 'speed'];
+        
+        const budget = (() => {
+            const raw = formData.budget;
+            // Xử lý: string "1000000" → number 1000000
+            if (raw === undefined || raw === null || raw === '') return 1000000;
+            const num = parseInt(String(raw).replace(/[^\d]/g, ''));
+            return isNaN(num) || num <= 0 ? 1000000 : num;
+        })();
+        
+        const passengers = (() => {
+            const raw = formData.passengers;
+            if (raw === undefined || raw === null || raw === '') return 1;
+            const num = parseInt(String(raw));
+            return isNaN(num) || num <= 0 ? 1 : num;
+        })();
+
+        console.log("📊 Dữ liệu gửi tới API:", { 
+            distance_km: distanceKm, 
+            budget: budget, 
+            passengers: passengers, 
+            priorities: priorities 
+        });
+
+        // 🔧 FIX: Gửi dữ liệu được parse sạch qua API
+        const response = await fetch('/api/compare-transport', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                distance_km: distanceKm,
+                priorities: priorities,
+                budget: budget,          
+                passengers: passengers,  
+                is_student: false 
+            })
+        });
+
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            renderDynamicCards(result.data, distanceKm);
+        } else {
+            console.error("API trả về lỗi:", result);
+            document.querySelector('.vehicle-scroll-container').innerHTML = 
+                'Không tìm thấy giá xe.';
+        }
+    } catch (error) {
+        console.error("Lỗi lấy giá xe:", error);
+        document.querySelector('.vehicle-scroll-container').innerHTML = 
+            'Lỗi kết nối server.';
     }
+}
 
     function renderDynamicCards(backendResults, distanceKm) {
         const container = document.querySelector('.vehicle-scroll-container');
@@ -456,6 +523,7 @@ function drawRouteOnMap(coords, start, end, waypoints, segments = null) {
             });
         });
     }
+
 
     function getStoredRouteFromStorage() {
         try { return JSON.parse(localStorage.getItem('selectedRoute')); } catch { return null; }

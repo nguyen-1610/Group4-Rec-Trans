@@ -32,11 +32,18 @@ SPEED_CONFIG = {
 # 3. CLASS DEFINITIONS
 # ==============================================================================
 class UserRequest:  # Class chứa thông tin người dùng gửi lên
-    def __init__(self, is_student, priorities, budget=None, passenger_count=1):
-        self.is_student = is_student  # Check xem có phải sinh viên không (để giảm giá bus)
+    def __init__(self, priorities, budget=None, passenger_count=1):
+        # --- [DEBUG TRACE 3] Kiểm tra tham số đầu vào __init__ ---
+        print(f"🔍 [DEBUG TRACE 3] UserRequest.__init__ received budget: {budget} (Type: {type(budget)})")
+
         self.priorities = set(priorities) if priorities else set()  # Lưu các ưu tiên (nhanh, rẻ...) vào set để tra cứu
+        
         # Xử lý ngân sách: Nếu không nhập hoặc nhập sai thì mặc định là 10 triệu (coi như vô hạn)
         self.budget = float(budget) if budget and float(budget) > 0 else 10_000_000
+        
+        # --- [DEBUG TRACE 4] Kiểm tra self.budget sau khi logic if/else chạy ---
+        print(f"🔍 [DEBUG TRACE 4] Final self.budget: {self.budget}")
+
         self.passenger_count = int(passenger_count)  # Số lượng hành khách
 
 class WeatherContext:  # Class chứa thông tin thời tiết
@@ -130,7 +137,7 @@ def _calculate_metrics(mode, user, distance_km, weather_ctx):  # Hàm tính toá
     # Tính giá tiền (nếu không phải đi bộ)
     if cost_estimation and mode['type'] != 'walk':
         res = cost_estimation.calculate_transport_cost(  # Gọi hàm tính giá bên file cost_estimation
-            mode=mode['map_key'], distance_km=distance_km, is_student=user.is_student,
+            mode=mode['map_key'], distance_km=distance_km,
             is_raining=weather_ctx.is_raining, brand_name=mode.get('brand')
         )
         # Lấy giá trị số (value) và chuỗi hiển thị (display)
@@ -138,7 +145,7 @@ def _calculate_metrics(mode, user, distance_km, weather_ctx):  # Hàm tính toá
         display_str = res['display'] if isinstance(res, dict) else f"{int(res):,}đ"
 
     # Tính tổng tiền: Bus nhân theo người, còn lại tính theo chuyến
-    if mode['type'] == 'bus': total_cost = unit_price * user.passenger_count
+    if mode['type'] == 'bus': total_cost = unit_price
     else: total_cost = unit_price 
 
     # Tính giá chia đầu người
@@ -284,10 +291,21 @@ def _generate_labels(metrics, score, weather_ctx, distance_km):  # Hàm tạo nh
 # 10. MAIN FUNCTION
 # ==============================================================================
 def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.5):  # Hàm chính
-    modes = _get_all_modes(trip_distance)  # B1: Lấy danh sách xe
-    if not modes: return []
 
+    # --- [DEBUG START] ---
+    print("-" * 30)
+    print("💰 [DEBUG PRICING SCORE] Đang tính toán điểm số...")
+    print(f"   👤 Số khách: {user.passenger_count}")
+    print(f"   💵 Ngân sách: {user.budget:,.0f} đ")
+    print(f"   ❤️ Ưu tiên: {user.priorities}")
+    print("-" * 30)
+    # --- [DEBUG END] ---
+
+    modes = _get_all_modes(trip_distance)  # B1: Lấy danh sách xe
+
+    if not modes: return [] # Nếu không có mode nào khả thi thì trả về rỗng
     results = []
+
     for mode in modes:
         if not _check_hard_constraints(mode, user):  # B2: Lọc cứng (VD: quá số người)
             continue 
