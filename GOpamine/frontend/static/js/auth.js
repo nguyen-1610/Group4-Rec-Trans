@@ -69,7 +69,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
         } catch (error) {
             console.error("Network/Logic Error:", error);
-            alert("Lỗi hệ thống: " + error.message + "\nHãy kiểm tra Terminal của Python để xem chi tiết.");
+            
+            // [FIX] Phân loại lỗi để báo tin nhắn dễ hiểu hơn
+            let msg = "Lỗi hệ thống: " + error.message;
+            
+            if (error.message.includes('Failed to fetch')) {
+                msg = "Không thể kết nối đến Server. Vui lòng kiểm tra lại mạng hoặc đảm bảo Server Python đang chạy.";
+            }
+
+            // Dùng Swal nếu có, không thì alert
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi kết nối',
+                    text: msg,
+                    confirmButtonColor: '#d33'
+                });
+            } else {
+                alert(msg);
+            }
         } finally {
             btn.textContent = oldText;
             btn.disabled = false;
