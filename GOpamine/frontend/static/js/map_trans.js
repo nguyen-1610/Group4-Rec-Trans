@@ -27,6 +27,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             lbl_vehicle: "Xe",
             lbl_price: "Giá",
 
+            alert_title_redirect: "Chuyển hướng",
+            alert_desc_redirect: "Mở ứng dụng",
+            alert_title_select: "Chưa chọn xe",
+            btn_go: "Đi ngay",
+            btn_cancel: "Hủy",
+
             // Tên phương tiện
             mode_walking: "Đi bộ",
             mode_bus: "Xe buýt",
@@ -52,6 +58,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             ph_dest: "Search destination",
             lbl_vehicle: "Vehicle",
             lbl_price: "Price",
+
+            alert_title_redirect: "Redirecting",
+            alert_desc_redirect: "Open app",
+            alert_title_select: "No vehicle selected",
+            btn_go: "Go",
+            btn_cancel: "Cancel",
+
             // Vehicle names
             mode_walking: "Walking",
             mode_bus: "Bus",
@@ -522,7 +535,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     function updateAllVehicleCardsDefault() {
-        document.querySelector('.vehicle-scroll-container').innerHTML = '<div style="text-align:center; padding:20px; color:#666;"><i class="fas fa-spinner fa-spin"></i> Đang tính toán...</div>';
+        const text = window.getTrans('map_loading'); 
+        document.querySelector('.vehicle-scroll-container').innerHTML = 
+        `<div style="text-align:center; padding:20px; color:#666;">
+            <i class="fas fa-spinner fa-spin"></i> ${text}
+        </div>`;
     }
 
     function setupCardSelectionEvents() {

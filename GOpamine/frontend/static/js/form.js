@@ -44,7 +44,7 @@ function saveFormData() {
             },
             destinations: destinations,
             budget: rangeSlider.value,
-            passengers: document.querySelector('input[placeholder="Số hành khách"]').value,
+            passengers: document.getElementById('passenger-input').value,
             preferences: Array.from(document.querySelectorAll('.checkbox-item input:checked'))
                 .map(cb => cb.parentElement.querySelector('span').textContent),
             timestamp: Date.now()
@@ -97,10 +97,13 @@ function restoreFormData() {
                     destItem = document.createElement('div');
                     destItem.className = 'destination-item';
                     destItem.draggable = true;
+
+                    const lang = localStorage.getItem('userLang') || 'vi';
+const t = (window.translations && window.translations[lang]) ? window.translations[lang] : { search_placeholder: "Tìm kiếm địa điểm" };
+
                     destItem.innerHTML = `
                         <div class="destination-input-wrapper">
-                            <input type="text" placeholder="Tìm kiếm địa điểm" class="destination-input" autocomplete="off">
-                            <div class="destination-controls">
+                        <input type="text" placeholder="${t.search_placeholder}" class="destination-input" autocomplete="off" data-i18n-placeholder="search_placeholder">                            <div class="destination-controls">
                                 <div class="drag-handle">
                                     <span></span>
                                     <span></span>
@@ -320,12 +323,13 @@ dropdownHeader.addEventListener('click', () => {
 
 addDestinationBtn.addEventListener('click', () => {
     const newDestination = document.createElement('div');
+    const lang = localStorage.getItem('userLang') || 'vi';
+    const t = (window.translations && window.translations[lang]) ? window.translations[lang] : { search_placeholder: "Tìm kiếm địa điểm" };
     newDestination.className = 'destination-item';
     newDestination.draggable = true;
     newDestination.innerHTML = `
         <div class="destination-input-wrapper">
-            <input type="text" placeholder="Tìm kiếm địa điểm" class="destination-input" autocomplete="off">
-            <div class="destination-controls">
+        <input type="text" placeholder="${t.search_placeholder}" class="destination-input" autocomplete="off" data-i18n-placeholder="search_placeholder">            <div class="destination-controls">
                 <div class="drag-handle">
                     <span></span>
                     <span></span>
@@ -570,11 +574,10 @@ async function syncFormDataWithChatbot(sessionId, formData) {
 // ... (Phần đầu sự kiện click giữ nguyên) ...
 submitBtn.addEventListener('click', async () => {
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Đang xử lý...'; // Hoặc lấy từ t.form_processing nếu muốn chuẩn chỉ
-
     // [BỔ SUNG] Lấy từ điển ngôn ngữ hiện tại để hiển thị popup đúng tiếng
     const currentLang = localStorage.getItem('userLang') || 'vi';
     const t = window.translations ? window.translations[currentLang] : null;
+    submitBtn.textContent = t.form_processing || "Processing...";
 
     // Fallback text (phòng trường hợp chưa nạp từ điển)
     const txtOrigin = t ? t.alert_no_origin : 'Vui lòng chọn điểm xuất phát!';
@@ -805,7 +808,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // D. Logic nút GPS (Kết nối với hàm handleGetUserLocation đã viết ở trên)
         if (gpsBtn) {
             gpsBtn.addEventListener('click', () => {
-                handleGetUserLocation(originInput, gpsBtn, originDropdown);
+                const lang = localStorage.getItem('userLang') || 'vi';
+        const t = (window.translations && window.translations[lang]) ? window.translations[lang] : { gps_locating: "Đang tìm vị trí..." };
+
+        // Gán giá trị đã dịch vào ô input
+        originInput.value = t.gps_locating;
+
+        // Gọi hàm xử lý GPS gốc
+        handleGetUserLocation(originInput, gpsBtn, originDropdown);
             });
         }
     }
@@ -946,7 +956,12 @@ document.addEventListener('DOMContentLoaded', function() {
             form_submit_btn: "Hoàn tất",
             form_processing: "Đang xử lý...",
             alert_no_origin: "Vui lòng chọn điểm xuất phát từ danh sách gợi ý!",
-            alert_no_dest: "Vui lòng chọn ít nhất một điểm đến!"
+            alert_no_dest: "Vui lòng chọn ít nhất một điểm đến!",
+
+            form_processing: "Đang xử lý...",
+            gps_locating: "Đang tìm vị trí...",
+            gps_getting_name: "Đang lấy tên đường...",
+            search_placeholder: "Tìm kiếm địa điểm"
         });
 
         // --- TIẾNG ANH ---
@@ -973,7 +988,12 @@ document.addEventListener('DOMContentLoaded', function() {
             form_submit_btn: "Find Route",
             form_processing: "Processing...",
             alert_no_origin: "Please select a valid origin from suggestions!",
-            alert_no_dest: "Please select at least one destination!"
+            alert_no_dest: "Please select at least one destination!",
+
+            form_processing: "Processing...",
+            gps_locating: "Locating...",
+            gps_getting_name: "Getting street name...",
+            search_placeholder: "Search location"
         });
     }
 
