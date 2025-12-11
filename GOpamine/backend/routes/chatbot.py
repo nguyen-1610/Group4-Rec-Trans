@@ -234,8 +234,8 @@ def build_pricing_context(form_data, weather_payload, traffic_payload):
 
         normalized_priorities = normalize_priorities(form_data.get("preferences", []))
         user = UserRequest(
-            is_student=is_student(form_data),
             priorities=normalized_priorities
+            
         )
 
         weather_ctx = build_weather_context(weather_payload)
@@ -261,6 +261,7 @@ def build_pricing_context(form_data, weather_payload, traffic_payload):
 
         for option in top_choices:
             label = f" ({', '.join(option['labels'])})" if option.get("labels") else ""
+            price_str = option.get('display_price', '0đ')
             lines.append(
                 f"- {option['mode_name']}: ~{option['price']:,}đ | "
                 f"{option['duration']} phút | Điểm {option['score']}{label}"
@@ -284,13 +285,11 @@ def build_advanced_pricing_context(form_data):
             print("[Pricing] Thiếu thông tin điểm đi/đến trong form_data")
             return None
 
-        is_sv = is_student(form_data)
 
         # Gọi AStarRouter
         result = ROUTER.plan_multi_stop_trip(
-            start_id=start_input,
-            destination_ids=dest_input,
-            is_student=is_sv
+            start_id=int(start_id),
+            destination_ids=[int(x) for x in dest_ids],
         )
 
         if not result['success']:
@@ -362,10 +361,6 @@ def build_advanced_pricing_context(form_data):
         import traceback
         traceback.print_exc()
         return None
-
-def is_student(form_data):
-    marker = str(form_data.get("passengers", "")).strip().lower()
-    return "sinh viên" in marker
 
 
 def normalize_priorities(preferences):

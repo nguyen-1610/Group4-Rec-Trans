@@ -636,13 +636,29 @@ submitBtn.addEventListener('click', async () => {
         
         console.log('📋 Form Data:', formData);
 
-        saveFormData(); // Lưu form data trước khi submit
         
         // 4. Tạo session (nếu có API)
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
             sessionId = await tryCreateSession();
         }
+
+        const syncResponse = await fetch(`${API_BASE}/form`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                form_data: formData  // ← Backend sẽ lưu vào session/DB
+            })
+        });
+
+        saveFormData(); // Lưu form data trước khi submit
+
+
+        if (!syncResponse.ok) {
+            console.warn('⚠️ Không thể sync form data với server');
+        }
+
         await syncFormDataWithChatbot(sessionId, formData);
         
                 // 5. Gọi backend để tính route
@@ -660,11 +676,12 @@ submitBtn.addEventListener('click', async () => {
             route_coordinates: routeData.route_coordinates, 
             distance_km: routeData.distance_km,
             waypoints: routeData.waypoints,
-            vehicle: DEFAULT_VEHICLE
+            vehicle: DEFAULT_VEHICLE,
+            form_data: formData
         };
 
         localStorage.setItem('selectedRoute', JSON.stringify(routePayload));
-        localStorage.setItem('pendingFormData', JSON.stringify(formData));
+        localStorage.setItem('pendingFormData', JSON.stringify(formData)); // ← Backup
         
         // 7. Chuyển sang chatbot
         console.log('🤖 Chuyển sang chatbot...');
