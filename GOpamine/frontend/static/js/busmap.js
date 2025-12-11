@@ -158,6 +158,260 @@ function drawDetailedBusRoute(routeData, userStart, userEnd) {
     console.log('✅ Hoàn tất vẽ Bus route!');
 }
 
+function drawMultiLegBusRoute(multiData, waypoints) {
+    const map = getMapInstance();
+    if (!map) return alert('Lỗi: Bản đồ chưa sẵn sàng.');
+    
+    // 1. Xóa layers cũ
+    console.log('🗑️ Xóa tất cả layers cũ...');
+    if (window.busLayers && window.busLayers.length > 0) {
+        console.log(`🗑️ Xóa ${window.busLayers.length} layers cũ`);
+        window.busLayers.forEach(layer => {
+            try { map.removeLayer(layer); } catch(e) { }
+        });
+    }
+    window.busLayers = [];
+
+    // 2. Xóa routeLayerGroup nếu có
+    if (window.routeLayerGroup) {
+        console.log('  → Xóa routeLayerGroup');
+        try {
+            window.routeLayerGroup.clearLayers();
+        } catch(e) {
+            console.warn('Không thể xóa routeLayerGroup:', e);
+        }
+    }
+
+    // 3. Gọi hàm clear global nếu có (từ map_trans.js)
+    if (typeof window.clearExistingMapRoutes === 'function') {
+        console.log('  → Gọi clearExistingMapRoutes()');
+        window.clearExistingMapRoutes();
+    }
+    // =========================================
+    console.log('🚌 Vẽ lộ trình Bus đa chặng...');
+    const legColors = ['#4285F4', '#EA4335', '#FBBC04', '#34A853', '#9C27B0', '#FF6D00'];
+    const allPoints = []; 
+
+    if (!multiData.legs || multiData.legs.length === 0) return;
+
+    multiData.legs.forEach((leg, legIndex) => {
+        const legColor = legColors[legIndex % legColors.length];
+        const legNumber = legIndex + 1;
+        const isLastLeg = legIndex === multiData.legs.length - 1;
+
+        // ====== A. ĐI BỘ RA TRẠM ĐẦU ======
+        if (leg.walk_to_start) {
+            const startWaypoint = waypoints[legIndex];
+            const walkToStart = drawWalkingPath(
+                { lat: startWaypoint.lat, lng: startWaypoint.lon || startWaypoint.lng },
+                { lat: leg.walk_to_start[0], lng: leg.walk_to_start[1] },
+                '#ff6b6b'
+            );
+            if (walkToStart) window.busLayers.push(walkToStart);
+            
+            // Marker Trạm Đầu
+            const startStationMarker = L.marker([leg.walk_to_start[0], leg.walk_to_start[1]], {
+                icon: L.divIcon({
+                    html: `<div style="background:${legColor}; color:white; padding:5px 8px; border-radius:4px; font-size:11px; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space:nowrap;">🚏 ${leg.start_stop || 'Trạm ' + legNumber}</div>`,
+                    className: 'station-label',
+                    iconAnchor: [0, 0]
+                })
+            }).addTo(map);
+            window.busLayers.push(startStationMarker);
+            allPoints.push(leg.walk_to_start);
+        }
+
+        // ====== B. VẼ BUS SEGMENTS ======
+        if (leg.segments) {
+            leg.segments.forEach(seg => {
+                if (seg.type === 'bus' && seg.path) {
+                    const busLine = L.polyline(seg.path, { 
+                        color: legColor, 
+                        weight: 5, 
+                        opacity: 0.8 
+                    }).addTo(map);
+                    window.busLayers.push(busLine);
+                    allPoints.push(...seg.path);
+                } else if (seg.type === 'transfer') {
+                    const tMarker = L.marker([seg.lat, seg.lng], {
+                        icon: L.divIcon({ 
+                            html: '<div style="background:#FFA500; color:white; padding:8px; border-radius:50%; font-size:16px;">🔄</div>', 
+                            className: 'transfer-icon',
+                            iconAnchor: [16, 16]
+                        })
+                    }).addTo(map);
+                    window.busLayers.push(tMarker);
+                }
+            });
+        }
+
+        // ====== C. ĐI BỘ TỪ TRẠM CUỐI → ĐIỂM TIẾP THEO ======
+        // ⚠️ KEY FIX: Vẽ walk_from_end cho MỌI leg (không chỉ leg cuối)
+        if (leg.walk_from_end) {
+            const nextWaypoint = waypoints[legIndex + 1]; // Điểm B, C...
+            
+            const walkFromEnd = drawWalkingPath(
+                { lat: leg.walk_from_end[0], lng: leg.walk_from_end[1] },
+                { lat: nextWaypoint.lat, lng: nextWaypoint.lon || nextWaypoint.lng },
+                '#ff6b6b'
+            );
+            if (walkFromEnd) window.busLayers.push(walkFromEnd);
+            
+            // Marker Trạm Cuối của leg này
+            const endStationMarker = L.marker([leg.walk_from_end[0], leg.walk_from_end[1]], {
+                icon: L.divIcon({
+                    html: `<div style="background:${legColor}; color:white; padding:5px 8px; border-radius:4px; font-size:11px; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space:nowrap;">🚏 ${leg.end_stop || 'Trạm cuối ' + legNumber}</div>`,
+                    className: 'station-label',
+                    iconAnchor: [0, 0]
+                })
+            }).addTo(map);
+            window.busLayers.push(endStationMarker);
+            allPoints.push(leg.walk_from_end);
+        }
+    });
+
+    // ====== D. VẼ MARKERS CHO WAYPOINTS (A, B, C) ======
+    if (typeof window.createCustomMarker === 'function') {
+        waypoints.forEach((wp, index) => {
+            const label = String.fromCharCode(65 + index); // A, B, C...
+            let color = '#fbbc04'; 
+            if (index === 0) color = '#4285f4'; 
+            else if (index === waypoints.length - 1) color = '#ea4335';
+
+            createCustomMarker(map, wp.lat, wp.lon || wp.lng, color, label, wp.name);
+            allPoints.push([wp.lat, wp.lon || wp.lng]);
+        });
+    }
+
+    // ====== E. FIT BOUNDS ======
+    if (allPoints.length > 0) {
+        map.fitBounds(allPoints, { padding: [50, 50], maxZoom: 15 });
+    }
+    
+    // ====== F. RENDER UI ======
+    renderMultiLegList(multiData, waypoints);
+    console.log('✅ Hoàn tất vẽ Multi-Leg Bus Route!');
+}
+
+function renderMultiLegList(multiData, waypoints) {
+    const container = document.querySelector(".vehicle-scroll-container");
+    if (!container) return;
+
+    // 1. Backup giao diện cũ
+    if (!window.originalVehicleListHTML) {
+        window.originalVehicleListHTML = container.innerHTML;
+    }
+
+    // 2. Header: Nút Back + Tổng kết
+    // Mình dùng innerHTML cho nhanh gọn
+    const headerHTML = `
+        <div style="padding: 0 5px 15px 5px; border-bottom: 1px solid #eee; margin-bottom: 15px;">
+            <button onclick="restoreVehicleList()" style="background:none; border:none; color:#333; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:5px; margin-bottom: 10px;">
+                <i class="fas fa-arrow-left"></i> Quay lại
+            </button>
+            <div style="background: #e8f0fe; color: #1967d2; padding: 10px; border-radius: 8px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+                <span><i class="fas fa-coins"></i> <b>${multiData.display_price}</b></span>
+                <span><i class="fas fa-clock"></i> <b>${multiData.duration} phút</b></span>
+                <span><i class="fas fa-route"></i> ${multiData.legs.length} chặng</span>
+            </div>
+        </div>
+    `;
+
+    // 3. Render Timeline
+    let timelineHTML = '<div class="multi-leg-timeline" style="padding: 0 10px;">';
+    
+    const legs = multiData.legs || [];
+    
+    // Logic màu sắc giống hàm vẽ Map để đồng bộ
+    // (A: Xanh, B: Vàng/Đỏ..., Cuối: Đỏ)
+    const getPointColor = (index, total) => {
+        if (index === 0) return '#4285F4'; // Điểm đầu: Xanh
+        if (index === total - 1) return '#EA4335'; // Điểm cuối: Đỏ
+        return '#FBBC04'; // Điểm giữa: Vàng
+    };
+
+    legs.forEach((leg, i) => {
+        const pointLabel = String.fromCharCode(65 + i); // A, B, C...
+        const pointName = waypoints[i] ? waypoints[i].name : `Điểm ${pointLabel}`;
+        const color = getPointColor(i, waypoints.length);
+
+        // --- PHẦN 1: ĐIỂM DỪNG (Node) ---
+        timelineHTML += `
+            <div style="display:flex; gap: 15px; position: relative;">
+                <div style="display:flex; flex-direction:column; align-items:center; width: 30px;">
+                    <div style="
+                        width: 28px; height: 28px; 
+                        background: ${color}; color: white; 
+                        border-radius: 50%; 
+                        display: flex; align-items: center; justify-content: center; 
+                        font-weight: bold; font-size: 14px;
+                        z-index: 2; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    ">${pointLabel}</div>
+                    
+                    <div style="width: 2px; background: #ddd; flex: 1; min-height: 40px; margin-top: -2px; margin-bottom: -2px;"></div>
+                </div>
+
+                <div style="flex: 1; padding-bottom: 20px;">
+                    <div style="font-weight: bold; font-size: 14px; color: #333; margin-top: 4px;">${pointName}</div>
+                    
+                    <div class="option-card" style="
+                        margin-top: 10px; padding: 10px; 
+                        border: 1px solid #eee; background: #fff; 
+                        border-left: 3px solid ${color}; border-radius: 4px;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                    ">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:bold; color:#2c3e50;">${leg.route_name}</span>
+                            <span style="font-size:11px; background:#f1f3f4; padding:2px 6px; border-radius:4px; font-weight:bold;">
+                                ${leg.display_price}
+                            </span>
+                        </div>
+                        <div style="font-size:12px; color:#666; margin-top:4px; font-style: italic;">
+                            ${leg.description}
+                        </div>
+                        <div style="font-size:11px; color:#888; margin-top:6px; display:flex; gap:10px;">
+                            <span><i class="fas fa-walking"></i> ${leg.walk_distance}m đi bộ</span>
+                            <span><i class="fas fa-clock"></i> ${leg.duration} phút</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    // --- PHẦN 3: ĐIỂM CUỐI CÙNG (Kết thúc hành trình) ---
+    if (waypoints.length > 0) {
+        const lastIdx = waypoints.length - 1;
+        const lastLabel = String.fromCharCode(65 + lastIdx);
+        const lastName = waypoints[lastIdx].name;
+        const lastColor = getPointColor(lastIdx, waypoints.length);
+
+        timelineHTML += `
+            <div style="display:flex; gap: 15px;">
+                <div style="display:flex; flex-direction:column; align-items:center; width: 30px;">
+                    <div style="
+                        width: 28px; height: 28px; 
+                        background: ${lastColor}; color: white; 
+                        border-radius: 50%; 
+                        display: flex; align-items: center; justify-content: center; 
+                        font-weight: bold; font-size: 14px;
+                        z-index: 2; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    ">${lastLabel}</div>
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-weight: bold; font-size: 14px; color: #333; margin-top: 4px;">${lastName}</div>
+                    <div style="font-size: 12px; color: #888;">Điểm kết thúc</div>
+                </div>
+            </div>
+        `;
+    }
+
+    timelineHTML += '</div>'; // Đóng div timeline
+
+    // 4. Render vào container
+    container.innerHTML = headerHTML + timelineHTML;
+}
+
 // =========================================================================
 // 7. BUS LOGIC - XỬ LÝ DANH SÁCH LỰA CHỌN (UPDATED)
 // =========================================================================
@@ -165,18 +419,18 @@ function drawDetailedBusRoute(routeData, userStart, userEnd) {
 async function handleBusSelection() {
     console.log("🚌 Đang lấy danh sách lộ trình xe buýt...");
     
-     // ========== KIỂM TRA MAP ==========
     const map = getMapInstance();
     if (!map) {
         return alert('Lỗi: Bản đồ chưa sẵn sàng. Vui lòng tải lại trang.');
     }
-    // ==================================
-    // Lấy dữ liệu hành trình từ localStorage
+    
+    // Lấy dữ liệu từ localStorage
     const storedRouteJson = localStorage.getItem('selectedRoute');
     if (!storedRouteJson) return alert("Lỗi: Không tìm thấy dữ liệu hành trình.");
+    
     const storedRoute = JSON.parse(storedRouteJson);
     
-    // Lấy điểm A và B
+    // Xác định điểm đầu/cuối
     let userStart, userEnd;
     if (storedRoute.waypoints && storedRoute.waypoints.length >= 2) {
         userStart = storedRoute.waypoints[0];
@@ -185,51 +439,147 @@ async function handleBusSelection() {
         userStart = storedRoute.start_place;
         userEnd = storedRoute.end_place;
     }
-
+    
     // Hiển thị loading
     const priceEl = document.querySelector('.option-card.selected .price');
     const originalText = priceEl ? priceEl.textContent : "";
     if (priceEl) priceEl.textContent = "⏳...";
-
+    
     try {
-        // Gọi API Backend
-        const response = await fetch('/api/bus/find', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                start: { lat: parseFloat(userStart.lat), lon: parseFloat(userStart.lon || userStart.lng) },
-                end: { lat: parseFloat(userEnd.lat), lon: parseFloat(userEnd.lon || userEnd.lng) }
-            })
-        });
+        const isMultiStop = storedRoute.waypoints && storedRoute.waypoints.length > 2;
         
-        const res = await response.json();
-        
-        if (res.success) {
-            // Check kỹ hơn để tránh lỗi undefined
-            if (res.routes && Array.isArray(res.routes) && res.routes.length > 0) {
-                renderBusOptionsList(res.routes, userStart, userEnd);
-            }
-            else if (res.type === 'multi_stop') {
-                // Đảm bảo hàm này tồn tại trước khi gọi
-                if (typeof drawMultiLegBusRoute === 'function') {
-                    drawMultiLegBusRoute(res.data, storedRoute.waypoints);
-                } else {
-                    console.warn("Hàm drawMultiLegBusRoute chưa được định nghĩa");
-                }
-            }
-            else {
-                alert("⚠️ Không tìm thấy lộ trình phù hợp");
-            }
+        if (isMultiStop) {
+            // ========== XỬ LÝ ĐA ĐIỂM: TÁCH THÀNH CÁC CHẶNG ==========
+            console.log("🔀 Xử lý hành trình đa điểm...");
+            await handleMultiStopBusRoute(storedRoute.waypoints);
         } else {
-            // Xử lý trường hợp success: false từ backend
-            alert("Không tìm thấy tuyến xe: " + (res.message || "Lỗi không xác định"));
+            // ========== XỬ LÝ 2 ĐIỂM (GIỮ NGUYÊN LOGIC CŨ) ==========
+            const payload = {
+                start: { 
+                    lat: parseFloat(userStart.lat), 
+                    lon: parseFloat(userStart.lon || userStart.lng) 
+                },
+                end: { 
+                    lat: parseFloat(userEnd.lat), 
+                    lon: parseFloat(userEnd.lon || userEnd.lng) 
+                }
+            };
+            
+            const response = await fetch('/api/bus/find', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const res = await response.json();
+            
+            if (res.success) {
+                if (res.routes && res.routes.length > 0) {
+                    renderBusOptionsList(res.routes, userStart, userEnd);
+                } else {
+                    alert("⚠️ Không tìm thấy lộ trình");
+                }
+            } else {
+                alert("❌ " + (res.message || "Không tìm thấy tuyến xe"));
+            }
         }
-    } 
-    catch (e) {
+    } catch (e) {
         console.error("❌ Lỗi:", e);
         alert("Lỗi kết nối: " + e.message);
     } finally {
         if (priceEl) priceEl.textContent = originalText;
+    }
+}
+
+/**
+ * Xử lý đa điểm: Gọi API cho từng chặng riêng biệt
+ */
+async function handleMultiStopBusRoute(waypoints) {
+    console.log(`📍 Tìm route cho ${waypoints.length} điểm...`);
+    
+    const legs = [];
+    let totalPrice = 0;
+    let totalDuration = 0;
+    let hasError = false;
+    
+    // Tạo các chặng: A→B, B→C, C→D...
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const start = waypoints[i];
+        const end = waypoints[i + 1];
+        const legLabel = `${String.fromCharCode(65 + i)} → ${String.fromCharCode(65 + i + 1)}`;
+        
+        console.log(`🔍 Tìm route cho chặng ${legLabel}...`);
+        
+        try {
+            const response = await fetch('/api/bus/find', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start: { 
+                        lat: parseFloat(start.lat), 
+                        lon: parseFloat(start.lon || start.lng) 
+                    },
+                    end: { 
+                        lat: parseFloat(end.lat), 
+                        lon: parseFloat(end.lon || end.lng) 
+                    }
+                })
+            });
+            
+            const res = await response.json();
+            
+            if (res.success && res.routes && res.routes.length > 0) {
+                // Lấy tuyến tốt nhất (tuyến đầu tiên)
+                const bestRoute = res.routes[0];
+                
+                // Chuyển đổi sang format leg
+                const leg = {
+                    route_name: bestRoute.route_name || `Chặng ${i + 1}`,
+                    description: bestRoute.description || `${legLabel}`,
+                    walk_to_start: bestRoute.walk_to_start,
+                    walk_from_end: bestRoute.walk_from_end,
+                    start_stop: bestRoute.start_stop,
+                    end_stop: bestRoute.end_stop,
+                    segments: bestRoute.segments,
+                    duration: bestRoute.duration || 15,
+                    walk_distance: bestRoute.walk_distance || 0,
+                    display_price: bestRoute.display_price || '7.000đ',
+                    price: bestRoute.price || 7000
+                };
+                
+                legs.push(leg);
+                totalPrice += leg.price;
+                totalDuration += leg.duration;
+                
+                console.log(`✅ Tìm thấy route cho ${legLabel}:`, leg.route_name);
+            } else {
+                console.error(`❌ Không tìm thấy route cho ${legLabel}`);
+                alert(`Không tìm thấy tuyến xe cho chặng ${legLabel}`);
+                hasError = true;
+                break;
+            }
+        } catch (e) {
+            console.error(`❌ Lỗi khi tìm route ${legLabel}:`, e);
+            alert(`Lỗi kết nối cho chặng ${legLabel}`);
+            hasError = true;
+            break;
+        }
+    }
+    
+    // Nếu tìm thấy đủ tất cả chặng
+    if (!hasError && legs.length === waypoints.length - 1) {
+        console.log(`✅ Đã tìm thấy đủ ${legs.length} chặng!`);
+        
+        // Tạo data object giống format backend
+        const multiLegData = {
+            mode_name: "Hành trình Bus Đa Điểm",
+            legs: legs,
+            display_price: `${totalPrice.toLocaleString('vi-VN')}đ`,
+            duration: totalDuration
+        };
+        
+        // Vẽ lên map
+        drawMultiLegBusRoute(multiLegData, waypoints);
     }
 }
 
@@ -444,4 +794,43 @@ window.restoreVehicleList = function() {
     } else {
         console.warn('⚠️ Không có backup HTML để restore!');
     }
+};
+
+/**
+ * 🧹 HÀM DỌN DẸP BẢN ĐỒ (GLOBAL CLEAR)
+ * Xóa sạch các đường vẽ, marker, và reset biến trạng thái liên quan đến lộ trình.
+ */
+window.clearExistingMapRoutes = function() {
+    console.log("🧹 Đang dọn dẹp bản đồ...");
+
+    const map = window.mapInstance || (typeof getMapInstance === 'function' ? getMapInstance() : null);
+
+    // 1. Xóa RouteLayerGroup (Layer chính chứa đường đi Car/Moto/Walk cơ bản)
+    if (window.routeLayerGroup) {
+        window.routeLayerGroup.clearLayers();
+    }
+
+    // 2. Xóa Bus Layers (Mảng chứa các đoạn đường Bus, icon trạm, đường đi bộ đứt nét...)
+    if (window.busLayers && Array.isArray(window.busLayers)) {
+        window.busLayers.forEach(layer => {
+            if (map) {
+                try { map.removeLayer(layer); } catch (e) { console.warn("Lỗi xóa layer bus:", e); }
+            }
+        });
+        window.busLayers = []; // Reset mảng về rỗng
+    }
+
+    // 3. Xóa Routing Control (Nếu dùng thư viện Leaflet Routing Machine cũ/ngoài luồng)
+    if (window.routingControl && map) {
+        try { map.removeControl(window.routingControl); } catch (e) {}
+        window.routingControl = null;
+    }
+
+    // 4. Xóa các container chỉ đường còn sót lại trong DOM (nếu có)
+    document.querySelectorAll('.leaflet-routing-container').forEach(el => el.remove());
+
+    // 5. Reset các biến trạng thái Global
+    window.currentBusOptions = null; // Xóa danh sách options bus đang lưu tạm
+
+    console.log("✨ Bản đồ đã được làm sạch!");
 };
