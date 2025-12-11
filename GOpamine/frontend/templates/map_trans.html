@@ -10,13 +10,12 @@
     
     <link rel="stylesheet" href="../static/css/map_trans.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="container">
         <div id="map">
-            <button class="back-btn" onclick="goToPreviousPage()">←</button>
+            <button class="back-btn" type="button">←</button>
 
             <div class="ai-chat-btn">
                 <button class="tab-btn active" onclick="switchTab('map')">Map</button>
@@ -49,7 +48,7 @@
         </div>
 
     <div class="action-buttons">
-        <button class="btn btn-secondary" onclick="goBack()" data-i18n="map_consult_ai">
+        <button class="btn btn-secondary" onclick="consultWithAI()" data-i18n="map_consult_ai">
             Tư Vấn Với AI
         </button>
         <button class="btn btn-primary" onclick="confirmRoute()" data-i18n="map_select_btn">
@@ -62,5 +61,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
     <script src="../static/js/location-utils.js"></script>
     <script src="../static/js/map_trans.js"></script>
+    <script src="../static/js/busmap.js"></script>
 </body>
 </html>

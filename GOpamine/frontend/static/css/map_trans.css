@@ -386,89 +386,225 @@ body {
 }
 
 /* Gợi ý tìm kiếm (Autocomplete) */
+/* ============================================== */
+/* GIAO DIỆN GỢI Ý TÌM KIẾM (KIỂU GOOGLE MAPS) */
+/* ============================================== */
+
+/* Khung chứa danh sách */
 .map-suggestions {
-    margin-top: 5px;
-    border-top: 1px solid #f0f0f0;
-    max-height: 200px;
-    overflow-y: auto;
+    background: white;
+    border-radius: 0 0 16px 16px; /* Bo tròn góc dưới */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15); /* Bóng đổ mềm mại */
+    margin-top: 2px;
+    overflow: hidden;
+    border: 1px solid #eee;
+    border-top: none;
 }
 
-.map-suggestions.hidden { display: none; }
-
+/* Từng dòng kết quả */
 .suggestion-item {
-    padding: 10px 15px;
+    display: flex;          /* Xếp ngang Icon và Chữ */
+    align-items: center;    /* Căn giữa dọc */
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f1f1;
     cursor: pointer;
-    border-bottom: 1px solid #f9f9f9;
+    transition: background 0.2s ease;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover {
+    background-color: #f2f2f2; /* Màu hover xám nhẹ */
+}
+
+/* 1. Cột Icon bên trái */
+.sugg-icon-wrapper {
+    width: 36px;
+    height: 36px;
+    background-color: #f0f0f0; /* Nền tròn xám sau lưng icon */
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    font-size: 14px;
+    justify-content: center;
+    margin-right: 14px;
+    flex-shrink: 0; /* Không bị co méo */
+    color: #555;
+    font-size: 16px;
 }
 
-.suggestion-item:hover { background: #f5f5f5; }
-.suggestion-item i { margin-right: 10px; color: #777; }
+/* 2. Cột Chữ bên phải */
+.sugg-text-wrapper {
+    display: flex;
+    flex-direction: column; /* Xếp 2 dòng chữ dọc */
+    overflow: hidden;       /* Ẩn chữ thừa */
+    flex: 1;
+}
 
+/* Dòng 1: Tên địa điểm (Đậm) */
+.sugg-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #202124; /* Màu đen Google */
+    margin-bottom: 3px;
+    
+    /* Cắt chữ ... nếu quá dài */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
+/* Dòng 2: Địa chỉ (Mờ, Nhỏ) */
+.sugg-address {
+    font-size: 13px;
+    color: #70757a; /* Màu xám Google */
+    
+    /* Cắt chữ ... nếu quá dài */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Style cho dòng 'Không tìm thấy kết quả' */
+.suggestion-item.no-results {
+    color: #888;
+    font-style: italic;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* ============================================== */
+/* FIX CHO IPAD & TABLET (Màn hình < 1024px) */
+/* ============================================== */
+@media (max-width: 1024px) {
+    
+    /* 1. Thanh tìm kiếm: Thu gọn lại để chừa chỗ cho 2 nút 2 bên */
+    .map-search-overlay {
+        top: 15px;         /* Ngang hàng với các nút */
+        left: 65px;        /* Né nút Back (40px + margin) */
+        right: 135px;      /* Né nút AI (112px + margin) */
+        width: auto;       /* Tự co giãn theo khoảng trống còn lại */
+        max-width: none;   /* Bỏ giới hạn chiều rộng cũ */
+        padding: 4px 8px;
+    }
+    
+    /* 2. Giảm kích thước font chữ input trên tablet cho gọn */
+    .input-group input {
+        font-size: 14px;
+    }
+}
+
+/* ============================================== */
+/* FIX CHO MOBILE (< 480px) - BỎ NÚT AI */
+/* ============================================== */
 @media (max-width: 480px) {
     
-    /* 1. Nút Back: Neo chặt ở góc trái trên cùng */
-    .back-btn {
-        top: 10px !important;       /* Cách mép trên 10px */
-        left: 10px !important;      /* Cách mép trái 10px */
-        width: 38px !important;     /* Thu nhỏ nhẹ (gốc 40px) */
-        height: 38px !important;
-        z-index: 1005 !important;   /* Lớp cao nhất để luôn bấm được */
+    /* 1. Ẩn luôn nút chuyển đổi Map/AI */
+    .ai-chat-btn {
+        display: none !important;
     }
 
-    /* 2. Thanh Search: Kéo LÊN ngang hàng với nút Back */
+    /* 2. Nút Back: Giữ nguyên ở góc trái */
+    .back-btn {
+        top: 10px !important;
+        left: 10px !important;
+        z-index: 1005 !important;
+    }
+
+    /* 3. Thanh tìm kiếm: Đưa lên TRÊN CÙNG, nằm cạnh nút Back */
     .map-search-overlay {
-        /* Vị trí dọc: Ngang hàng với nút Back */
-        top: 10px !important;       
-        left: 58px !important;      
+        top: 10px !important;       /* Ngang hàng với nút Back */
+        
+        /* Né nút Back ra (40px + khoảng cách 15px) */
+        left: 55px !important;      
+        
+        /* Bên phải thả lỏng sát lề (vì không còn nút AI nữa) */
         right: 10px !important;     
         
-        width: auto !important;     /* Để left/right có tác dụng kéo dãn */
-        padding: 6px 10px !important; /* Giảm padding trong cho gọn */
+        width: auto !important;     /* Tự dãn ra hết chiều ngang còn lại */
+        z-index: 1000;
+        
+        /* Giới hạn chiều cao popup gợi ý nếu cần */
+        max-height: 50vh;
     }
 
-    /* Tinh chỉnh input bên trong cho vừa vặn */
-
+    /* Tinh chỉnh input nhỏ lại xíu cho đẹp */
     .input-group {
-        padding: 4px 0 !important;
+        padding: 5px 0 !important;
     }
-
-    .divider-line {
-        margin: 1px 0 2px 44px !important;
-    }
-
+    
     .input-group input {
-        font-size: 13px !important; /* Chữ nhỏ hơn xíu trên mobile */
-        height: 24px !important;
-    }
-
-    /* 3. Nút AI/Map: Đẩy xuống DƯỚI thanh Search & Thu nhỏ */
-    .ai-chat-btn {
-        /* Vị trí dọc: Nằm dưới thanh Search */
-        /* Search bar cao khoảng 50-55px + 10px top = ~65px. Đặt 75px là an toàn */
-        top: 100px !important;       
-        
-        /* Vị trí ngang: Căn phải */
-        right: 10px !important;
-        left: auto !important;      /* Đảm bảo không bị dính lề trái */
-        
-        z-index: 1002 !important;
-        transform: scale(0.85);      /* Thu nhỏ còn 85% kích thước gốc */
-        transform-origin: top right; /* Thu nhỏ về phía góc phải trên */
-        
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important; /* Đổ bóng đậm hơn chút cho nổi */
-    }
-
-    /* Thu nhỏ chữ trong các tab con của nút AI */
-    .tab-btn {
-        padding: 6px 16px !important;
-        font-size: 13px !important;
-        min-width: auto !important; /* Bỏ giới hạn chiều rộng tối thiểu */
+        font-size: 14px !important;
     }
 }
+
+/* ============================================== */
+/* FIX FINAL: GIAO DIỆN GỢI Ý & ICON (CHUẨN 100%) */
+/* ============================================== */
+
+/* 1. Định vị thẻ cha bao quanh input (Điểm neo) */
+.input-wrapper-cell {
+    position: relative !important; 
+    flex: 1;                       
+    display: flex;                 
+}
+
+/* 2. Input: Chiếm trọn khung */
+.map-input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    height: 40px; 
+}
+
+/* 3. Hộp gợi ý (Dropdown): Bám theo Input */
+.autocomplete-suggestions {
+    position: absolute;
+    top: 100%;       /* Ngay mép dưới input */
+    left: 0;         /* Thẳng mép trái input */
+    width: 100%;     /* Rộng bằng đúng input */
+    
+    box-sizing: border-box !important; 
+    
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none; 
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    
+    z-index: 99999;
+    max-height: 280px;
+    overflow-y: auto;
+    margin-top: 0px; 
+}
+
+/* 4. Từng dòng gợi ý */
+.autocomplete-suggestions .suggestion-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px; 
+    border-bottom: 1px solid #f5f5f5;
+    cursor: pointer;
+    background: white;
+}
+
+.autocomplete-suggestions .suggestion-item:hover {
+    background-color: #f2f2f2;
+}
+
+/* FIX ICON TRONG SUGGESTIONS LỆCH KHỎI HÌNH TRÒN */
+.sugg-icon-wrapper i,
+.autocomplete-suggestions .sugg-icon-wrapper i {
+    line-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+/* =========================================
+   [NEW] SWEETALERT2 STYLES (MOVED FROM HTML)
+   ========================================= */
 
 /* --- BỔ SUNG: CĂN GIỮA HỘP THOẠI CHUYỂN APP (SWEETALERT2) --- */
 div:where(.swal2-container) {
@@ -481,9 +617,7 @@ div:where(.swal2-container) {
 div:where(.swal2-popup) {
     margin: auto !important;
 }
-/* =========================================
-   [NEW] SWEETALERT2 STYLES (MOVED FROM HTML)
-   ========================================= */
+
 div:where(.swal2-container) {
     display: grid !important;
     place-items: center !important;

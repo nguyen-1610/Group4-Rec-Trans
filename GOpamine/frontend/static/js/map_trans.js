@@ -1,3 +1,7 @@
+// ========== BIẾN GLOBAL - Truy cập từ busmap.js ==========
+window.mapInstance = null;          // Leaflet map object
+window.routeLayerGroup = null;      // Layer group chứa routes
+window.originalVehicleListHTML = null; // Backup HTML list
 /**
  * 🚌 GOPamine - Map & Transport Logic (Multi-stop UI Version)
  * ===========================================================
@@ -94,7 +98,16 @@ document.addEventListener('DOMContentLoaded', async function() {
         { lat: null, lon: null, name: '' }  // Điểm B (End mặc định)
     ];
 
-    const map = L.map('map', { zoomControl: false, zoom: 13 });
+    const map = L.map('map', { zoomControl: false, zoom: 13 }).setView([10.8231, 106.6297], 13);
+    // Khi khởi tạo map:
+    window.mapInstance = map;
+    // ^^^^ GÁN VÀO WINDOW
+    
+    window.routeLayerGroup = L.layerGroup().addTo(window.mapInstance);
+    
+    // ✅ Khai báo global để busmap.js dùng
+    window.originalVehicleListHTML = null; // ✅ Khai báo global để busmap.js dùng
+  
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap', maxZoom: 19
@@ -503,6 +516,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
 
         setupCardSelectionEvents();
+        console.log('✅ Đã gắn event listeners cho', document.querySelectorAll('.option-card').length, 'cards');
         const firstCard = container.querySelector('.option-card');
         if(firstCard) firstCard.classList.add('selected');
     }
@@ -514,8 +528,56 @@ document.addEventListener('DOMContentLoaded', async function() {
     function setupCardSelectionEvents() {
         document.querySelectorAll('.option-card').forEach(card => {
             card.addEventListener('click', function() {
+                // 1. Highlight card
                 document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
                 this.classList.add('selected');
+
+                 // 2. ========== KIỂM TRA LOẠI XE ==========
+                const vehicleMode = this.getAttribute('data-vehicle') || '';
+                
+                console.log('🚗 Chọn phương tiện:', vehicleMode);
+                // 3. Nếu là BUS → Gọi logic riêng
+                 const isBusMode = vehicleMode.toLowerCase().includes('bus') 
+                    || vehicleMode.toLowerCase().includes('buýt')
+                    || vehicleMode.toLowerCase().includes('xe buýt');
+                    if (isBusMode) {
+                    console.log('🚌 Kích hoạt Bus logic...');
+
+                    if (typeof drawRouteOnMap === 'function') {
+                         // Tham số: (coords, start, end, waypoints)
+                        drawRouteOnMap([], null, null, currentWaypoints);
+                        console.log('✅ Đã refresh lại điểm A/B và xóa đường cũ');
+                    }
+
+                    // 2. Dọn dẹp phụ (Routing Machine Control nếu có)
+                    // Vì cái này thường không nằm trong routeLayerGroup nên phải xóa tay
+                    const map = (typeof getMapInstance === 'function') ? getMapInstance() : window.mapInstance;
+                    if (window.routingControl && map) {
+                        try { map.removeControl(window.routingControl); } catch (e) {}
+                        window.routingControl = null;
+                    }
+                    document.querySelectorAll('.leaflet-routing-container').forEach(el => el.remove());
+
+                    // ============================================================
+
+                    // ========== BACKUP HTML TRƯỚC KHI GỌI BUS ==========
+                    if (!window.originalVehicleListHTML) {
+                        const container = document.querySelector('.vehicle-scroll-container');
+                        window.originalVehicleListHTML = container.innerHTML;
+                    }
+                    // =================================================
+                    // Gọi hàm từ busmap.js
+                    if (typeof handleBusSelection === 'function') {
+                        handleBusSelection();
+                    } else {
+                        console.error('❌ Hàm handleBusSelection không tồn tại!');
+                    }
+                }
+                // 4. Các xe khác (Grab/Be) → Logic cũ
+                else {
+                    console.log('🚗 Xe Grab/Be - Giữ nguyên');
+                    // Code vẽ route Grab/Be của bạn (nếu có)
+                }
             });
         });
     }
@@ -626,6 +688,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         });
     }
+    // =========================================================================
+    window.drawRouteOnMap = drawRouteOnMap;
+    window.setupCardSelectionEvents = setupCardSelectionEvents;
+    
+    // Kiểm tra xem đã public thành công chưa
+    console.log("✅ Đã public hàm drawRouteOnMap và setupCardSelectionEvents");
 });
 
 window.switchTab = (arg1, arg2) => {
@@ -715,5 +783,117 @@ window.confirmRoute = function() {
         }
     };
 };
-window.goToPreviousPage = () => window.history.back();
-window.goBack = () => window.location.href = '/chatbot';
+
+//======================================================================
+// 8. LOGIC TƯ VẤN AI (FIX: GIẢ LẬP FORM DATA ĐỂ CHATBOT NHẬN DIỆN)
+// =============================================================================
+
+window.consultWithAI = async function() {
+    const btn = document.querySelector('.btn-secondary'); 
+    const originalText = btn ? btn.textContent : 'Tư Vấn Với AI';
+    
+    if (btn) {
+        btn.textContent = 'Đang kết nối AI...';
+        btn.disabled = true;
+    }
+
+    try {
+        // 1. Lấy dữ liệu lộ trình
+        const storedRouteJSON = localStorage.getItem('selectedRoute');
+        if (!storedRouteJSON) throw new Error("Chưa có dữ liệu lộ trình.");
+
+        const routeData = JSON.parse(storedRouteJSON);
+        const waypoints = routeData.waypoints; // [Start, Stop1, ..., End]
+
+        if (!waypoints || waypoints.length < 2) throw new Error("Lộ trình không hợp lệ.");
+
+        const origin = waypoints[0];
+        const destinations = waypoints.slice(1);
+
+        // 2. CHUẨN BỊ PAYLOAD (Quan trọng: Format giống hệt form.js)
+        // AI sẽ nhìn vào đây để biết user muốn gì
+        const aiFormData = {
+            origin: {
+                name: origin.name,
+                lat: origin.lat,
+                lon: origin.lon || origin.lng
+            },
+            destinations: destinations.map(wp => ({
+                name: wp.name,
+                lat: wp.lat,
+                lon: wp.lon || wp.lng
+            })),
+            // Các trường phụ trợ để AI không bị null
+            budget: 0, 
+            passengers: "1",
+            preferences: ["Tối ưu đường đi", "Tiết kiệm thời gian"], 
+            context_type: "route_consultation" // Cờ đánh dấu để AI biết là tư vấn map
+        };
+        
+        console.log('📦 Đóng gói dữ liệu Map -> Form Data:', aiFormData);
+
+        // 3. Gửi dữ liệu về Backend (Sync Session)
+        let sessionId = localStorage.getItem('sessionId');
+        if (sessionId) {
+            await fetch('/api/form', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    form_data: aiFormData
+                })
+            });
+        }
+
+        // 4. [QUAN TRỌNG NHẤT] Lưu vào localStorage key 'pendingFormData'
+        // Đây chính là thứ mà chatbot.js sẽ kiểm tra khi load trang!
+        localStorage.setItem('pendingFormData', JSON.stringify(aiFormData));
+        
+        // Đánh dấu thêm cờ này để chatbot biết không cần hỏi lại câu chào
+        localStorage.setItem('msg_context', 'map_consultation'); 
+
+        // 5. Chuyển trang
+        window.location.href = '/chatbot';
+
+    } catch (error) {
+        console.error("❌ Lỗi:", error);
+        alert(error.message);
+        if (btn) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+};
+// =============================================================================
+// 9. HÀM QUAY LẠI TRANG TRƯỚC (CẢI TIẾN)
+// =============================================================================
+
+function goToPreviousPage(fallbackUrl = '/', ignorePaths = []) {
+    const currentDomain = window.location.origin;
+    const referrer = document.referrer;
+
+    // 1. Kiểm tra cơ bản
+    const isInternal = referrer && referrer.indexOf(currentDomain) === 0;
+
+    // 2. Kiểm tra Vòng lặp
+    const isIgnored = ignorePaths.some(path => referrer.includes(path));
+
+    // LOGIC QUYẾT ĐỊNH
+    if (isInternal && !isIgnored) {
+        window.history.back();
+    } else {
+        console.log('🔄 Luồng không an toàn hoặc vòng lặp -> Về:', fallbackUrl);
+        window.location.href = fallbackUrl;
+    }
+}
+
+const backBtn = document.querySelector('.back-btn'); // Hoặc nút back trên map
+if (backBtn) {
+    backBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        // QUAN TRỌNG: Tại MAP mới cần chặn CHATBOT
+        // Logic: Nếu vừa từ Chatbot về đây -> Bấm back phát nữa thì về Home luôn.
+        goToPreviousPage('/', ['chatbot']); 
+    });
+}

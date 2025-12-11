@@ -5,6 +5,8 @@ import sys
 from feedback import feedback_bp, get_all_reviews
 from astar import create_api_blueprint
 from routing import form_bp
+from bus_routes import bus_bp
+
 
 # 2. IMPORT TỪ CHATBOT.PY
 from chatbot import chatbot_bp
@@ -72,7 +74,7 @@ app.register_blueprint(chatbot_bp)
 app.register_blueprint(create_api_blueprint(DB_PATH))
 app.register_blueprint(form_bp)
 app.register_blueprint(auth_bp)
-
+app.register_blueprint(bus_bp)
 app.register_blueprint(transport_bp)
 
 # ========== ROUTES HTML ==========
