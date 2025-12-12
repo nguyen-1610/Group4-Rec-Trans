@@ -2,10 +2,46 @@ import os
 import uuid
 import sys
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response, url_for, session, current_app, redirect
 from flask_login import login_user, logout_user, login_required, current_user, UserMixin
+# Bổ sung các module cần thiết nếu chưa có
+# [BỔ SUNG IMPORT CHO OAUTH]
+from authlib.integrations.flask_client import OAuth
+from dotenv import load_dotenv
+
 
 auth_bp = Blueprint('auth', __name__)
+load_dotenv()
+
+
+# [SỬA/ĐẢM BẢO ĐOẠN NÀY NHƯ SAU]
+oauth = OAuth() # Khởi tạo đối tượng OAuth tại đây
+
+def setup_oauth(app):
+    """Hàm này sẽ được app.py gọi để cài đặt OAuth"""
+    oauth.init_app(app) # Gắn vào app Flask
+
+    # 1. Đăng ký Google
+    oauth.register(
+        name='google',
+        client_id=os.getenv('GOOGLE_CLIENT_ID'), # Đảm bảo tên biến ENV khớp với file .env của bạn
+        client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'}
+    )
+
+    # 2. Đăng ký Facebook
+    oauth.register(
+        name='facebook',
+        client_id=os.getenv('FB_CLIENT_ID'),
+        client_secret=os.getenv('FB_CLIENT_SECRET'),
+        access_token_url='https://graph.facebook.com/oauth/access_token',
+        access_token_params=None,
+        authorize_url='https://www.facebook.com/dialog/oauth',
+        authorize_params=None,
+        api_base_url='https://graph.facebook.com/',
+        client_kwargs={'scope': 'email public_profile'}
+    )
 
 # ==============================================================================
 # 1. CẤU HÌNH ĐƯỜNG DẪN DB
@@ -34,18 +70,6 @@ def check_table_exists():
     except Exception as e:
         print(f"❌ Lỗi kiểm tra bảng: {e}")
         return False
-
-# --- XỬ LÝ CORS ---
-@auth_bp.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-    return response
-
-@auth_bp.route('/api/<path:path>', methods=['OPTIONS'])
-def handle_options(path):
-    return jsonify({'status': 'ok'})
 
 # --- CLASS USER ---
 class User(UserMixin):
@@ -212,3 +236,110 @@ def get_current_user():
 def logout():
     logout_user()
     return jsonify({'success': True})
+
+# ==============================================================================
+# [BỔ SUNG] XỬ LÝ OAUTH2 THỰC TẾ (REAL IMPLEMENTATION)
+# Thay thế cho quy trình giả lập cũ.
+# Yêu cầu: Phải cấu hình oauth.register() bên app.py trước.
+# ==============================================================================
+
+# --- 1. Route Chuyển hướng người dùng sang Google/Facebook ---
+@auth_bp.route('/api/login/<provider>')
+def login_oauth(provider):
+    try:
+        redirect_uri = url_for('auth.auth_callback', provider=provider, _external=True)
+        
+        print(f">>> [OAUTH REAL] Chuyển hướng sang {provider}... URI: {redirect_uri}")
+        return oauth.create_client(provider).authorize_redirect(redirect_uri)
+    except Exception as e:
+        print(f"❌ [OAUTH INIT ERROR]: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# --- 2. Route Callback (Nơi nhận kết quả trả về từ Google/FB) ---
+@auth_bp.route('/api/auth/<provider>/callback')
+def auth_callback(provider):
+    try:
+        # Trao đổi code lấy token
+        token = oauth.create_client(provider).authorize_access_token()
+        
+        user_info = None
+        social_id = None
+        email = None
+        name = None
+
+        # Lấy thông tin user tùy theo nhà cung cấp
+        if provider == 'google':
+            user_info = token.get('userinfo')
+            # Google trả về: sub (id), email, name
+            social_id = user_info.get('sub')
+            email = user_info.get('email')
+            name = user_info.get('name')
+            
+        elif provider == 'facebook':
+            # Facebook cần gọi thêm API để lấy info
+            # Token đã tự động được lưu trong session của client
+            resp = oauth.create_client('facebook').get('me?fields=id,name,email')
+            user_info = resp.json()
+            social_id = user_info.get('id')
+            email = user_info.get('email')
+            name = user_info.get('name')
+
+        print(f">>> [OAUTH REAL SUCCESS] {provider} | Email: {email}")
+
+        if not email:
+            return jsonify({'success': False, 'message': 'Không lấy được Email từ mạng xã hội. Vui lòng thử lại.'}), 400
+
+        # --- TÁI SỬ DỤNG LOGIC DB (CREATE OR LOGIN) ---
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Kiểm tra user tồn tại
+        user_row = cursor.execute("SELECT * FROM User WHERE email = ?", (email,)).fetchone()
+        
+        final_user_id = None
+
+        if user_row:
+            final_user_id = user_row['user_id']
+            # Cập nhật social_id và auth_type mới nhất
+            cursor.execute("UPDATE User SET social_id = ?, auth_type = ? WHERE user_id = ?", 
+                         (social_id, provider, final_user_id))
+            conn.commit()
+        else:
+            # Tạo user mới
+            print(f">>> [OAUTH REAL] Tạo User mới cho {email}")
+            created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            dummy_pass = f"{provider}_{str(uuid.uuid4())[:8]}"
+            
+            cursor.execute("""
+                INSERT INTO User (auth_type, username, email, social_id, is_guest, created_at, password)
+                VALUES (?, ?, ?, ?, 0, ?, ?)
+            """, (provider, name, email, social_id, created_at, dummy_pass))
+            
+            final_user_id = cursor.lastrowid
+            
+            # Tạo Profile mặc định (Quan trọng để không lỗi app)
+            cursor.execute("""
+                INSERT INTO UserProfile (user_id, default_mode, age_group)
+                VALUES (?, 0, 'balanced')
+            """, (final_user_id,))
+            conn.commit()
+        
+        db_user = conn.execute("SELECT * FROM User WHERE user_id = ?", (final_user_id,)).fetchone()
+        conn.close()
+
+        # Đăng nhập Flask-Login
+        user_obj = User(
+            user_id=db_user['user_id'], 
+            email=db_user['email'], 
+            username=db_user['username'],
+            auth_type=db_user['auth_type'],
+            is_guest=db_user['is_guest']
+        )
+        login_user(user_obj, remember=True)
+
+        # Chuyển hướng về trang chủ
+        return redirect('/')
+
+    except Exception as e:
+        print(f"❌ [OAUTH CALLBACK ERROR]: {e}")
+        return jsonify({'success': False, 'message': f'Lỗi đăng nhập {provider}: {str(e)}'}), 500

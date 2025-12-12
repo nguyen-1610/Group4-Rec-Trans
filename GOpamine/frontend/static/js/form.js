@@ -133,7 +133,12 @@ function restoreFormData() {
         
         // Khôi phục số hành khách
         if (formData.passengers) {
-            document.querySelector('input[placeholder="Số hành khách"]').value = formData.passengers;
+            const passInput = document.getElementById('passenger-input');
+            if (passInput) {
+                passInput.value = formData.passengers;
+                // Kích hoạt sự kiện để đồng bộ sang ô Visual (nếu cần thiết ngay lập tức)
+                passInput.dispatchEvent(new Event('input')); 
+            }
         }
         
         // Khôi phục preferences
@@ -562,9 +567,19 @@ async function syncFormDataWithChatbot(sessionId, formData) {
     }
 }
 
+// ... (Phần đầu sự kiện click giữ nguyên) ...
 submitBtn.addEventListener('click', async () => {
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Đang xử lý...';
+    submitBtn.textContent = 'Đang xử lý...'; // Hoặc lấy từ t.form_processing nếu muốn chuẩn chỉ
+
+    // [BỔ SUNG] Lấy từ điển ngôn ngữ hiện tại để hiển thị popup đúng tiếng
+    const currentLang = localStorage.getItem('userLang') || 'vi';
+    const t = window.translations ? window.translations[currentLang] : null;
+
+    // Fallback text (phòng trường hợp chưa nạp từ điển)
+    const txtOrigin = t ? t.alert_no_origin : 'Vui lòng chọn điểm xuất phát!';
+    const txtDest = t ? t.alert_no_dest : 'Vui lòng chọn ít nhất một điểm đến!';
+    const txtTitle = currentLang === 'en' ? 'Missing Information' : 'Thiếu thông tin';
     
     try {
         // 1. Lấy điểm xuất phát
@@ -572,7 +587,14 @@ submitBtn.addEventListener('click', async () => {
         const startPlace = getPlaceFromInput(originInput);
         
         if (!startPlace) {
-            alert('Vui lòng chọn điểm xuất phát từ danh sách gợi ý!');
+            // [THAY THẾ ALERT CŨ BẰNG SWEETALERT]
+            Swal.fire({
+                icon: 'warning',
+                title: txtTitle,
+                text: txtOrigin,
+                confirmButtonColor: '#3C7363', // Màu xanh chủ đạo của App
+                confirmButtonText: 'OK'
+            });
             throw new Error('No origin selected');
         }
         
@@ -583,10 +605,17 @@ submitBtn.addEventListener('click', async () => {
             .filter(place => place !== null);
         
         if (destinations.length === 0) {
-            alert('Vui lòng chọn ít nhất một điểm đến từ danh sách gợi ý!');
+            // [THAY THẾ ALERT CŨ BẰNG SWEETALERT]
+            Swal.fire({
+                icon: 'warning',
+                title: txtTitle,
+                text: txtDest,
+                confirmButtonColor: '#3C7363',
+                confirmButtonText: 'OK'
+            });
             throw new Error('No destinations selected');
         }
-        
+                
         // 3. Thu thập dữ liệu form
         const formData = {
             origin: {
@@ -600,20 +629,36 @@ submitBtn.addEventListener('click', async () => {
                 lon: d.lon
             })),
             budget: rangeSlider.value,
-            passengers: document.querySelector('input[placeholder="Số hành khách"]').value.trim(),
+            passengers: document.getElementById('passenger-input').value.trim(),
             preferences: Array.from(document.querySelectorAll('.checkbox-item input:checked'))
                 .map(cb => cb.parentElement.querySelector('span').textContent)
         };
         
         console.log('📋 Form Data:', formData);
 
-        saveFormData(); // Lưu form data trước khi submit
         
         // 4. Tạo session (nếu có API)
         let sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
             sessionId = await tryCreateSession();
         }
+
+        const syncResponse = await fetch(`${API_BASE}/form`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                form_data: formData  // ← Backend sẽ lưu vào session/DB
+            })
+        });
+
+        saveFormData(); // Lưu form data trước khi submit
+
+
+        if (!syncResponse.ok) {
+            console.warn('⚠️ Không thể sync form data với server');
+        }
+
         await syncFormDataWithChatbot(sessionId, formData);
         
                 // 5. Gọi backend để tính route
@@ -631,11 +676,12 @@ submitBtn.addEventListener('click', async () => {
             route_coordinates: routeData.route_coordinates, 
             distance_km: routeData.distance_km,
             waypoints: routeData.waypoints,
-            vehicle: DEFAULT_VEHICLE
+            vehicle: DEFAULT_VEHICLE,
+            form_data: formData
         };
 
         localStorage.setItem('selectedRoute', JSON.stringify(routePayload));
-        localStorage.setItem('pendingFormData', JSON.stringify(formData));
+        localStorage.setItem('pendingFormData', JSON.stringify(formData)); // ← Backup
         
         // 7. Chuyển sang chatbot
         console.log('🤖 Chuyển sang chatbot...');
@@ -884,3 +930,110 @@ if (profileIcon) {
         window.location.href = '/login';
     });
 }
+
+// ============================================================
+// [I18N] TỪ ĐIỂN & LOGIC CHO FORM (FIX LANGUAGE LOSS)
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Khởi tạo kho từ điển
+    window.translations = window.translations || { vi: {}, en: {} };
+
+    if (window.translations) {
+        // --- TIẾNG VIỆT ---
+        Object.assign(window.translations.vi, {
+            form_title: "Thiết lập lộ trình",
+            form_origin_label: "Điểm xuất phát",
+            form_origin_ph: "Nhập điểm đi hoặc chọn bên dưới...",
+            form_gps_main: "Sử dụng vị trí hiện tại",
+            form_gps_sub: "Nhấn để lấy tọa độ GPS",
+            form_dest_label: "Điểm đến",
+            form_add_btn: "Thêm",
+            form_dest_ph: "Tìm kiếm địa điểm...",
+            form_budget_label: "Ngân sách",
+            form_passenger_label: "Số hành khách",
+            form_passenger_ph: "Số hành khách",
+            form_pref_header: "Ưu tiên",
+            form_pref_hint: "Lựa chọn các ưu tiên theo sở thích của bạn dưới đây.",
+            pref_speed: "Tốc độ",
+            pref_saving: "Tiết kiệm",
+            pref_comfort: "Thoải mái",
+            pref_safety: "An toàn",
+            pref_balanced: "Cân bằng",
+            form_add_pref_btn: "Thêm",
+            form_submit_btn: "Hoàn tất",
+            form_processing: "Đang xử lý...",
+            alert_no_origin: "Vui lòng chọn điểm xuất phát từ danh sách gợi ý!",
+            alert_no_dest: "Vui lòng chọn ít nhất một điểm đến!"
+        });
+
+        // --- TIẾNG ANH ---
+        Object.assign(window.translations.en, {
+            form_title: "Trip Planner",
+            form_origin_label: "Starting Point",
+            form_origin_ph: "Enter origin or select below...",
+            form_gps_main: "Use Current Location",
+            form_gps_sub: "Tap to get GPS coordinates",
+            form_dest_label: "Destinations",
+            form_add_btn: "Add",
+            form_dest_ph: "Search destination...",
+            form_budget_label: "Budget",
+            form_passenger_label: "Passengers",
+            form_passenger_ph: "Number of passengers",
+            form_pref_header: "Preferences",
+            form_pref_hint: "Select your preferences below.",
+            pref_speed: "Speed",
+            pref_saving: "Economical",
+            pref_comfort: "Comfort",
+            pref_safety: "Safety",
+            pref_balanced: "Balanced",
+            form_add_pref_btn: "Add",
+            form_submit_btn: "Find Route",
+            form_processing: "Processing...",
+            alert_no_origin: "Please select a valid origin from suggestions!",
+            alert_no_dest: "Please select at least one destination!"
+        });
+    }
+
+    // 2. Hàm lấy ngôn ngữ (Ưu tiên localStorage)
+    window.getCurrentLanguage = function() {
+        return localStorage.getItem('userLang') || localStorage.getItem('language') || 'vi';
+    };
+
+    // 3. Hàm áp dụng ngôn ngữ (Core Logic)
+    window.applyLanguage = function() {
+        const lang = window.getCurrentLanguage();
+        const t = window.translations[lang] || window.translations['vi'];
+
+        // Dịch Text Content
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (t[key]) el.textContent = t[key];
+        });
+
+        // Dịch Placeholder
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            if (t[key]) el.placeholder = t[key];
+        });
+
+        // Update Text Nút Submit
+        const submitBtn = document.querySelector('.submit-btn');
+        if (submitBtn && !submitBtn.disabled && t.form_submit_btn) {
+            submitBtn.textContent = t.form_submit_btn;
+        }
+    };
+
+    // 4. Hook vào sự kiện load
+    // Chạy ngay lập tức, không chờ timeout lâu
+    window.applyLanguage(); 
+
+    // 5. Hook vào nút "Thêm điểm đến" (Dynamic UI)
+    const addDestBtn = document.getElementById('add-destination-btn');
+    if (addDestBtn) {
+        addDestBtn.addEventListener('click', () => {
+            setTimeout(() => {
+                window.applyLanguage(); // Dịch lại ngay sau khi thêm ô mới
+            }, 10);
+        });
+    }
+});
