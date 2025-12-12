@@ -10,12 +10,12 @@ parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
 # Thêm thư mục cha vào đường dẫn tìm kiếm của Python
 sys.path.insert(0, parent_dir)
 
-from utils.database import PostgresConnection
-from feedback import feedback_bp, get_all_reviews
+from feedback import feedback_bp, get_reviews_from_db
 from astar import create_api_blueprint
 from routing import form_bp
 from bus_routes import bus_bp
-
+from backend.database.supabase_client import supabase
+from backend.models.user_model import users
 
 # 2. IMPORT TỪ CHATBOT.PY
 from chatbot import chatbot_bp
@@ -53,19 +53,27 @@ login_manager.login_view = 'login' # Nếu chưa login thì đá về trang logi
 # Hàm load_user bắt buộc cho Flask-Login
 @login_manager.user_loader
 def load_user(user_id):
-    conn = get_db_connection()
-    # Lưu ý: Cột ID trong DB là user_id
-    user_row = conn.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
-    conn.close()
-    
-    if user_row:
+    # Supabase trả về list, nên phải lấy phần tử đầu tiên
+    result = (
+        supabase
+        .table("users")
+        .select("*")
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    rows = result.data
+
+    if rows and len(rows) > 0:
+        user_row = rows[0]
         return users(
-            user_id=user_row['user_id'], 
-            email=user_row['email'], 
-            username=user_row['username'],
-            auth_type=user_row['auth_type'],
-            is_guest=user_row['is_guest']
+            user_id=user_row["user_id"],
+            email=user_row["email"],
+            username=user_row["username"],
+            auth_type=user_row["auth_type"],
+            is_guest=user_row["is_guest"]
         )
+
     return None
 # ---------------------
 

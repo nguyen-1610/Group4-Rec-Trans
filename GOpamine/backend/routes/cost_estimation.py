@@ -1,84 +1,75 @@
-import sqlite3
 import os
+from backend.database.supabase_client import supabase
 import sys
 
-# ==============================================================================
-# 1. CẤU HÌNH KẾT NỐI DATABASE
-# ==============================================================================
-# Lấy đường dẫn thư mục hiện tại của file này (backend/routes)
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Lấy đường dẫn thư mục gốc dự án (nhảy ra ngoài 2 cấp: backend/routes -> backend -> GOpamine)
-PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '../../'))
-# Đường dẫn tuyệt đối đến file database vehicle.db
-DB_PATH = os.path.join(PROJECT_ROOT, 'data', 'vehicle.db')
 
-def get_db_connection():
-    # Kiểm tra xem file db có tồn tại không
-    if not os.path.exists(DB_PATH): return None
-    try:
-        # Kết nối SQLite
-        conn = sqlite3.connect(DB_PATH)
-        # Cấu hình để kết quả trả về dạng từ điển (dict) thay vì tuple, giúp truy cập bằng tên cột (row['price'])
-        conn.row_factory = sqlite3.Row 
-        return conn
-    except Exception as e:
-        print(f"❌ [Database Error] {e}")
-        return None
 
 # ==============================================================================
 # 2. LOAD DỮ LIỆU GIÁ TỪ DB (CÓ ĐỌC SỐ GHẾ)
 # ==============================================================================
 def load_price_config_from_db():
-    # Cấu hình mặc định: Đi bộ 0đ, Bus mặc định 7000đ
-    config = { "walking": 0, "bus": 7000, "motorbike": {}, "car": {} }
-    conn = get_db_connection()
-    if not conn: return config # Nếu lỗi DB thì trả về mặc định
-    cursor = conn.cursor()
-
+    # Config mặc định
+    config = {
+        "walking": 0,
+        "bus": 7000,
+        "motorbike": {},
+        "car": {}
+    }
+   
     # Helper: Hàm làm đẹp tên hãng (Ví dụ: "grab" -> "Grab", "bebike" -> "Be")
     def prettify_brand(name):
-        if not name: return "Standard"
-        name_lower = name.lower().strip()
-        if "xanh" in name_lower and "sm" in name_lower: return "Xanh SM"
-        if name_lower in ["be", "bebike", "becar"]: return "Be"
-        if name_lower == "grab": return "Grab"
-        return name.title() # Viết hoa chữ cái đầu
+        if not name:
+            return "Standard"
 
-    # Helper: Hàm tạo tên hiển thị đầy đủ (Ví dụ: "Grab Car (4 chỗ)")
+        name_lower = name.lower().strip()
+
+        if "xanh" in name_lower and "sm" in name_lower:
+            return "Xanh SM"
+        if name_lower in ["be", "bebike", "becar"]:
+            return "Be"
+        if name_lower == "grab":
+            return "Grab"
+
+        return name.title()
+
     def format_display_name(raw_brand, seats, suffix):
         pretty_brand = prettify_brand(raw_brand)
         return f"{pretty_brand} {suffix} ({seats} chỗ)"
 
     # A. Load giá Xe Máy từ bảng 'motorbike_pricing'
     try:
-        rows = cursor.execute("SELECT * FROM motorbike_pricing").fetchall()
+        result = supabase.table("motorbike_pricing").select("*").execute()
+        rows = result.data
+
         for row in rows:
-            brand = row["brand"] or "Standard"
-            tier = row["type"] or "Normal"
+            brand = row.get("brand") or "Standard"
+            tier = row.get("type") or "Normal"
             # Tạo key định danh (VD: "grab_normal")
             key = f"{brand}_{tier}".lower().replace(" ", "")
-            
             # Lưu cấu hình giá vào dictionary
             config["motorbike"][key] = {
                 "brand": brand,
                 "tier": tier,
-                "display_name": f"{prettify_brand(brand)} Bike", 
-                "base_fare": row["base_price"],       # Giá mở cửa (VD: 15k cho 2km đầu)
-                "base_distance": row["base_distance_km"], # Khoảng cách mở cửa (VD: 2km)
-                "price_per_km": row["per_km_after_base"], # Giá mỗi km tiếp theo (VD: 5k/km)
-                "weather_surge": 1.2 # Hệ số tăng giá khi mưa (mặc định tăng 20%)
+                "display_name": f"{prettify_brand(brand)} Bike",
+                "base_fare": row.get("base_price"),      # Giá mở cửa       
+                "base_distance": row.get("base_distance_km"),   # Km mở cửa
+                "price_per_km": row.get("per_km_after_base"),   # Giá mỗi km tiếp theo
+                "weather_surge": 1.2,  # Hệ số tăng giá khi mưa (mặc định tăng 20%)
             }
-    except Exception: pass
+
+    except Exception as e:
+        print(f"❌ [Motorbike Pricing Error] {e}")
+
+    
 
     # B. Load giá Ô tô từ bảng 'car_pricing'
     try:
-        rows = cursor.execute("SELECT * FROM car_pricing").fetchall()
+        result = supabase.table("car_pricing").select("*").execute()
+        rows = result.data
         for row in rows:
-            brand = row["brand"] or "Standard"
-            tier = row["type"] or "Normal"
-            # Lấy số ghế, mặc định là 4 nếu không có
-            seats = row["number_of_seats"] if "number_of_seats" in row.keys() else 4
-            
+            brand = row.get("brand") or "Standard"
+            tier = row.get("type") or "Normal"
+            seats = row.get("number_of_seats", 4)
             # Tạo key unique (VD: "grab_4cho")
             key = f"{brand}_{seats}cho".lower().replace(" ", "")
             
@@ -87,18 +78,17 @@ def load_price_config_from_db():
                 "tier": tier,
                 "seats": seats, 
                 "display_name": format_display_name(brand, seats, "Car"),
-                "base_fare": row["base_price"], # Giá mở cửa
-                "base_distance": row["base_distance_km"], # Km mở cửa
+                "base_fare": row.get("base_price"), # Giá mở cửa
+                "base_distance": row.get("base_distance_km"), # Km mở cửa
                 # Giá theo bậc thang (tier pricing)
-                "per_km_3_12": row["per_km_3_12"],   # Giá km thứ 3 đến 12
-                "per_km_13_25": row["per_km_13_25"], # Giá km thứ 13 đến 25
-                "per_km_26_plus": row["per_km_26_plus"], # Giá km thứ 26 trở đi
+                "per_km_3_12": row.get("per_km_3_12"),   # Giá km thứ 3 đến 12
+                "per_km_13_25": row.get("per_km_13_25"), # Giá km thứ 13 đến 25
+                "per_km_26_plus": row.get("per_km_26_plus"), # Giá km thứ 26 trở đi
                 "weather_surge": 1.4 # Mưa tăng giá 40%
             }
     except Exception as e:
         print(f"Lỗi load Car: {e}")
-
-    conn.close()
+    
     return config
 
 # Biến toàn cục chứa cấu hình giá (Load 1 lần khi chạy server)

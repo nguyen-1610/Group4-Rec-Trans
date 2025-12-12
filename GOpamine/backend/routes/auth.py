@@ -51,11 +51,6 @@ parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from utils.database import PostgresConnection
-
-# Hàm này trả về Wrapper, không phải connection thô
-def get_db_connection():
-    return PostgresConnection()
 
 # --- HÀM KIỂM TRA BẢNG ---
 def check_table_exists():
