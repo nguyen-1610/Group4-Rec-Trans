@@ -1,9 +1,10 @@
-import sqlite3
 import math
 import os
 import requests 
 import logging  
-from datetime import datetime  
+from datetime import datetime 
+from backend.database.supabase_client import supabase
+ 
 
 # ========== THÊM SETUP LOGGING ==========
 def setup_route_logger():
@@ -33,21 +34,6 @@ route_logger = setup_route_logger()
 # =========================================================
 # 1. CẤU HÌNH & HÀM CƠ BẢN
 # =========================================================
-def get_db_path():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    db_path = os.path.abspath(os.path.join(current_dir, '../../data/busmap.db'))
-    if not os.path.exists(db_path):
-        fallback = os.path.abspath(os.path.join(current_dir, '../data/busmap.db'))
-        if os.path.exists(fallback): return fallback
-        return None
-    return db_path
-
-def get_db():
-    db_path = get_db_path()
-    if not db_path: raise FileNotFoundError("Không tìm thấy busmap.db")
-    conn = sqlite3.connect(db_path)
-    return conn
-
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dlat = math.radians(lat2 - lat1)
@@ -136,41 +122,70 @@ def fetch_road_geometry_osrm(stops_list):
     
     return final_geometry
 
-def get_official_path_from_db(conn, route_id, direction, start_order, end_order):
+def get_official_path_from_db(route_id, direction, start_order, end_order):
     """
     Lấy đường đi thực tế từ database với pathPoints
     FIX: Thêm start station, detect gap, improve fallback
     """
     try:
-        # ========== BƯỚC 1: LẤY TỌA ĐỘ TRẠM ĐẦU (CRITICAL!) ==========
-        start_station = conn.execute(
-            "SELECT Lat, Lng, StationName FROM stations WHERE RouteId=? AND StationDirection=? AND StationOrder=?",
-            (route_id, direction, start_order)
-        ).fetchone()
-        
+        # ==========================================================
+        # 1) LẤY TỌA ĐỘ TRẠM ĐẦU (CRITICAL!)
+        # ==========================================================
+        response = (
+            supabase
+            .table("stations")
+            .select("Lat, Lng, StationName")
+            .eq("RouteId", route_id)
+            .eq("StationDirection", direction)
+            .eq("StationOrder", start_order)
+            .single()
+            .execute()
+        )
+
+        start_station = response.data  # dict
+
         if not start_station:
             route_logger.error(f"MISSING_START | RouteID={route_id} Dir={direction} Order={start_order}")
             raise Exception("Không tìm thấy trạm đầu")
-        
-        # Khởi tạo path với điểm đầu tiên
-        full_path = [[start_station[0], start_station[1]]]
-        route_logger.info(f"PATH_START | Route={route_id} | Station={start_station[2]} | Coord=[{start_station[0]:.6f}, {start_station[1]:.6f}]")
-        
-        # ========== BƯỚC 2: LẤY PATHPOINTS TỪ CÁC TRẠM ==========
-        query = """
-            SELECT StationOrder, StationName, pathPoints, Lat, Lng
-            FROM stations 
-            WHERE RouteId = ? AND StationDirection = ? 
-            AND StationOrder >= ? AND StationOrder < ?
-            ORDER BY StationOrder ASC
-        """
-        rows = conn.execute(query, (route_id, direction, start_order, end_order)).fetchall()
+
+        # Khởi tạo path
+        full_path = [[start_station["Lat"], start_station["Lng"]]]
+
+        route_logger.info(
+            f"PATH_START | Route={route_id} | Station={start_station['StationName']} | "
+            f"Coord=[{start_station['Lat']:.6f}, {start_station['Lng']:.6f}]"
+        )
+
+        # ==========================================================
+        # 2) LẤY PATHPOINTS TỪ CÁC TRẠM
+        # ==========================================================
+        response = (
+            supabase
+            .table("stations")
+            .select("StationOrder, StationName, pathPoints, Lat, Lng")
+            .eq("RouteId", route_id)
+            .eq("StationDirection", direction)
+            .gte("StationOrder", start_order)
+            .lt("StationOrder", end_order)
+            .order("StationOrder", asc=True)
+            .execute()
+        )
+
+        rows = response.data  # list[dict]
+
         
         has_valid_path = False
         total_gaps = 0
         
+        # ==========================================================
+        # 2) XỬ LÝ PATHPOINTS TỪ DANH SÁCH STATIONS (SUPABASE)
+        # ==========================================================
         for row in rows:
-            order, name, path_str, lat, lng = row
+            order = row["StationOrder"]
+            name = row["StationName"]
+            path_str = row["pathPoints"]
+            lat = row["Lat"]
+            lng = row["Lng"]
             
             if path_str:
                 segment = parse_path_string(path_str)
@@ -202,10 +217,18 @@ def get_official_path_from_db(conn, route_id, direction, start_order, end_order)
                 full_path.append([lat, lng])
         
         # ========== BƯỚC 3: THÊM TRẠM CUỐI ==========
-        end_station = conn.execute(
-            "SELECT Lat, Lng, StationName FROM stations WHERE RouteId=? AND StationDirection=? AND StationOrder=?",
-            (route_id, direction, end_order)
-        ).fetchone()
+        response_end = (
+            supabase
+            .table("stations")
+            .select("Lat, Lng, StationName")
+            .eq("RouteId", route_id)
+            .eq("StationDirection", direction)
+            .eq("StationOrder", end_order)
+            .single()
+            .execute()
+        )
+
+        end_station = response_end.data  # dict
         
         if end_station:
             last_point = full_path[-1]
@@ -231,13 +254,19 @@ def get_official_path_from_db(conn, route_id, direction, start_order, end_order)
     
     # ========== FALLBACK: DÙNG OSRM ==========
     try:
-        query = """
-            SELECT Lat, Lng FROM stations 
-            WHERE RouteId=? AND StationDirection=? 
-            AND StationOrder >= ? AND StationOrder <= ? 
-            ORDER BY StationOrder ASC
-        """
-        rows = conn.execute(query, (route_id, direction, start_order, end_order)).fetchall()
+        response = (
+            supabase
+            .table("stations")
+            .select("Lat, Lng")
+            .eq("RouteId", route_id)
+            .eq("StationDirection", direction)
+            .gte("StationOrder", start_order)
+            .lte("StationOrder", end_order)
+            .order("StationOrder", asc=True)
+            .execute()
+        ) 
+
+        rows = response.data  # list of dict
         
         if not rows:
             route_logger.error(f"OSRM_NO_STATIONS | Route={route_id}")
@@ -256,19 +285,46 @@ def get_official_path_from_db(conn, route_id, direction, start_order, end_order)
         route_logger.error(f"OSRM_FAIL | Route={route_id} | Error={str(e)}")
         return []
 # =========================================================
-def get_route_no(conn, route_id):
+def get_route_no(route_id):
     try:
-        r = conn.execute("SELECT RouteNo FROM routes WHERE RouteId = ?", (route_id,)).fetchone()
-        return str(r[0]) if r else "Bus"
-    except: return "Bus"
+        response = (
+            supabase
+            .table("routes")
+            .select("RouteNo")
+            .eq("RouteId", route_id)
+            .single()
+            .execute()
+        )
 
-def get_route_name(conn, route_id):
+        data = response.data
+        return str(data["RouteNo"]) if data else "Bus"
+    except:
+        return "Bus"
+
+
+def get_route_name(route_id):
     try:
-        r = conn.execute("SELECT RouteNo, RouteName FROM routes WHERE RouteId = ?", (route_id,)).fetchone()
-        return f"{r[0]} - {r[1]}" if r else "Bus"
-    except: return "Bus"
+        response = (
+            supabase
+            .table("routes")
+            .select("RouteNo, RouteName")
+            .eq("RouteId", route_id)
+            .single()
+            .execute()
+        )
 
-def validate_route_quality(conn, route_id, direction):
+        data = response.data
+
+        if data:
+            return f"{data['RouteNo']} - {data['RouteName']}"
+        else:
+            return "Bus"
+
+    except:
+        return "Bus"
+
+
+def validate_route_quality(route_id, direction):
     """
     Kiểm tra chất lượng tuyến trước khi sử dụng
     Tiêu chí: 
@@ -282,11 +338,21 @@ def validate_route_quality(conn, route_id, direction):
         MAX_GAP_KM = 2.5       # Nếu 2 trạm liền kề cách nhau > 2.5km -> Loại
         
         # 1. Lấy danh sách trạm và tọa độ (Sắp xếp theo thứ tự)
-        query = "SELECT StationName, Lat, Lng FROM stations WHERE RouteId = ? AND StationDirection = ? ORDER BY StationOrder"
-        stations = conn.execute(query, (route_id, direction)).fetchall()
+        response = (
+            supabase
+            .table("stations")
+            .select("StationName, Lat, Lng")
+            .eq("RouteId", route_id)
+            .eq("StationDirection", direction)
+            .order("StationOrder", asc=True)
+            .execute()
+        )
+
+        stations = response.data  # list of dict
+
         
         count = len(stations)
-        route_name = get_route_name(conn, route_id)
+        route_name = get_route_name( route_id)
 
         # 2. Kiểm tra số lượng trạm
         if count < MIN_STOPS:
@@ -311,10 +377,18 @@ def validate_route_quality(conn, route_id, direction):
                 return (False, f"Tuyến {route_name} bị lỗi dữ liệu (ngắt quãng lớn)")
 
         # 4. Kiểm tra PathPoints (Optional - Chỉ log cảnh báo chứ không loại)
-        has_path = conn.execute(
-            "SELECT COUNT(*) FROM stations WHERE RouteId = ? AND StationDirection = ? AND pathPoints IS NOT NULL",
-            (route_id, direction)
-        ).fetchone()[0]
+        response = (
+            supabase
+            .table("stations")
+            .select("id", count="exact")
+            .eq("RouteId", route_id)
+            .eq("StationDirection", direction)
+            .not_("pathPoints", "is", None)   # pathPoints IS NOT NULL
+            .execute()
+        )
+
+        has_path = response.count  # số lượng pathPoints có dữ liệu
+
         
         if has_path < count * 0.3: # Nếu dưới 30% trạm có pathPoints
             route_logger.info(f"LOW_QUALITY_PATH | RouteID={route_id} | Chỉ {has_path}/{count} trạm có pathPoints")
@@ -330,16 +404,22 @@ def validate_route_quality(conn, route_id, direction):
 # =========================================================
 def find_smart_bus_route(start_coords, end_coords, **kwargs):
     print(f"\n🔍 [REALISTIC MODE] Tìm từ {start_coords} -> {end_coords}")
-    conn = get_db()
-    all_stops = conn.execute("SELECT StationId, StationName, Lat, Lng, RouteId, StationOrder, StationDirection FROM stations").fetchall()
-    
+    response = (
+        supabase
+        .table("stations")
+        .select("StationId, StationName, Lat, Lng, RouteId, StationOrder, StationDirection")
+        .execute()
+    )
+
+    all_stops = response.data  # list of dict 
+
     # DANH SÁCH TUYẾN XƯƠNG SỐNG (Ưu tiên)
     BACKBONE_ROUTES = ['19', '53', '150', '8', '6', '56', '10', '30', '104', '33', '99', '152']
     
     route_no_cache = {}
     def is_backbone(rid):
         if rid not in route_no_cache:
-            route_no_cache[rid] = get_route_no(conn, rid)
+            route_no_cache[rid] = get_route_no(rid)
         return route_no_cache[rid] in BACKBONE_ROUTES
 
      # ========== THÊM CACHE VALIDATION ==========
@@ -348,7 +428,7 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
         """Kiểm tra tuyến có đủ tiêu chuẩn không"""
         key = (rid, direction)
         if key not in route_quality_cache:
-            is_valid, error = validate_route_quality(conn, rid, direction)
+            is_valid, error = validate_route_quality(rid, direction)
             route_quality_cache[key] = is_valid
             if not is_valid:
                 print(f"❌ {error}")
@@ -388,9 +468,7 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
             f"NOT_FOUND | Start={start_coords} End={end_coords} | "
             f"StartRoutes={len(s_close)} EndRoutes={len(e_close)}"
         )
-        # ==================================
         
-        conn.close()
         # ========== SỬA MESSAGE ==========
         return {
             'success': False, 
@@ -446,35 +524,49 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
             for e in top_e:
                 if s['RouteId'] == e['RouteId']: continue
                 
-                # Hub Matching
-                query = """
-                    SELECT S1.StationName, S1.Lat, S1.Lng, S1.StationOrder as Order1, S2.StationOrder as Order2
-                    FROM stations S1
-                    JOIN stations S2 ON 
-                        (ABS(S1.Lat - S2.Lat) < 0.005 AND ABS(S1.Lng - S2.Lng) < 0.005)
-                        OR S1.StationName = S2.StationName
-                    WHERE S1.RouteId = ? AND S1.StationDirection = ?
-                      AND S2.RouteId = ? AND S2.StationDirection = ?
-                      AND S1.StationOrder > ? AND S2.StationOrder < ?
-                    LIMIT 1
-                """
-                trans_row = conn.execute(query, (s['RouteId'], s['StationDirection'], e['RouteId'], e['StationDirection'], s['StationOrder'], e['StationOrder'])).fetchone()
-                
+                trans_row = find_transfer_point(
+                    s["RouteId"], 
+                    s["StationDirection"], 
+                    e["RouteId"], 
+                    e["StationDirection"], 
+                    s["StationOrder"], 
+                    e["StationOrder"]
+                )
+
                 if trans_row:
-                    trans = {'StationName': trans_row[0], 'Lat': trans_row[1], 'Lng': trans_row[2], 'Order1': trans_row[3], 'Order2': trans_row[4]}
+                    trans = {
+                        'StationName': trans_row["StationName"],
+                        'Lat': trans_row["Lat"],
+                        'Lng': trans_row["Lng"],
+                        'Order1': trans_row["Order1"],
+                        'Order2': trans_row["Order2"]
+                    }
                     walk_total = s['dist'] + e['dist']
-                    stops_total = (trans['Order1'] - s['StationOrder']) + (e['StationOrder'] - trans['Order2'])
-                    
+
+                    stops_total = (
+                        (trans['Order1'] - s['StationOrder']) +
+                        (e['StationOrder'] - trans['Order2'])
+                    )
                     # Phạt nặng nếu tổng trạm > 70
                     penalty = 0
                     if stops_total > 70: penalty = 500
 
-                    score = (walk_total * WEIGHT_WALK) + (stops_total * WEIGHT_STOP) + TRANSFER_PENALTY + penalty
-                    potential_solutions.append({'type': 'transfer', 'score': score, 'walk': walk_total, 'stops': stops_total, 'data': (s, e, trans)})
+                    score = (
+                        walk_total * WEIGHT_WALK +
+                        stops_total * WEIGHT_STOP +
+                        TRANSFER_PENALTY +
+                        penalty
+                    )
 
+                    potential_solutions.append({
+                        'type': 'transfer',
+                        'score': score,
+                        'walk': walk_total,
+                        'stops': stops_total,
+                        'data': (s, e, trans)
+                    })
     # --- KẾT QUẢ ---
     if not potential_solutions:
-        conn.close()
         return {'success': False, 'error': 'Không tìm thấy.'}
 
     # Sắp xếp theo điểm
@@ -526,7 +618,7 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
     
     # Log lựa chọn tốt nhất
     best = top_solutions[0]
-    r_lbl = get_route_name(conn, best['data'][0]['RouteId'])
+    r_lbl = get_route_name( best['data'][0]['RouteId'])
     print(f"   🏆 Tốt nhất: {best['type'].upper()} ({r_lbl}) | Walk: {best['walk']:.2f}km | Score: {best['score']:.1f}")
     
     route_logger.info(
@@ -538,29 +630,107 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
     final_results = []
     for sol in top_solutions:
         if sol['type'] == 'direct':
-            res = build_response(conn, sol['data'][0], sol['data'][1], 'direct')
+            res = build_response( sol['data'][0], sol['data'][1], 'direct')
         else:
-            res = build_response(conn, sol['data'][0], sol['data'][1], 'transfer', sol['data'][2])
+            res = build_response( sol['data'][0], sol['data'][1], 'transfer', sol['data'][2])
         
         if res['success']:
             final_results.append(res['data'])
     
-    conn.close()  # ✅ Đóng connection Ở ĐÂY, sau khi xong vòng lặp
-    
+ 
     return {
         'success': True,
         'count': len(final_results),
         'routes': final_results  # ✅ Đổi key từ 'data' → 'routes' cho rõ ràng
     }
 
-def build_response(conn, s, e, type, trans=None):
+# Hàm helpers để tìm trạm giao nhau
+def find_transfer_point(routeA, dirA, routeB, dirB, start_order, end_order):
+    """
+    Tìm trạm giao nhau giữa tuyến A và tuyến B.
+    Logic tương đương SQL JOIN cũ.
+
+    Trả về:
+        {
+            "StationName": ...,
+            "Lat": ...,
+            "Lng": ...,
+            "Order1": ...,
+            "Order2": ...
+        }
+    hoặc None nếu không tìm thấy.
+    """
+
+    # ==========================================
+    # 1) Lấy danh sách S1 (các trạm từ tuyến A)
+    # ==========================================
+    try:
+        resp_s1 = (
+            supabase
+            .table("stations")
+            .select("StationName, Lat, Lng, StationOrder, RouteId, StationDirection")
+            .eq("RouteId", routeA)
+            .eq("StationDirection", dirA)
+            .gt("StationOrder", start_order)
+            .execute()
+        )
+        S1_list = resp_s1.data or []
+    except:
+        S1_list = []
+
+    # ==========================================
+    # 2) Lấy danh sách S2 (các trạm từ tuyến B)
+    # ==========================================
+    try:
+        resp_s2 = (
+            supabase
+            .table("stations")
+            .select("StationName, Lat, Lng, StationOrder, RouteId, StationDirection")
+            .eq("RouteId", routeB)
+            .eq("StationDirection", dirB)
+            .lt("StationOrder", end_order)
+            .execute()
+        )
+        S2_list = resp_s2.data or []
+    except:
+        S2_list = []
+
+    # ==========================================
+    # 3) So khớp như JOIN (mô phỏng SQL)
+    # ==========================================
+    for s1 in S1_list:
+        for s2 in S2_list:
+
+            # Điều kiện vị trí gần nhau (500m)
+            close_position = (
+                abs(s1["Lat"] - s2["Lat"]) < 0.005 and
+                abs(s1["Lng"] - s2["Lng"]) < 0.005
+            )
+
+            # Điều kiện trùng tên
+            same_name = s1["StationName"] == s2["StationName"]
+
+            if close_position or same_name:
+                # Tạo dòng kết quả giống fetchone() cũ
+                return {
+                    "StationName": s1["StationName"],
+                    "Lat": s1["Lat"],
+                    "Lng": s1["Lng"],
+                    "Order1": s1["StationOrder"],
+                    "Order2": s2["StationOrder"],
+                }
+
+    # Không tìm thấy → trả None (đúng yêu cầu)
+    return None
+
+def build_response( s, e, type, trans=None):
     """
     Xây dựng object JSON trả về cho Frontend.
     [CHANGE]: Không đóng connection ở đây để dùng cho vòng lặp.
     """
     if type == 'direct':
-        name = get_route_name(conn, s['RouteId'])
-        path = get_official_path_from_db(conn, s['RouteId'], s['StationDirection'], s['StationOrder'], e['StationOrder'])
+        name = get_route_name( s['RouteId'])
+        path = get_official_path_from_db( s['RouteId'], s['StationDirection'], s['StationOrder'], e['StationOrder'])
 
         return {
             'success': True, 
@@ -590,10 +760,10 @@ def build_response(conn, s, e, type, trans=None):
             }
         }
     else:
-        name1 = get_route_name(conn, s['RouteId'])
-        name2 = get_route_name(conn, e['RouteId'])
-        path1 = get_official_path_from_db(conn, s['RouteId'], s['StationDirection'], s['StationOrder'], trans['Order1'])
-        path2 = get_official_path_from_db(conn, e['RouteId'], e['StationDirection'], trans['Order2'], e['StationOrder'])
+        name1 = get_route_name(s['RouteId'])
+        name2 = get_route_name(e['RouteId'])
+        path1 = get_official_path_from_db(s['RouteId'], s['StationDirection'], s['StationOrder'], trans['Order1'])
+        path2 = get_official_path_from_db(e['RouteId'], e['StationDirection'], trans['Order2'], e['StationOrder'])
         
         return {
             'success': True,

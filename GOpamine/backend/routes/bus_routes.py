@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 import sys
 import os
 import traceback # Thêm thư viện này để in lỗi chi tiết
+from backend.utils.bus_routing import find_smart_bus_route, validate_route_quality, get_route_name
+from backend.database.supabase_client import supabase
 
 # --- HACK PATH (Giữ nguyên để import được) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -10,7 +12,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 # ---------------------------------------------
 
-from backend.utils.bus_routing import find_smart_bus_route, plan_multi_stop_bus_trip
+from ..utils.bus_routing import find_smart_bus_route, plan_multi_stop_bus_trip
 
 bus_bp = Blueprint('bus_api', __name__, url_prefix='/api/bus')
 
@@ -72,52 +74,69 @@ def plan_multi_trip():
 @bus_bp.route('/validate-routes', methods=['GET'])
 def validate_all_routes():
     """
-    API kiểm tra tất cả tuyến trong database
+    API kiểm tra tất cả tuyến trong database trên Supabase
     Dùng để debug/báo cáo chất lượng data
     """
     try:
-        from backend.utils.bus_routing import get_db, validate_route_quality, get_route_name
-        
-        conn = get_db()
-        all_routes = conn.execute("""
-            SELECT DISTINCT RouteId, StationDirection 
-            FROM stations 
-            ORDER BY RouteId, StationDirection
-        """).fetchall()
-        
+        # 1️⃣ Lấy tất cả RouteId + StationDirection (DISTINCT)
+        response = (
+            supabase
+            .table("stations")
+            .select("RouteId, StationDirection")
+            .order("RouteId", desc=False)
+            .order("StationDirection", desc=False)
+            .execute()
+        )
+
+        rows = response.data
+
+        # Tạo danh sách unique (vì Supabase không có DISTINCT trực tiếp)
+        seen = set()
+        all_routes = []
+        for r in rows:
+            key = (r["RouteId"], r["StationDirection"])
+            if key not in seen:
+                seen.add(key)
+                all_routes.append(key)
+
         valid = []
         invalid = []
-        
+
+        # 2️⃣ Lặp qua từng route/direction
         for route_id, direction in all_routes:
-            is_valid, error = validate_route_quality(conn, route_id, direction)
-            route_name = get_route_name(conn, route_id)
-            
+
+            # 🔥 Nếu validate_route_quality cần query DB → gửi route_id, direction là đủ
+            is_valid, error = validate_route_quality(route_id, direction)
+
+            # 3️⃣ Lấy tên route từ Supabase
+            route_name = get_route_name(route_id)
+
             if is_valid:
                 valid.append({
-                    'route_id': route_id,
-                    'route_name': route_name,
-                    'direction': direction
+                    "route_id": route_id,
+                    "route_name": route_name,
+                    "direction": direction
                 })
             else:
                 invalid.append({
-                    'route_id': route_id,
-                    'route_name': route_name,
-                    'direction': direction,
-                    'error': error
+                    "route_id": route_id,
+                    "route_name": route_name,
+                    "direction": direction,
+                    "error": error
                 })
-        
-        conn.close()
-        
+
+        total = len(all_routes)
+
         return jsonify({
-            'success': True,
-            'summary': {
-                'total': len(all_routes),
-                'valid': len(valid),
-                'invalid': len(invalid),
-                'valid_percentage': round(len(valid) / len(all_routes) * 100, 1)
+            "success": True,
+            "summary": {
+                "total": total,
+                "valid": len(valid),
+                "invalid": len(invalid),
+                "valid_percentage": round(len(valid) / total * 100, 1) if total > 0 else 0
             },
-            'invalid_routes': invalid,
-            'valid_routes': valid
+            "invalid_routes": invalid,
+            "valid_routes": valid
         })
 
     except Exception as e:

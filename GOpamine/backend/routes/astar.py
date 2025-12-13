@@ -6,15 +6,14 @@ import json
 from time import sleep
 from flask import Blueprint, request, jsonify
 from typing import List, Dict, Tuple, Optional
+    #Import để lấy dữ liệu ng dùng nhập
+from .pricing_score import UserRequest, calculate_adaptive_scores # Import class UserRequest
 
 # --- Import module tính tiền ---
 try:
     from .cost_estimation import calculate_transport_cost
 except ImportError:
-    try:
-        from cost_estimation import calculate_transport_cost
-    except ImportError:
-        raise ImportError("Cannot import cost_estimation module")
+    raise ImportError("Cannot import cost_estimation module")
 
 class AStarRouter:
     """
@@ -27,7 +26,7 @@ class AStarRouter:
     
     PROFILE_MAP = {
         'car': 'driving',
-        'moto': 'driving',
+        'moto': 'bike',
         'bus': 'driving'
     }
     
@@ -254,14 +253,13 @@ class AStarRouter:
     # MAIN: MULTI-STOP TRIP PLANNING
     # ==============================================================================
 
-    def plan_multi_stop_trip(self, start_id, destination_ids, is_student=False, vehicle_type='car'):
+    def plan_multi_stop_trip(self, start_id, destination_ids, vehicle_type='car'):
         """
         Hàm chính: Lập kế hoạch lộ trình đa điểm
         
         Input:
           - start_id: Tên/ID điểm xuất phát (String)
           - destination_ids: Danh sách tên điểm đến (List[String])
-          - is_student: Boolean (áp dụng giảm giá SV)
           - vehicle_type: 'car', 'moto', 'bus'
         
         Output:
@@ -276,6 +274,11 @@ class AStarRouter:
             'error': str
           }
         """
+        # --- [DEBUG START] ---
+        print("\n" + "="*50)
+        print("🚀 [DEBUG ASTAR] Đang nhận yêu cầu lập lịch trình...")
+        # --- [DEBUG END] ---
+
         try:
             # 0. VALIDATE INPUT - Đảm bảo destination_ids là list
             if isinstance(destination_ids, str):
@@ -352,7 +355,6 @@ class AStarRouter:
                     res = calculate_transport_cost(
                         mode=opt['mode'], 
                         distance_km=dist_km, 
-                        is_student=is_student, 
                         brand_name=opt['brand']
                     )
                     val = res['value'] if isinstance(res, dict) else res
@@ -444,7 +446,6 @@ def create_api_blueprint(db_path=None):
         res = router.plan_multi_stop_trip(
             start_id=start_input, # Truyền start_input (có thể là dict hoặc string)
             destination_ids=data.get('destinations') or data.get('stops', []),
-            is_student=data.get('is_student', False),
             vehicle_type=data.get('vehicle_type', 'car')
         )
         return jsonify(res)
