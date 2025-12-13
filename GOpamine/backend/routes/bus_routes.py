@@ -2,8 +2,8 @@ from flask import Blueprint, request, jsonify
 import sys
 import os
 import traceback # Thêm thư viện này để in lỗi chi tiết
-from backend.utils.bus_routing import get_db, validate_route_quality, get_route_name
-from supabase_client import supabase
+from backend.utils.bus_routing import find_smart_bus_route, validate_route_quality, get_route_name
+from backend.database.supabase_client import supabase
 
 # --- HACK PATH (Giữ nguyên để import được) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,7 +12,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 # ---------------------------------------------
 
-from backend.utils.bus_routing import find_smart_bus_route, plan_multi_stop_bus_trip
+from ..utils.bus_routing import find_smart_bus_route, plan_multi_stop_bus_trip
 
 bus_bp = Blueprint('bus_api', __name__, url_prefix='/api/bus')
 

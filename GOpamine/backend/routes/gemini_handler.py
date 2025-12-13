@@ -1,5 +1,5 @@
 import google.generativeai as genai
-from config import Config 
+from backend.routes.config import Config 
 
 class GeminiBot:
     def __init__(self):

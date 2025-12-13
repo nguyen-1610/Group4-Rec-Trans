@@ -3,21 +3,21 @@ import os
 from importlib import util as importlib_util
 
 from flask import Blueprint, request, jsonify
-from gemini_handler import GeminiBot
+from backend.routes.gemini_handler import GeminiBot
 import uuid
 
-from pricing_score import UserRequest, WeatherContext, calculate_adaptive_scores
+from .pricing_score import UserRequest, WeatherContext, calculate_adaptive_scores
 
-from astar import AStarRouter
+from backend.routes.astar import AStarRouter
 
 # [THÊM] Import logic tìm xe buýt (Bộ não của hệ thống Bus)
 try:
-    from backend.utils.bus_routing import plan_multi_stop_bus_trip
+    from ..utils.bus_routing import plan_multi_stop_bus_trip
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-    from backend.utils.bus_routing import plan_multi_stop_bus_trip
+    from ..utils.bus_routing import plan_multi_stop_bus_trip
 
 ROUTER = AStarRouter()
 

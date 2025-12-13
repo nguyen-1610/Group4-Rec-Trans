@@ -2,8 +2,6 @@ import os
 from backend.database.supabase_client import supabase
 import sys
 
-
-
 # ==============================================================================
 # 2. LOAD DỮ LIỆU GIÁ TỪ DB (CÓ ĐỌC SỐ GHẾ)
 # ==============================================================================

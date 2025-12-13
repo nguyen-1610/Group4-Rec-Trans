@@ -7,16 +7,13 @@ from time import sleep
 from flask import Blueprint, request, jsonify
 from typing import List, Dict, Tuple, Optional
     #Import để lấy dữ liệu ng dùng nhập
-from pricing_score import UserRequest, calculate_adaptive_scores # Import class UserRequest
+from .pricing_score import UserRequest, calculate_adaptive_scores # Import class UserRequest
 
 # --- Import module tính tiền ---
 try:
     from .cost_estimation import calculate_transport_cost
 except ImportError:
-    try:
-        from cost_estimation import calculate_transport_cost
-    except ImportError:
-        raise ImportError("Cannot import cost_estimation module")
+    raise ImportError("Cannot import cost_estimation module")
 
 class AStarRouter:
     """
