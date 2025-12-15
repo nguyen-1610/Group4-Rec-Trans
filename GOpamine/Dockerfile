@@ -4,6 +4,8 @@ FROM python:3.10-slim
 # 2. Thiết lập thư mục làm việc bên trong container
 WORKDIR /app
 
+ENV FLASK_HOST=0.0.0.0
+
 # 3. Copy file requirements từ máy bạn vào container trước
 # (Lưu ý đường dẫn backend/requirements.txt dựa trên ảnh bạn gửi)
 COPY backend/requirements.txt .
