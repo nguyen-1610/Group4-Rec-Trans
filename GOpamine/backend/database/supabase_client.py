@@ -1,12 +1,21 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
 # Load .env
-load_dotenv()
+current_dir = Path(__file__).resolve()  # backend/database
+root_dir = current_dir.parent.parent           # Root của dự án
+env_path = root_dir / 'routes' / '.env'
+
+# Load file .env với đường dẫn cụ thể
+load_dotenv(dotenv_path=env_path)
+# --------------------
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise Exception("❌ Thiếu SUPABASE_URL hoặc SUPABASE_KEY trong .env")

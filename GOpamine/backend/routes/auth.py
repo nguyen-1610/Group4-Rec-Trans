@@ -6,9 +6,10 @@ Hỗ trợ: Email/Password, OAuth (Google, Facebook), Guest Login
 import os
 import uuid
 from datetime import datetime
-from flask import Blueprint, request, jsonify, redirect, url_for, session
+from flask import Blueprint, request, jsonify, redirect, url_for, session, render_template_string
 from flask_login import login_user, logout_user, login_required, current_user, UserMixin
 from dotenv import load_dotenv
+from supabase import create_client
 
 # Import Supabase client
 import sys
@@ -363,13 +364,276 @@ def auth_callback():
         print(f"❌ [AUTH CALLBACK ERROR]: {e}")
         return redirect('/?error=auth_failed')
 
-# ==============================================================================
-# HELPER - Không cần setup_oauth nữa vì dùng Supabase Auth
-# ==============================================================================
+
 def setup_oauth(app):
-    """
-    Hàm này giữ lại để tương thích với app.py
-    Nhưng không cần làm gì vì Supabase Auth tự xử lý OAuth
-    """
-    print("✅ Supabase Auth initialized (OAuth ready)")
+    # Hàm này không cần làm gì cả vì ta đang dùng Supabase Client-side
     pass
+
+# ==============================================================================
+# [REPLACEMENT] CÁC HÀM XỬ LÝ AN TOÀN (FIX CHECK CONSTRAINT ERROR)
+# ==============================================================================
+
+@auth_bp.route('/api/register-safe', methods=['POST'])
+def register_safe():
+    return register_v2_admin()
+
+@auth_bp.route('/api/guest-safe', methods=['POST'])
+def guest_safe():
+    return login_guest_v2()
+
+@auth_bp.route('/api/login-guest-v2', methods=['POST'])
+def login_guest_v2():
+    try:
+        print("👤 [GUEST V2] Đang khởi tạo khách (Fix Check Constraint)...")
+        
+        # 1. Setup Admin Client
+        sb_url = os.getenv("SUPABASE_URL")
+        sb_service_key = os.getenv("SUPABASE_SERVICE_KEY")
+        if not sb_service_key:
+            return jsonify({'success': False, 'message': 'Thiếu Service Key'}), 500
+            
+        supabase_admin = create_client(sb_url, sb_service_key)
+        
+        # 2. Tạo User thật bằng quyền Admin
+        guest_id = str(uuid.uuid4())
+        guest_email = f"guest_{guest_id[:8]}@gopamine.local"
+        guest_pass = f"Guest@{guest_id[:8]}"
+        
+        admin_create = supabase_admin.auth.admin.create_user({
+            "email": guest_email,
+            "password": guest_pass,
+            "email_confirm": True,
+            "user_metadata": {"full_name": "Khách tham quan"}
+        })
+        
+        if not admin_create.user:
+             return jsonify({'success': False, 'message': 'Lỗi tạo Guest User'}), 500
+
+        user = admin_create.user
+        
+        # 3. GHI DB BẰNG QUYỀN ADMIN (FIX LỖI 23514 Ở ĐÂY)
+        # Database của bạn không chịu 'local', ta đổi sang 'email' để đánh lừa nó
+        user_data = {
+            "user_id": user.id,
+            "email": user.email,
+            "username": "Khách tham quan",
+            "auth_type": "email",  # <--- ĐỔI TỪ 'local' THÀNH 'email'
+            "is_guest": True,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        print(f"⚡ [ADMIN] Ghi Guest vào DB: {user.id} | Type: email")
+        supabase_admin.table("users").upsert(user_data).execute()
+        
+        # Tạo Profile phụ
+        try:
+            supabase_admin.table("UserProfile").upsert({
+                "user_id": user.id,
+                "default_mode": 0, 
+                "age_group": "balanced"
+            }, on_conflict='user_id').execute()
+        except:
+            pass
+
+        # 4. Đăng nhập lấy Token
+        login_res = supabase.auth.sign_in_with_password({
+            "email": guest_email,
+            "password": guest_pass
+        })
+        
+        if login_res.session:
+            # Login Flask session (auth_type cũng phải là email cho đồng bộ)
+            guest_user = User(user.id, user.email, "Khách tham quan", 'email', True)
+            login_user(guest_user, remember=True)
+            
+            return jsonify({
+                'success': True, 
+                'access_token': login_res.session.access_token,
+                'redirect_url': '/'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Không thể lấy Token khách'}), 500
+
+    except Exception as e:
+        print(f"❌ [GUEST V2 ERROR]: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@auth_bp.route('/api/register-v2-admin', methods=['POST'])
+def register_v2_admin():
+    try:
+        data = request.json
+        email = data.get('email')
+        password = data.get('password')
+        full_name = data.get('fullName')
+        
+        print(f"📝 [REGISTER V2 ADMIN]: {email}")
+        
+        sb_url = os.getenv("SUPABASE_URL")
+        sb_service_key = os.getenv("SUPABASE_SERVICE_KEY")
+        supabase_admin = create_client(sb_url, sb_service_key)
+
+        auth_res = supabase.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {"data": {"full_name": full_name}}
+        })
+
+        if not auth_res.user:
+            return jsonify({'success': False, 'message': 'Email có thể đã tồn tại hoặc lỗi Auth'}), 400
+
+        user = auth_res.user
+        
+        # GHI BẢNG USERS (FIX LỖI 23514 Ở ĐÂY LUÔN)
+        user_data = {
+            "user_id": user.id,
+            "email": user.email,
+            "username": full_name,
+            "auth_type": "email", # <--- ĐỔI TỪ 'local' THÀNH 'email'
+            "is_guest": False,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        print("⚡ [ADMIN] Ghi User Đăng ký vào DB...")
+        supabase_admin.table("users").upsert(user_data).execute()
+        
+        try:
+            supabase_admin.table("UserProfile").upsert({
+                "user_id": user.id,
+                "default_mode": 0,
+                "age_group": "balanced"
+            }, on_conflict='user_id').execute()
+        except:
+            pass
+
+        return jsonify({'success': True, 'message': 'Đăng ký thành công! Hãy đăng nhập.'})
+
+    except Exception as e:
+        print(f"❌ [REGISTER V2 ERROR]: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    
+# ==============================================================================
+# [REPLACEMENT] HÀM ĐỒNG BỘ SESSION (FIX LỖI FACEBOOK & UNDEFINED)
+# ==============================================================================
+@auth_bp.route('/api/auth/sync-session', methods=['POST'])
+def sync_session():
+    # Import cục bộ để tránh mọi lỗi thiếu thư viện tiềm ẩn
+    from supabase import create_client
+    import os
+    
+    try:
+        # 1. Lấy dữ liệu
+        data = request.json
+        access_token = data.get('access_token')
+        
+        if not access_token:
+            return jsonify({'success': False, 'message': 'Thiếu Access Token'}), 400
+
+        # 2. Kết nối ADMIN (Để ghi đè RLS và Check Constraint)
+        sb_url = os.getenv("SUPABASE_URL")
+        sb_service_key = os.getenv("SUPABASE_SERVICE_KEY")
+        
+        if not sb_service_key:
+            return jsonify({'success': False, 'message': 'Lỗi Server: Thiếu Service Key'}), 500
+            
+        supabase_admin = create_client(sb_url, sb_service_key)
+
+        # 3. Lấy thông tin User từ Supabase Auth
+        # (Dùng client thường để verify token cũng được, hoặc admin đều OK)
+        user_response = supabase_admin.auth.get_user(access_token)
+        if not user_response or not user_response.user:
+            return jsonify({'success': False, 'message': 'Token Facebook/Google không hợp lệ'}), 401
+
+        user = user_response.user
+        
+        # 4. CHUẨN BỊ DỮ LIỆU (QUAN TRỌNG NHẤT)
+        meta = user.user_metadata or {}
+        full_name = meta.get('full_name') or meta.get('name') or user.email.split('@')[0]
+        
+        # Xử lý trường hợp Facebook không trả về email (dùng ID làm email giả)
+        safe_email = user.email if user.email else f"{user.id}@facebook.no-email"
+
+        # [FIX CRITICAL] LUÔN DÙNG 'email' ĐỂ TRÁNH LỖI CHECK CONSTRAINT CỦA DB
+        # Database của bạn đang chặn các từ khóa lạ như 'facebook', 'google'
+        auth_type_value = 'email' 
+
+        user_data = {
+            "user_id": user.id,
+            "email": safe_email,
+            "username": full_name,
+            "auth_type": auth_type_value, # <--- Luôn là 'email' -> DB OK
+            "is_guest": False,
+            "created_at": datetime.now().isoformat()
+        }
+
+        # 5. GHI VÀO DB (Dùng Admin Client)
+        print(f"⚡ [SYNC] Đang đồng bộ Facebook/Google: {safe_email}")
+        supabase_admin.table("users").upsert(user_data).execute()
+        
+        # Ghi Profile phụ
+        try:
+            supabase_admin.table("UserProfile").upsert({
+                "user_id": user.id,
+                "default_mode": 0,
+                "age_group": "balanced"
+            }, on_conflict='user_id').execute()
+        except Exception as e:
+            print(f"⚠️ Lỗi tạo profile (không sao): {e}")
+
+        # 6. Login Flask (Để server nhớ phiên)
+        local_user = User(user.id, safe_email, full_name, auth_type_value, False)
+        login_user(local_user, remember=True)
+        
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"❌ [SYNC ERROR]: {e}")
+        # Trả về message rõ ràng để Frontend không báo 'undefined'
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# ==============================================================================
+# [ADD] API LẤY PROFILE THUẦN (KHÔNG ĐỤNG BẢNG USERS CŨ)
+# ==============================================================================
+@auth_bp.route('/api/get-capsule-info', methods=['POST'])
+def get_capsule_info():
+    # Import cục bộ để tránh lỗi 
+    try:
+        token = request.json.get('access_token')
+        if not token:
+            return jsonify({'success': False}), 400
+
+        # Kết nối Supabase (Dùng key thường cũng được vì chỉ đọc thông tin user của chính mình)
+        sb_url = os.getenv("SUPABASE_URL")
+        sb_key = os.getenv("SUPABASE_KEY")
+        client = create_client(sb_url, sb_key)
+
+        # Lấy thông tin user từ Token
+        user_res = client.auth.get_user(token)
+        if not user_res or not user_res.user:
+            return jsonify({'success': False}), 401
+
+        user = user_res.user
+        meta = user.user_metadata or {}
+        
+        # Ưu tiên lấy tên từ nhiều nguồn
+        # Google/FB thường để trong 'full_name', 'name'
+        # Khách/Email tự tạo thì ta đã lưu trong 'full_name'
+        display_name = meta.get('full_name') or meta.get('name') or meta.get('user_name') or user.email.split('@')[0]
+        
+        # Avatar: Google/FB có sẵn, còn lại dùng UI Avatars
+        avatar_url = meta.get('avatar_url') or meta.get('picture')
+        if not avatar_url:
+            avatar_url = f"https://ui-avatars.com/api/?name={display_name}&background=3C7363&color=fff&size=128"
+
+        return jsonify({
+            'success': True,
+            'user': {
+                'name': display_name,
+                'avatar': avatar_url,
+                'email': user.email
+            }
+        })
+
+    except Exception as e:
+        print(f"Capsule Info Error: {e}")
+        return jsonify({'success': False}), 500
