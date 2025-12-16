@@ -173,99 +173,247 @@ def _calculate_metrics(mode, user, distance_km, weather_ctx):  # Hàm tính toá
 # ==============================================================================
 # 8. MODULE 3: CHẤM ĐIỂM (BRAND-SPECIFIC LOGIC)
 # ==============================================================================
-def _compute_score(metrics, user, distance_km, weather_ctx):  # Hàm chấm điểm (Quan trọng nhất)
-    mode = metrics['mode']
-    price = metrics['total_cost']
-    mode_type = mode['type'] # Loại xe: 'bus', 'bike', 'car', 'walk'
-    brand = str(mode.get('brand', '')).lower() # Tên hãng (viết thường)
-    is_peak = metrics['is_peak']
+def _compute_score(metrics, user, distance_km, weather_ctx):
+    # =========================================================
+    # 🕵️ PRE-PROCESSING (CHUẨN HÓA DỮ LIỆU ĐỂ CODE CHẠY ĐƯỢC)
+    # =========================================================
     
-    score = 0.0  # Điểm khởi đầu
+    # Lấy thông tin mode từ metrics
+    mode = metrics['mode']  
+    # Lấy tổng chi phí từ metrics
+    price = metrics['total_cost']  
     
-    # ⭐ 1) PRICE SCORE (ĐIỂM GIÁ) - Tối đa 3.0 điểm
-    price_percent = price / user.budget  # Tỷ lệ giá / ngân sách
-    if price_percent < 0.05:      score += 3.0  # Rất rẻ (< 5% ngân sách)
-    elif price_percent < 0.10:    score += 2.5
-    elif price_percent < 0.20:    score += 1.8
-    elif price_percent < 0.40:    score += 1.0
-    else:                         score += 0.2  # Đắt (> 40% ngân sách)
+    # Lấy loại xe thô từ hệ thống (VD: 'tech_bike', 'bus_normal', 'walking')
+    raw_type = mode['type']  
     
-    # ⭐ 2) PRIORITY SCORING (ĐIỂM ƯU TIÊN)
+    # Chuẩn hóa về các từ khóa logic của bạn ('bus', 'bike', 'car', 'walk')
+    if 'bike' in raw_type: mode_type = 'bike'
+    elif 'car' in raw_type or 'taxi' in raw_type: mode_type = 'car'
+    elif 'bus' in raw_type: mode_type = 'bus'
+    elif 'walk' in raw_type: mode_type = 'walk'
+    else: mode_type = raw_type # Fallback
     
-    # --- A. ƯU TIÊN TỐC ĐỘ (SPEED) ---
-    # Logic xếp hạng: Gojek > Grab > Be > Car > Bus
-    if 'speed' in user.priorities:
-        # Nhóm Bike (Xe máy)
+    # Xử lý tên hãng xe (chuyển về chữ thường để so sánh)
+    brand = str(mode.get('brand', '')).lower()  
+    # Lấy sức chứa xe, mặc định là 4 nếu không có
+    capacity = mode.get('capacity', 4)  
+    # Kiểm tra xem có phải giờ cao điểm không
+    is_peak = metrics['is_peak']  
+
+    # Xử lý context thời tiết (Hỗ trợ cả object hoặc dict)
+    is_raining = getattr(weather_ctx, 'is_raining', False) if not isinstance(weather_ctx, dict) else weather_ctx.get('is_raining', False)
+    is_hot = getattr(weather_ctx, 'is_hot', False) if not isinstance(weather_ctx, dict) else weather_ctx.get('is_hot', False)
+
+    # Xử lý ưu tiên của user (Đảm bảo là set để dùng phép giao &)
+    user_priorities_set = set(user.priorities) if isinstance(user.priorities, (list, tuple)) else set(user.priorities.split(',')) if isinstance(user.priorities, str) else set()
+
+    # Khởi tạo điểm sàn ban đầu
+    score = 0.0  
+
+    # =========================================================
+    # ⭐ 0. PHYSICAL / CAPACITY (LUẬT CỨNG – NEW)
+    # =========================================================
+
+    # Xe máy chở đông (> 2 người) -> trừ điểm nặng
+    if mode_type == 'bike' and user.passenger_count > 2:
+        score -= 6.0
+
+    # Xe 4 chỗ nhưng đi > 4 người -> trừ điểm nặng
+    if mode_type == 'car' and capacity == 4 and user.passenger_count > 4:
+        score -= 4.0
+
+    # Xe 7 chỗ (hoặc lớn hơn) nhưng đi ít người (<= 4) -> trừ giảm dần
+    if mode_type == 'car' and capacity >= 7 and user.passenger_count <= 4:
+        # Nếu đi 1 mình xe to -> trừ 7 điểm
+        if user.passenger_count == 1:
+            score -= 7.0
+        # Nếu đi 2 người xe to -> trừ 4 điểm
+        elif user.passenger_count == 2:
+            score -= 4.0
+        # Nếu đi 3 người xe to -> trừ 2 điểm
+        elif user.passenger_count == 3:
+            score -= 2.0
+        # == 4 thì không trừ (score giữ nguyên)
+
+    # Bus + đông người (>= 5 người) -> cộng thêm điểm nền
+    if mode_type == 'bus' and user.passenger_count >= 5:
+        score += 2.5
+
+    # =========================================================
+    # ⭐ 1. PRICE SCORE (GIỮ NGUYÊN)
+    # =========================================================
+
+    # Nếu ngân sách user nhỏ hơn 2 triệu
+    if user.budget < 2_000_000:
+        # Tính tỷ lệ giá vé so với ngân sách
+        price_percent = price / user.budget
+        # Nếu giá chiếm < 5% ngân sách -> cộng 3 điểm
+        if price_percent < 0.05:      score += 3.0
+        # Nếu giá chiếm < 15% ngân sách -> cộng 2 điểm
+        elif price_percent < 0.15:    score += 2.0
+        # Nếu giá chiếm < 40% ngân sách -> cộng 1 điểm
+        elif price_percent < 0.40:    score += 1.0
+        # Nếu giá chiếm > 80% ngân sách -> trừ 2 điểm
+        elif price_percent > 0.80:    score -= 2.0
+    # Nếu ngân sách lớn (>= 2 triệu)
+    else:
+        # Giá rẻ dưới 15k -> cộng 3 điểm
+        if price < 15000:             score += 3.0
+        # Giá dưới 50k -> cộng 1.5 điểm
+        elif price < 50000:           score += 1.5
+        # Giá đắt trên 200k -> trừ 1 điểm
+        elif price > 200000:          score -= 1.0
+
+    # =========================================================
+    # ⭐ 2. PRIORITY SCORING (ĐÃ MERGE LOGIC MỚI)
+    # =========================================================
+
+    # --- A. SPEED (Ưu tiên Tốc độ) ---
+    if 'speed' in user_priorities_set:
+        # Logic cho xe máy
         if mode_type == 'bike':
-            score += 1.0 # Điểm sàn cho xe máy
-            if 'gojek' in brand:  score += 0.5  # Gojek được buff điểm tốc độ cao nhất
-            elif 'grab' in brand: score += 0.3  # Grab nhì
-            elif 'be' in brand:   score += 0.1  # Be ba
-        
-        # Nhóm Car (Ô tô)
+            # Ưu tiên theo hãng
+            if 'grab' in brand:   score += 2.0
+            elif 'be' in brand:   score += 1.5
+            elif 'xanh' in brand: score += 1.7
+
+        # Logic cho xe hơi -> cộng 1.2 điểm
         elif mode_type == 'car':
-            score += 0.4 # Điểm sàn ô tô thấp hơn xe máy
-            # Grab/XanhSM thường bắt xe nhanh hơn Taxi
-            if 'grab' in brand or 'xanh' in brand: score += 0.1
+            score += 1.25
 
-        # Nhóm chậm (Bus/Đi bộ) -> Trừ điểm
-        elif mode_type == 'bus':  score -= 0.6
-        elif mode_type == 'walk': score -= 1.0
-        
-        # Phạt nặng ô tô nếu đang kẹt xe (is_peak)
-        if is_peak and mode_type == 'car': score -= 0.8
-            
-    # --- B. ƯU TIÊN RẺ (CHEAP/BUDGET) ---
-    # Logic xếp hạng: Be > Bus > Gojek > Grab
-    if 'cheap' in user.priorities or 'budget' in user.priorities:
-        # Cộng điểm hãng rẻ (Tâm lý thích thương hiệu bình dân)
-        if 'be' in brand:      score += 0.8  # Be thường rẻ/nhiều mã
-        elif mode_type == 'bus': score += 0.6 # Bus siêu rẻ
-        elif 'gojek' in brand: score += 0.4 
-        elif 'grab' in brand:  score += 0.2  # Grab thường đắt hơn
-        
-        # Phạt xe hơi nếu muốn rẻ (vì ô tô chắc chắn đắt)
-        if mode_type == 'car': score -= 0.5
-        
-    # --- C. ƯU TIÊN THOẢI MÁI (COMFORT) ---
-    # Logic xếp hạng: GrabCar > XanhSM > BeCar > Bike
-    if 'comfort' in user.priorities:
+        # Logic cho xe buýt -> trừ 1.5 điểm (chậm)
+        elif mode_type == 'bus':
+            score -= 1.5
+
+        # Logic đi bộ -> trừ 2.0 điểm (quá chậm)
+        elif mode_type == 'walk':
+            score -= 2.0
+
+        # Nếu đang là giờ cao điểm
+        if is_peak:
+            # Xe hơi và buýt bị trừ điểm (tắc đường)
+            if mode_type in ['car', 'bus']: score -= 2.0
+            # Xe máy được cộng điểm (luồn lách tốt)
+            if mode_type == 'bike': score += 1.0
+
+    # --- B. SAVING (Ưu tiên Tiết kiệm/Rẻ) ---
+    # Kiểm tra giao thoa giữa tập ưu tiên và các từ khóa tiết kiệm
+    if {'saving', 'cheap', 'budget'} & user_priorities_set:
+        # Xe buýt -> cộng nhiều nhất (3.5)
+        if mode_type == 'bus':
+            score += 3.5
+        # Xe máy
+        elif mode_type == 'bike':
+            # Be rẻ hơn -> cộng 1.5
+            if 'be' in brand: score += 1.5
+            # Grab đắt hơn xíu -> cộng 1.2
+            elif 'grab' in brand: score += 1.25
+            # Hãng khác -> cộng 1.0
+            else: score += 1.0
+        # Xe hơi -> trừ 2.0 (tốn kém)
+        elif mode_type == 'car':
+            score -= 2.0
+            if 'be' in brand:
+                score += 1
+            if 'grab' in brand:
+                score += 0.5
+            if 'xanh' in brand:
+                score += 0.25
+        # Đi bộ -> cộng 2.0 (miễn phí)
+        elif mode_type == 'walk':
+            score += 2.0
+
+    # --- C. COMFORT (Ưu tiên Thoải mái - MERGE PEAK LOGIC) ---
+    if 'comfort' in user_priorities_set:
+        # Xe hơi -> cộng 2.5
         if mode_type == 'car':
-            score += 1.0 # Base Car
-            if 'grab' in brand:     score += 0.5  # GrabCar thường xịn/sạch
-            elif 'xanh' in brand:   score += 0.4  # XanhSM xe điện êm
-            elif 'be' in brand:     score += 0.2  # BeCar
-        
-        elif mode_type == 'bus':  score += 0.3  # Bus có máy lạnh
-        elif mode_type == 'bike': score -= 0.8  # Xe máy bụi bặm -> Trừ điểm
-        elif mode_type == 'walk': score -= 1.0
-        
-        if is_peak and mode_type == 'car': score -= 0.2 # Kẹt xe ngồi lâu cũng mệt
-        
-    # ⭐ 3) THỜI TIẾT (MƯA)
-    # Logic: Car > Bus >> Bike (Mưa thì đi ô tô là nhất)
-    if weather_ctx.is_raining:
-        if mode_type == 'car':    score += 0.5       # Cộng điểm
-        elif mode_type == 'bus':  score -= 0.5       # Trừ nhẹ (phải đi bộ ra bến)
-        elif mode_type == 'bike': score -= 2.5       # Trừ rất nặng (ướt)
-        elif mode_type == 'walk': score -= 3.0       # Trừ kịch khung
-    
-    # ⭐ 4) KHOẢNG CÁCH & SOLO (ĐI MỘT MÌNH)
-    if distance_km > 20:  # Nếu đi xa > 20km
-        if mode_type in ['bike', 'walk']: score -= 1.5  # Xe máy/Đi bộ cực mệt -> Trừ điểm
-        if mode_type == 'car': score += 0.5             # Ô tô đi xa khỏe -> Cộng điểm
+            score += 4.0
+            if 'grab' in brand:
+                score += 1.0
+            if 'xanh' in brand:
+                score += 1.0
+            if 'be' in brand:
+                score += 0.4
+        # Xe buýt -> cộng 1.0
+        elif mode_type == 'bus':
+            score += 1.0
+        # Xe máy -> trừ 1.0
+        elif mode_type == 'bike':
+            score -= 1.0
+        # Đi bộ -> trừ 1.5
+        elif mode_type == 'walk':
+            score -= 1.5
 
-    # Nếu đi 1 mình mà gọi xe 7 chỗ -> Lãng phí -> Trừ điểm
-    if user.passenger_count == 1 and mode_type == 'car' and mode['capacity'] >= 7:
-        score -= 0.5 
+        # 🔴 NEW: peak hour làm giảm mạnh comfort
+        if is_peak:
+            # Nếu là xe máy -> cộng 2.0 (đỡ stress vì thoát tắc đường)
+            if mode_type == "bike": 
+                score += 2.0
+            # Các loại khác (Car/Bus) -> trừ 2.0 (kẹt xe rất mệt)
+            else: 
+                score -= 2.0 
 
-    # Cộng điểm cơ bản (Base score) để không bị âm quá
-    score += 4.0 
+    # --- D. SAFETY (Ưu tiên An toàn) ---
+    if 'safety' in user_priorities_set:
+        # Car và Bus an toàn hơn -> cộng 2.0
+        if mode_type in ['car', 'bus']:
+            score += 2.0
+            if 'grab' in brand:
+                score += 0.5
+            if 'xanh' in brand:
+                score += 0.5
+        # Xe máy nguy hiểm hơn -> trừ 0.5
+        if mode_type == 'bike':
+            score -= 0.5
 
-    # Kẹp điểm trong khoảng 0.0 đến 10.0
+    # =========================================================
+    # ⭐ 3. CONTEXT (GIỮ + BUFF BUS CÓ TRẦN)
+    # =========================================================
+
+    # Nếu trời đang mưa
+    if is_raining:
+        if mode_type == 'car':    score += 2.5
+        elif mode_type == 'bus':  score += 1.5
+        elif mode_type == 'bike': score -= 3.0
+        elif mode_type == 'walk': score -= 4.0
+
+    # Nếu trời nóng và đi xe máy -> trừ 0.5
+    if is_hot and mode_type == 'bike':
+        score -= 0.5
+
+    # Nếu khoảng cách xa (> 15km)
+    if distance_km > 15:
+        # Đi bộ -> trừ cực nặng (10.0)
+        if mode_type == 'walk': score -= 10.0
+        # Xe máy -> trừ 2.5 (mỏi)
+        if mode_type == 'bike': score -= 2.5
+        # Xe hơi -> cộng 1.2 (khỏe)
+        if mode_type == 'car':  score += 1.2
+        # Xe buýt -> cộng 1.0 (khỏe)
+        if mode_type == 'bus':  score += 1.0
+
+    # =========================================================
+    # ⭐ 4. BRAND IDENTITY (MERGED)
+    # =========================================================
+
+    # Logic thương hiệu cho xe hơi
+    if mode_type == 'car':
+        if 'grab' in brand: score += 1.0
+        if 'xanh' in brand: score += 1.0
+        if 'be' in brand:   score += 0.4
+
+
+    # =========================================================
+    # ⭐ 5. BASE + CLAMP (GIỚI HẠN ĐIỂM)
+    # =========================================================
+
+    # Cộng điểm nền cơ bản
+    score += 5.0
+    # Giới hạn điểm trong khoảng [0, 10]
     final_score = max(0.0, min(10.0, score))
+    
+    # Làm tròn 1 chữ số thập phân và trả về
     return round(final_score, 1)
-
 # ==============================================================================
 # 9. MODULE 4: GÁN NHÃN
 # ==============================================================================
