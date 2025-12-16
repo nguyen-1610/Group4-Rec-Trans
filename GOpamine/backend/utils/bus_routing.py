@@ -4,7 +4,17 @@ import requests
 import logging  
 from datetime import datetime 
 from backend.database.supabase_client import supabase
- 
+from backend.routes.bus_manager import (
+    find_nearby_stations,
+    get_stations_by_route,
+    get_transfer_stations,
+    bus_data
+)
+from backend.utils.cache_layer import (
+    cache_get,
+    cache_set,
+    cache_key,
+)
 
 # ========== THÊM SETUP LOGGING ==========
 def setup_route_logger():
@@ -124,169 +134,159 @@ def fetch_road_geometry_osrm(stops_list):
 
 def get_official_path_from_db(route_id, direction, start_order, end_order):
     """
-    Lấy đường đi thực tế từ database với pathPoints
-    FIX: Thêm start station, detect gap, improve fallback
+    FIX CUỐI CÙNG: Nối segment ĐÚNG, không vẽ chồng
+    
+    Key insight: 
+      - Không thêm trạm giữa 2 segment
+      - Thay vào đó: Nối thẳng từ điểm cuối path A → điểm đầu path B
+      - Nếu có gap → thêm điểm trạm làm điểm trung gian
     """
+    # Check cache trước
+    cache_key_str = cache_key("path", route_id, direction, start_order, end_order)
+    cached_path = cache_get(cache_key_str)
+    if cached_path:
+        route_logger.info(f"PATH_HIT | Cache hit for {cache_key_str}")
+        return cached_path
+    
     try:
-        # ==========================================================
-        # 1) LẤY TỌA ĐỘ TRẠM ĐẦU (CRITICAL!)
-        # ==========================================================
-        response = (
-            supabase
-            .table("stations")
-            .select("Lat, Lng, StationName")
-            .eq("RouteId", route_id)
-            .eq("StationDirection", direction)
-            .eq("StationOrder", start_order)
-            .single()
-            .execute()
-        )
-
-        start_station = response.data  # dict
-
-        if not start_station:
-            route_logger.error(f"MISSING_START | RouteID={route_id} Dir={direction} Order={start_order}")
-            raise Exception("Không tìm thấy trạm đầu")
-
-        # Khởi tạo path
-        full_path = [[start_station["Lat"], start_station["Lng"]]]
-
-        route_logger.info(
-            f"PATH_START | Route={route_id} | Station={start_station['StationName']} | "
-            f"Coord=[{start_station['Lat']:.6f}, {start_station['Lng']:.6f}]"
-        )
-
-        # ==========================================================
-        # 2) LẤY PATHPOINTS TỪ CÁC TRẠM
-        # ==========================================================
-        response = (
-            supabase
-            .table("stations")
-            .select("StationOrder, StationName, pathPoints, Lat, Lng")
-            .eq("RouteId", route_id)
-            .eq("StationDirection", direction)
-            .gte("StationOrder", start_order)
-            .lt("StationOrder", end_order)
-            .order("StationOrder", asc=True)
-            .execute()
-        )
-
-        rows = response.data  # list[dict]
-
+        # Lấy tất cả trạm của tuyến từ cache (instant!)
+        all_stations = get_stations_by_route(route_id, direction)
         
-        has_valid_path = False
-        total_gaps = 0
+        # Filter theo order nếu cần
+        stations = [
+            s for s in all_stations
+            if start_order <= s.get('StationOrder', 0) <= end_order
+        ]
         
-        # ==========================================================
-        # 2) XỬ LÝ PATHPOINTS TỪ DANH SÁCH STATIONS (SUPABASE)
-        # ==========================================================
-        for row in rows:
-            order = row["StationOrder"]
-            name = row["StationName"]
-            path_str = row["pathPoints"]
-            lat = row["Lat"]
-            lng = row["Lng"]
-            
-            if path_str:
+        if not stations:
+            route_logger.error(f"NO_DATA | RouteID={route_id}")
+            return []
+        
+    except Exception as e:
+        route_logger.error(f"CACHE_ERROR | RouteID={route_id} | {str(e)}")
+        return []
+    
+    # ========== KHỞI TẠO ==========
+    first_station = stations[0]
+    full_path = [[first_station.get('Lat'), first_station.get('Lng')]]
+    has_detailed_path = False
+    total_gaps = 0
+    
+    route_logger.info(
+        f"PATH_START | Route={route_id} | Station={first_station.get('StationName')} | "
+        f"Coord=[{full_path[0][0]:.6f}, {full_path[0][1]:.6f}]"
+    )
+    
+    # ========== LOOP XỬ LÝ SEGMENTS ==========
+    for idx, station in enumerate(stations):
+        lat = station.get('Lat')
+        lng = station.get('Lng')
+        name = station.get('StationName', 'Unknown')
+        order = station.get('StationOrder')
+        path_str = station.get('pathPoints')
+        
+        # ✅ CHỈ process pathPoints, KHÔNG thêm trạm vào đây
+        if path_str and len(path_str) > 5:
+            try:
                 segment = parse_path_string(path_str)
                 
                 if segment and len(segment) > 0:
-                    # Kiểm tra ngắt quãng
-                    last_point = full_path[-1]
-                    first_new = segment[0]
-                    gap_distance = haversine(last_point[0], last_point[1], first_new[0], first_new[1])
+                    # Lấy điểm cuối path hiện tại & điểm đầu segment mới
+                    last_pt = full_path[-1]
+                    first_seg = segment[0]
                     
-                    if gap_distance > 0.05:  # Ngắt quãng >50m
+                    gap_distance = haversine(
+                        last_pt[0], last_pt[1],
+                        first_seg[0], first_seg[1]
+                    )
+                    
+                    # 🔧 QUAN TRỌNG: Xử lý gap
+                    if gap_distance > 0.05:  # Gap > 50m
                         total_gaps += 1
                         route_logger.warning(
                             f"GAP_DETECTED | Route={route_id} Order={order} | "
                             f"Gap={gap_distance*1000:.0f}m | Station={name}"
                         )
-                        # Nối thẳng bằng cách thêm tọa độ trạm làm điểm trung gian
+                        # ✅ Thêm trạm làm điểm trung gian (nối gap)
                         full_path.append([lat, lng])
                     
-                    # Thêm segment vào path
-                    full_path.extend(segment)
-                    has_valid_path = True
-                else:
-                    # PathPoints parse fail → dùng tọa độ trạm
-                    route_logger.warning(f"PARSE_FAIL | Route={route_id} Order={order} | Station={name}")
+                    if first_seg == [lat, lng]:           # Nếu segment[0] trùng trạm
+                        segment = segment[1:]              # Bỏ segment[0]
+                        
+                    # ✅ Thêm segment (không bao gồm trạm lại lần nữa)
+                    if segment:
+                        full_path.extend(segment)
+                        has_detailed_path = True
+                        
+                    
+            except Exception as e:
+                route_logger.warning(
+                    f"PARSE_FAIL | Route={route_id} Order={order} | Station={name} | {str(e)}"
+                )
+                # Nếu parse fail → thêm trạm làm fallback
+                if idx > 0:  # Không thêm start station lại
                     full_path.append([lat, lng])
-            else:
-                # Không có pathPoints → dùng tọa độ trạm
-                full_path.append([lat, lng])
-        
-        # ========== BƯỚC 3: THÊM TRẠM CUỐI ==========
-        response_end = (
-            supabase
-            .table("stations")
-            .select("Lat, Lng, StationName")
-            .eq("RouteId", route_id)
-            .eq("StationDirection", direction)
-            .eq("StationOrder", end_order)
-            .single()
-            .execute()
-        )
-
-        end_station = response_end.data  # dict
-        
-        if end_station:
-            last_point = full_path[-1]
-            dist_to_end = haversine(last_point[0], last_point[1], end_station[0], end_station[1])
-            
-            if dist_to_end > 0.01:  # Nếu còn cách >10m thì thêm
-                full_path.append([end_station[0], end_station[1]])
-                route_logger.info(f"PATH_END | Route={route_id} | Station={end_station[2]} | EndGap={dist_to_end*1000:.0f}m")
-        
-        # ========== KIỂM TRA CHẤT LƯỢNG PATH ==========
-        if has_valid_path and len(full_path) > 1:
-            route_logger.info(
-                f"PATH_SUCCESS | Route={route_id} | Points={len(full_path)} | "
-                f"Gaps={total_gaps} | Source=DATABASE"
-            )
-            return full_path
         else:
-            route_logger.warning(f"PATH_INCOMPLETE | Route={route_id} | Points={len(full_path)} | Fallback to OSRM")
-            raise Exception("PathPoints không đầy đủ, chuyển sang OSRM")
+            # Không có pathPoints → thêm tọa độ trạm
+            if idx > 0:  # Không thêm start station lại
+                full_path.append([lat, lng])
+    
+    # ========== ĐẢM BẢO END STATION ==========
+    last_station = stations[-1]
+    last_lat = last_station.get('Lat')
+    last_lng = last_station.get('Lng')
+    
+    # Nếu điểm cuối KHÔNG phải tọa độ trạm cuối → thêm vào
+    if full_path[-1] != [last_lat, last_lng]:
+        dist_to_end = haversine(
+            full_path[-1][0], full_path[-1][1],
+            last_lat, last_lng
+        )
+        
+        if dist_to_end > 0.001:  # > 1m
+            full_path.append([last_lat, last_lng])
+            route_logger.info(
+                f"PATH_END | Route={route_id} | EndGap={dist_to_end*1000:.0f}m"
+            )
+    
+    # ========== KIỂM TRA & RETURN ==========
+    if has_detailed_path and len(full_path) > len(stations):
+        route_logger.info(
+            f"PATH_SUCCESS | Route={route_id} | Points={len(full_path)} | "
+            f"Stations={len(stations)} | Gaps={total_gaps} | Source=DATABASE"
+        )
+        return full_path
+    
+    # FALLBACK OSRM
+    route_logger.info(
+        f"PATH_POOR | Route={route_id} | Calling OSRM... | Points={len(full_path)}"
+    )
+    
+    try:
+        station_coords = [[s['Lat'], s['Lng']] for s in stations]
+        osrm_path = fetch_road_geometry_osrm(station_coords)
+        
+        if osrm_path and len(osrm_path) > 0:
+            route_logger.info(
+                f"OSRM_SUCCESS | Route={route_id} | Points={len(osrm_path)} | Source=OSRM"
+            )
+            return osrm_path
+        else:
+            return full_path
             
     except Exception as e:
-        route_logger.warning(f"PATH_ERROR | Route={route_id} | Error={str(e)} | Using OSRM fallback")
-    
-    # ========== FALLBACK: DÙNG OSRM ==========
-    try:
-        response = (
-            supabase
-            .table("stations")
-            .select("Lat, Lng")
-            .eq("RouteId", route_id)
-            .eq("StationDirection", direction)
-            .gte("StationOrder", start_order)
-            .lte("StationOrder", end_order)
-            .order("StationOrder", asc=True)
-            .execute()
-        ) 
+        route_logger.error(f"OSRM_FAIL | Route={route_id} | {str(e)}")
+        return full_path
 
-        rows = response.data  # list of dict
-        
-        if not rows:
-            route_logger.error(f"OSRM_NO_STATIONS | Route={route_id}")
-            return []
-        
-        raw_coords = [[r[0], r[1]] for r in rows]
-        osrm_path = fetch_road_geometry_osrm(raw_coords)
-        
-        route_logger.info(
-            f"PATH_SUCCESS | Route={route_id} | Points={len(osrm_path)} | "
-            f"Source=OSRM | Stations={len(rows)}"
-        )
-        return osrm_path
-        
-    except Exception as e:
-        route_logger.error(f"OSRM_FAIL | Route={route_id} | Error={str(e)}")
-        return []
+
 # =========================================================
 def get_route_no(route_id):
     try:
+        # Check cache trước
+        cached = cache_get(cache_key("route_no", route_id))
+        if cached:
+            return cached
+        
         response = (
             supabase
             .table("routes")
@@ -297,13 +297,22 @@ def get_route_no(route_id):
         )
 
         data = response.data
-        return str(data["RouteNo"]) if data else "Bus"
+        result = str(data["RouteNo"]) if data else "Bus"
+        
+        # Cache 24h
+        cache_set(cache_key("route_no", route_id), result, ttl=24*3600)
+        return result
     except:
         return "Bus"
 
 
 def get_route_name(route_id):
     try:
+        # Check cache trước
+        cached = cache_get(cache_key("route_name", route_id))
+        if cached:
+            return cached
+        
         response = (
             supabase
             .table("routes")
@@ -314,12 +323,12 @@ def get_route_name(route_id):
         )
 
         data = response.data
-
-        if data:
-            return f"{data['RouteNo']} - {data['RouteName']}"
-        else:
-            return "Bus"
-
+        result = f"{data['RouteNo']} - {data['RouteName']}" if data else "Bus"
+        
+        # Cache 24h
+        cache_set(cache_key("route_name", route_id), result, ttl=24*3600)
+        return result
+    
     except:
         return "Bus"
 
@@ -335,84 +344,79 @@ def validate_route_quality(route_id, direction):
     try:
         # CẤU HÌNH BỘ LỌC
         MIN_STOPS = 5          # Giảm xuống 5 để không bị sót các tuyến ngắn
-        MAX_GAP_KM = 2.5       # Nếu 2 trạm liền kề cách nhau > 2.5km -> Loại
+        MAX_GAP_KM = 4       # Nếu 2 trạm liền kề cách nhau > 2.5km -> Loại
         
-        # 1. Lấy danh sách trạm và tọa độ (Sắp xếp theo thứ tự)
-        response = (
-            supabase
-            .table("stations")
-            .select("StationName, Lat, Lng")
-            .eq("RouteId", route_id)
-            .eq("StationDirection", direction)
-            .order("StationOrder", asc=True)
-            .execute()
-        )
-
-        stations = response.data  # list of dict
-
+        # 1. Lấy danh sách trạm (FIX: dùng desc=False thay vì asc=True)
+        # Lấy từ cache (instant! ~5-10ms)
+        stations = get_stations_by_route(route_id, direction)
         
         count = len(stations)
-        route_name = get_route_name( route_id)
+        route_name = get_route_name(route_id)
 
         # 2. Kiểm tra số lượng trạm
         if count < MIN_STOPS:
-            error_msg = f"Tuyến {route_name} quá ngắn: chỉ có {count} trạm (yêu cầu ≥{MIN_STOPS})"
+            error_msg = f"Tuyến {route_name} quá ngắn: chỉ có {count} trạm"
             route_logger.warning(f"REJECTED_SHORT | RouteID={route_id} | {error_msg}")
             return (False, error_msg)
-        
-        # 3. [NEW] Kiểm tra khoảng cách "nhảy cóc" giữa các trạm
-        # Nếu trạm A và trạm B cách nhau quá xa, nghĩa là database bị thiếu dữ liệu đường đi ở giữa
+
+        # 3. Kiểm tra khoảng cách "nhảy cóc" (FIX: Ép kiểu float để tránh lỗi str-str)
         for i in range(count - 1):
-            # Trạm hiện tại
-            s1_name, lat1, lng1 = stations[i]
-            # Trạm kế tiếp
-            s2_name, lat2, lng2 = stations[i+1]
+            s1 = stations[i]
+            s2 = stations[i+1]
             
-            # Tính khoảng cách chim bay
-            dist = haversine(lat1, lng1, lat2, lng2)
-            
-            if dist > MAX_GAP_KM:
-                error_msg = f"Phát hiện đứt quãng {dist:.2f}km giữa trạm '{s1_name}' và '{s2_name}'"
-                route_logger.warning(f"REJECTED_GAP | RouteID={route_id} | {error_msg}")
-                return (False, f"Tuyến {route_name} bị lỗi dữ liệu (ngắt quãng lớn)")
+            try:
+                # ✅ Sửa lỗi str-str: Ép kiểu float và dùng .get() an toàn
+                lat1 = float(s1.get('Lat', 0))
+                lng1 = float(s1.get('Lng', 0))
+                
+                lat2 = float(s2.get('Lat', 0))
+                lng2 = float(s2.get('Lng', 0))
+                
+                s1_name = s1.get('StationName', 'Unknown')
+                s2_name = s2.get('StationName', 'Unknown')
 
-        # 4. Kiểm tra PathPoints (Optional - Chỉ log cảnh báo chứ không loại)
-        response = (
-            supabase
-            .table("stations")
-            .select("id", count="exact")
-            .eq("RouteId", route_id)
-            .eq("StationDirection", direction)
-            .not_("pathPoints", "is", None)   # pathPoints IS NOT NULL
-            .execute()
-        )
-
-        has_path = response.count  # số lượng pathPoints có dữ liệu
-
+                # Tính khoảng cách
+                dist = haversine(lat1, lng1, lat2, lng2)
+                
+                if dist > MAX_GAP_KM:
+                    error_msg = f"Phát hiện đứt quãng {dist:.2f}km giữa trạm '{s1_name}' và '{s2_name}'"
+                    route_logger.warning(f"REJECTED_GAP | RouteID={route_id} | {error_msg}")
+                    return (False, f"Tuyến {route_name} bị lỗi dữ liệu (ngắt quãng lớn)")
+            except Exception as e:
+                continue # Bỏ qua nếu dữ liệu lỗi
         
-        if has_path < count * 0.3: # Nếu dưới 30% trạm có pathPoints
+       
+        # Đếm những stations có pathPoints
+        has_path = sum(1 for s in stations if s.get('pathPoints')) 
+
+        if has_path is not None and has_path < count * 0.3:
             route_logger.info(f"LOW_QUALITY_PATH | RouteID={route_id} | Chỉ {has_path}/{count} trạm có pathPoints")
 
         return (True, None)
         
     except Exception as e:
         route_logger.error(f"VALIDATE_ERROR | RouteID={route_id} Dir={direction} | {str(e)}")
-        return (False, f"Lỗi kiểm tra tuyến: {str(e)}")
-
+        # Trả về True để không chặn user nếu code check lỗi (Fail-safe)
+        return (True, None)
+    
+      
 # =========================================================
 # 3. THUẬT TOÁN TÌM ĐƯỜNG (REALISTIC SCORING)
 # =========================================================
-def find_smart_bus_route(start_coords, end_coords, **kwargs):
+def find_smart_bus_route(start_coords, end_coords, skip_validation=False, **kwargs):
+    """
+    skip_validation=True: Bỏ qua validate, chỉ tìm bus có trạm gần, 
+                          dùng OSRM vẽ đường, giữ tên bus
+    """
     print(f"\n🔍 [REALISTIC MODE] Tìm từ {start_coords} -> {end_coords}")
-    response = (
-        supabase
-        .table("stations")
-        .select("StationId, StationName, Lat, Lng, RouteId, StationOrder, StationDirection")
-        .execute()
-    )
 
-    all_stops = response.data  # list of dict 
+    all_stops = bus_data.stations  # list of dict 
 
+    # 🔥 [THÊM MỚI] Lấy danh sách ID tuyến sạch về 1 lần duy nhất
+    active_route_ids = bus_data.active_route_ids
+    print(f"ℹ️ Đã tải {len(active_route_ids)} tuyến đang hoạt động.")
+    print(f"ℹ️ Tổng {len(all_stops)} trạm được cache.")
+    
     # DANH SÁCH TUYẾN XƯƠNG SỐNG (Ưu tiên)
     BACKBONE_ROUTES = ['19', '53', '150', '8', '6', '56', '10', '30', '104', '33', '99', '152']
     
@@ -436,43 +440,81 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
     # ==========================================
     
     def get_nearby_routes(coords, radius_km):
+        nearby_stations = bus_data.find_nearby_stations(coords['lat'], coords['lon'], radius_km)
+        
         routes = {}
-        for stop in all_stops:
-            s_lat, s_lng = stop[2], stop[3]
+        for stop in nearby_stations:
+            
+            # Nếu RouteId của trạm này không nằm trong danh sách Active -> Bỏ qua luôn
+            r_id = stop.get('RouteId')
+            direction = str(stop.get('StationDirection'))
+            
+            if r_id not in active_route_ids:
+                continue
+            
+            s_lat = stop.get('Lat')
+            s_lng = stop.get('Lng')
+            
+            # Bỏ qua nếu dữ liệu lỗi
+            if s_lat is None or s_lng is None: continue
+                
             dist = haversine(coords['lat'], coords['lon'], s_lat, s_lng)
+           
             if dist <= radius_km:
-                key = (stop[4], stop[6]) # RouteId, Direction
+                direction = stop.get('StationDirection')
+                key = (r_id, direction)
                 
                 # ========== THÊM CHECK Ở ĐÂY ==========
-                if not is_valid_route(stop[4], stop[6]):
+                if not is_valid_route(r_id, direction):
                     continue  # Bỏ qua tuyến không hợp lệ
                 # ==========================================
                 
+                # Logic cũ giữ nguyên, chỉ đổi cách lấy dữ liệu
                 if key not in routes or dist < routes[key]['dist']:
                     routes[key] = {
-                        'StationId': stop[0], 'StationName': stop[1], 'Lat': s_lat, 'Lng': s_lng,
-                        'RouteId': stop[4], 'StationOrder': stop[5], 'StationDirection': stop[6],
+                        'StationId': stop.get('StationId'), 
+                        'StationName': stop.get('StationName'), 
+                        'Lat': s_lat, 
+                        'Lng': s_lng,
+                        'RouteId': r_id, 
+                        'StationOrder': stop.get('StationOrder'), 
+                        'StationDirection': direction,
                         'dist': dist
                     }
         return routes
 
     # 1. Tìm trạm (Quét rộng để bắt tuyến xương sống)
-    s_close = get_nearby_routes(start_coords, 2.0)
-    e_close = get_nearby_routes(end_coords, 2.0)
+    s_close = get_nearby_routes(start_coords, 5.0)
+    e_close = get_nearby_routes(end_coords, 5.0)
 
-    if not e_close: e_close = get_nearby_routes(end_coords, 4.0)
+    if not e_close: e_close = get_nearby_routes(end_coords, 6.0)
 
     if not s_close or not e_close:
-        # ========== LOG THẤT BẠI ==========
-        route_logger.warning(
-            f"NOT_FOUND | Start={start_coords} End={end_coords} | "
-            f"StartRoutes={len(s_close)} EndRoutes={len(e_close)}"
-        )
-        
-        # ========== SỬA MESSAGE ==========
+        # Nếu skip_validation → return OSRM + bus name
+        if skip_validation:
+            # Tìm bus nào có trạm gần nhất
+            best_route = find_best_route_for_osrm(s_close, e_close)
+            
+            if best_route:
+                return {
+                    'success': True,
+                    'count': 1,
+                    'routes': [{
+                        'route_name': f"Xe {get_route_name(best_route)}",
+                        'description': f"Tuyến {get_route_name(best_route)} (vẽ OSRM)",
+                        'type': 'bus_osrm',
+                        'osrm_needed': True,  # Signal: cần gọi OSRM
+                        'route_id': best_route,
+                        'start_coords': start_coords,
+                        'end_coords': end_coords
+                    }]
+                }
         return {
             'success': False, 
-            'error': 'Không tìm thấy tuyến xe bus phù hợp (chỉ hiển thị tuyến có ≥10 trạm). Vui lòng thử điểm khác hoặc mở rộng bán kính tìm kiếm.'
+            'error': 'Không tìm thấy tuyến xe bus phù hợp (chỉ hiển thị tuyến thỏa yêu cầu). Vui lòng thử điểm khác hoặc mở rộng bán kính tìm kiếm.',
+            'fallback': 'osrm',  # ← Signal cho frontend
+            'start_coords': start_coords,
+            'end_coords': end_coords
         }
         # =================================
 
@@ -644,6 +686,25 @@ def find_smart_bus_route(start_coords, end_coords, **kwargs):
         'routes': final_results  # ✅ Đổi key từ 'data' → 'routes' cho rõ ràng
     }
 
+
+def find_best_route_for_osrm(s_close, e_close):
+    """
+    Tìm tuyến bus tốt nhất từ s_close và e_close
+    Return: route_id của tuyến bus tốt nhất
+    """
+    # Tìm tuyến có ở cả start và end
+    common_routes = s_close & e_close  # Intersection của 2 sets
+    
+    if common_routes:
+        return list(common_routes)[0]  # Lấy tuyến đầu tiên
+    
+    # Nếu không có tuyến chung → lấy từ s_close
+    if s_close:
+        return list(s_close)[0]
+    
+    return None
+# =========================================================
+
 # Hàm helpers để tìm trạm giao nhau
 def find_transfer_point(routeA, dirA, routeB, dirB, start_order, end_order):
     """
@@ -665,63 +726,30 @@ def find_transfer_point(routeA, dirA, routeB, dirB, start_order, end_order):
     # 1) Lấy danh sách S1 (các trạm từ tuyến A)
     # ==========================================
     try:
-        resp_s1 = (
-            supabase
-            .table("stations")
-            .select("StationName, Lat, Lng, StationOrder, RouteId, StationDirection")
-            .eq("RouteId", routeA)
-            .eq("StationDirection", dirA)
-            .gt("StationOrder", start_order)
-            .execute()
-        )
-        S1_list = resp_s1.data or []
-    except:
-        S1_list = []
-
-    # ==========================================
-    # 2) Lấy danh sách S2 (các trạm từ tuyến B)
-    # ==========================================
-    try:
-        resp_s2 = (
-            supabase
-            .table("stations")
-            .select("StationName, Lat, Lng, StationOrder, RouteId, StationDirection")
-            .eq("RouteId", routeB)
-            .eq("StationDirection", dirB)
-            .lt("StationOrder", end_order)
-            .execute()
-        )
-        S2_list = resp_s2.data or []
-    except:
-        S2_list = []
-
-    # ==========================================
-    # 3) So khớp như JOIN (mô phỏng SQL)
-    # ==========================================
-    for s1 in S1_list:
-        for s2 in S2_list:
-
-            # Điều kiện vị trí gần nhau (500m)
-            close_position = (
-                abs(s1["Lat"] - s2["Lat"]) < 0.005 and
-                abs(s1["Lng"] - s2["Lng"]) < 0.005
-            )
-
-            # Điều kiện trùng tên
-            same_name = s1["StationName"] == s2["StationName"]
-
-            if close_position or same_name:
-                # Tạo dòng kết quả giống fetchone() cũ
-                return {
-                    "StationName": s1["StationName"],
-                    "Lat": s1["Lat"],
-                    "Lng": s1["Lng"],
-                    "Order1": s1["StationOrder"],
-                    "Order2": s2["StationOrder"],
-                }
-
-    # Không tìm thấy → trả None (đúng yêu cầu)
-    return None
+        # Lấy từ cache (instant! ~5-20ms)
+        transfers = bus_data.get_transfer_stations(routeA, dirA, routeB, dirB)
+        
+        if not transfers:
+            return None
+        
+        # Lấy transfer point đầu tiên (đã match điều kiện)
+        transfer = transfers[0]
+        
+        # Filter theo order nếu cần
+        if start_order <= transfer.get('Order1', 0) <= end_order:
+            return {
+                "StationName": transfer["StationName"],
+                "Lat": transfer["Lat"],
+                "Lng": transfer["Lng"],
+                "Order1": transfer["Order1"],
+                "Order2": transfer["Order2"],
+            }
+        
+        return None
+        
+    except Exception as e:
+        route_logger.error(f"TRANSFER_ERROR | {str(e)}")
+        return None
 
 def build_response( s, e, type, trans=None):
     """
@@ -834,3 +862,4 @@ def plan_multi_stop_bus_trip(waypoints):
             'segments': legs[0]['segments'] # Fallback
         }
     }
+    
