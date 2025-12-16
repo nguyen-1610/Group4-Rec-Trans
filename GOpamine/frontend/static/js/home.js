@@ -425,7 +425,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     padding: 4px; display: flex; align-items: center;
                     transition: transform 0.2s;
                 " title="Đăng xuất" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
-                    <i class="fas fa-power-off"></i> &#x23FB;
+                    <i class="fas fa-power-off"></i>
                 </button>
             </div>
         `;
