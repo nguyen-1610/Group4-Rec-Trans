@@ -445,11 +445,18 @@ def find_smart_bus_route(start_coords, end_coords, skip_validation=False, **kwar
         routes = {}
         for stop in nearby_stations:
             
-            # Nếu RouteId của trạm này không nằm trong danh sách Active -> Bỏ qua luôn
-            r_id = stop.get('RouteId')
+            # --- [FIX START] Ép kiểu RouteId về string để so sánh ---
+            raw_id = stop.get('RouteId')
+            if raw_id is None: continue # Bỏ qua nếu dữ liệu lỗi
+            r_id = str(raw_id) 
+            # --- [FIX END] ---
+
             direction = str(stop.get('StationDirection'))
             
+            # Bây giờ so sánh String với Set of Strings mới đúng
             if r_id not in active_route_ids:
+                # Debug log: in ra để biết tại sao bị loại (chỉ dùng khi test)
+                # print(f"DEBUG: Loại Route {r_id} vì không active") 
                 continue
             
             s_lat = stop.get('Lat')
