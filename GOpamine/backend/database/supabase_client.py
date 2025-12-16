@@ -6,7 +6,7 @@ from supabase import create_client, Client
 # Load .env
 current_dir = Path(__file__).resolve()  # backend/database
 root_dir = current_dir.parent.parent           # Root của dự án
-env_path = root_dir / 'routes' / '.env'
+env_path = root_dir / '.env'  # Đường dẫn tới file .env
 
 # Load file .env với đường dẫn cụ thể
 load_dotenv(dotenv_path=env_path)
