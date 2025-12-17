@@ -262,8 +262,10 @@ def _compute_score(metrics, user, distance_km, weather_ctx):
         # Giá dưới 50k -> cộng 1.5 điểm
         elif price < 50000:           score += 1.5
         # Giá đắt trên 200k -> trừ 1 điểm
-        elif price > 200000:          score -= 1.0
-
+        elif price > 200000:          score -= 2.0
+        else:
+            penalty = (price - 50000) / 10000 * 0.1
+            score -= penalty
     # =========================================================
     # ⭐ 2. PRIORITY SCORING (ĐÃ MERGE LOGIC MỚI)
     # =========================================================
@@ -302,38 +304,29 @@ def _compute_score(metrics, user, distance_km, weather_ctx):
         # Xe buýt -> cộng nhiều nhất (3.5)
         if mode_type == 'bus':
             score += 3.5
-        # Xe máy
-        elif mode_type == 'bike':
-            # Be rẻ hơn -> cộng 1.5
-            if 'be' in brand: score += 1.5
-            # Grab đắt hơn xíu -> cộng 1.2
-            elif 'grab' in brand: score += 1.25
-            # Hãng khác -> cộng 1.0
-            else: score += 1.0
-        # Xe hơi -> trừ 2.0 (tốn kém)
+        
+      
+        
         elif mode_type == 'car':
-            score -= 2.0
-            if 'be' in brand:
-                score += 1
-            if 'grab' in brand:
-                score += 0.5
-            if 'xanh' in brand:
-                score += 0.25
+            score -= 2.0 # Xe hơi tốn kém -> Trừ điểm nền
         # Đi bộ -> cộng 2.0 (miễn phí)
         elif mode_type == 'walk':
             score += 2.0
+            
+        # 2. [FIX] Logic so sánh giá trực tiếp (Không hardcode brand)
+        # Nếu mode này rẻ hơn 20% so với trung bình (hoặc một mốc nào đó), cộng điểm
+        # Ở đây ta dùng cách đơn giản: Giá < 80k cho xe công nghệ là rẻ
+        if mode_type in ['bike', 'car']:
+            if price < 40000: score += 1.5      # Rất rẻ
+            elif price < 80000: score += 0.5    # Tương đối rẻ (Grab 78k sẽ ăn điểm này)
+            elif price > 100000: score -= 1.0   # Đắt (Xanh 94k sẽ bị dính hoặc gần dính)
 
     # --- C. COMFORT (Ưu tiên Thoải mái - MERGE PEAK LOGIC) ---
     if 'comfort' in user_priorities_set:
         # Xe hơi -> cộng 2.5
         if mode_type == 'car':
             score += 4.0
-            if 'grab' in brand:
-                score += 1.0
-            if 'xanh' in brand:
-                score += 1.0
-            if 'be' in brand:
-                score += 0.4
+           
         # Xe buýt -> cộng 1.0
         elif mode_type == 'bus':
             score += 1.0
@@ -358,10 +351,7 @@ def _compute_score(metrics, user, distance_km, weather_ctx):
         # Car và Bus an toàn hơn -> cộng 2.0
         if mode_type in ['car', 'bus']:
             score += 2.0
-            if 'grab' in brand:
-                score += 0.5
-            if 'xanh' in brand:
-                score += 0.5
+
         # Xe máy nguy hiểm hơn -> trừ 0.5
         if mode_type == 'bike':
             score -= 0.5
@@ -381,8 +371,8 @@ def _compute_score(metrics, user, distance_km, weather_ctx):
     if is_hot and mode_type == 'bike':
         score -= 0.5
 
-    # Nếu khoảng cách xa (> 15km)
-    if distance_km > 15:
+    # Nếu khoảng cách xa (> 13km)
+    if distance_km > 13:
         # Đi bộ -> trừ cực nặng (10.0)
         if mode_type == 'walk': score -= 10.0
         # Xe máy -> trừ 2.5 (mỏi)
@@ -397,10 +387,10 @@ def _compute_score(metrics, user, distance_km, weather_ctx):
     # =========================================================
 
     # Logic thương hiệu cho xe hơi
-    if mode_type == 'car':
-        if 'grab' in brand: score += 1.0
-        if 'xanh' in brand: score += 1.0
-        if 'be' in brand:   score += 0.4
+    # if mode_type == 'car':
+    #     if 'grab' in brand: score += 1.0
+    #     if 'xanh' in brand: score += 1.0
+    #     if 'be' in brand:   score += 0.4
 
 
     # =========================================================
