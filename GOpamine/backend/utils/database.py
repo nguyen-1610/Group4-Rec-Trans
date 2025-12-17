@@ -1,37 +1,62 @@
+import sys
 import os
-import sqlite3
 
-# Thư mục của file database.py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "../../"))
 
-# Thư mục chứa các file .db (đặt tên là "data")
-DB_DIR = os.path.join(BASE_DIR, "..", "data")
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-
-class DBConnection:
-    """Wrapper để mỗi database có hàm query riêng."""
-    def __init__(self, filename):
-        path = os.path.join(DB_DIR, filename)
-        self.conn = sqlite3.connect(path)
-
-    def query(self, sql, params=None):
-        """Thực thi query và trả kết quả."""
-        cur = self.conn.cursor()
-        cur.execute(sql, params or [])
-        self.conn.commit()
-        return cur.fetchall()
-
-    def execute(self, sql, params=None):
-        """Thực thi query không cần trả kết quả (INSERT/UPDATE/DELETE)."""
-        cur = self.conn.cursor()
-        cur.execute(sql, params or [])
-        self.conn.commit()
-
+from ..database.supabase_client import supabase
 
 class DatabaseManager:
-    """Quản lý tất cả database trong 1 class."""
+    """
+    DatabaseManager phiên bản Supabase
+    Giữ nguyên API db.busmap.query() để không lỗi code cũ.
+    Nhưng bên trong dùng Supabase SDK.
+    """
+
     def __init__(self):
-        self.busmap = DBConnection("busmap.db")
-        self.user = DBConnection("user.db")
-        self.landmarks = DBConnection("tourism-landmarks.db")
-        self.vehicle = DBConnection("vehicle.db")
+        self.busmap = SupabaseWrapper()
+        self.user = SupabaseWrapper()
+        self.vehicle = SupabaseWrapper()
+        self.landmarks = SupabaseWrapper()
+
+class SupabaseWrapper:
+    """Wrapper mô phỏng query() và execute() theo kiểu cũ."""
+
+    def query(self, table_name, filters=None, select="*"):
+        """
+        Thay thế query SELECT.
+        - table_name: tên bảng
+        - filters: dict ví dụ {"RouteId": 12, "StationDirection": 1}
+        """
+        q = supabase.table(table_name).select(select)
+        
+        if filters:
+            for key, value in filters.items():
+                q = q.eq(key, value)
+
+        result = q.execute()
+        return result.data
+
+    def insert(self, table_name, data):
+        """INSERT dạng cũ."""
+        result = supabase.table(table_name).insert(data).execute()
+        return result.data
+
+    def update(self, table_name, filters, new_values):
+        """UPDATE dạng cũ."""
+        q = supabase.table(table_name).update(new_values)
+        for key, value in filters.items():
+            q = q.eq(key, value)
+        result = q.execute()
+        return result.data
+
+    def delete(self, table_name, filters):
+        """DELETE dạng cũ."""
+        q = supabase.table(table_name).delete()
+        for key, value in filters.items():
+            q = q.eq(key, value)
+        result = q.execute()
+        return result.data

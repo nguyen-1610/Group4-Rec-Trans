@@ -473,19 +473,117 @@ async function handleBusSelection() {
             
             const res = await response.json();
             
-            if (res.success) {
-                if (res.routes && res.routes.length > 0) {
-                    renderBusOptionsList(res.routes, userStart, userEnd);
+            if (res.success && res.routes && res.routes.length > 0) {
+                
+                // ✅ CHECK OSRM NEEDED
+                if (res.routes[0].osrm_needed) {
+                    console.log("🗺️ osrm_needed=true, gọi OSRM...");
+                    console.log("Start:", res.routes[0].start_coords);
+                    console.log("End:", res.routes[0].end_coords);
+                    
+                    try {
+                        const osrmRes = await fetch('/api/find-route-osm', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                start: res.routes[0].start_coords,
+                                end: res.routes[0].end_coords,
+                                vehicle_type: 'car'
+                            })
+                        });
+                        
+                        console.log("OSRM Response status:", osrmRes.status);
+                        const osrmData = await osrmRes.json();
+                        console.log("OSRM Data:", osrmData);
+                        
+                        if (osrmData.success && osrmData.data) {
+                            const finalRoute = {
+                                ...res.routes[0],
+                                route_coordinates: osrmData.data.route_coordinates,
+                                segments: [{
+                                    'type': 'bus',
+                                    'path': osrmData.data.route_coordinates,
+                                    'name': res.routes[0].route_name
+                                }],
+                                duration: osrmData.data.duration_min ? Math.ceil(osrmData.data.duration_min) : 30,
+                                walk_distance: osrmData.data.distance_km ? Math.ceil(osrmData.data.distance_km * 1000) : 0
+                            };
+                            
+                            console.log("✅ Final route:", finalRoute);
+                            renderBusOptionsList([finalRoute], userStart, userEnd);
+                        } else {
+                            console.error("OSRM error:", osrmData);
+                            alert("❌ OSRM error: " + (osrmData.error || "Unknown"));
+                        }
+                    } catch (osrmError) {
+                        console.error("❌ OSRM API error:", osrmError);
+                        alert("❌ Lỗi vẽ đường OSRM: " + osrmError.message);
+                    }
                 } else {
-                    alert("⚠️ Không tìm thấy lộ trình");
+                    console.log("✅ Bus route bình thường");
+                    renderBusOptionsList(res.routes, userStart, userEnd);
                 }
-            } else {
-                alert("❌ " + (res.message || "Không tìm thấy tuyến xe"));
+            } else if (res.fallback === 'osrm') {
+                    // ========== FALLBACK OSRM (KHÔNG CÓ BUS) ==========
+                    console.log("🗺️ fallback=osrm, gọi OSRM...");
+                    
+                    try {
+                        const osrmRes = await fetch('/api/find-route-osm', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                start: res.start_coords,
+                                end: res.end_coords,
+                                vehicle_type: 'car'
+                            })
+                        });
+                        
+                        const osrmData = await osrmRes.json();
+                        console.log("OSRM Data:", osrmData);
+                        
+                        if (osrmData.success && osrmData.data) {
+                            // ✅ TẠO ROUTE MỚI từ OSRM data, KHÔNG spread res.routes[0]
+                            let finalRoute = {
+                                route_name: "Đường bộ",
+                                route_type: "walking", // hoặc "car"
+                                route_coordinates: osrmData.data.route_coordinates,
+                                segments: [{
+                                    type: 'walk', // hoặc 'car'
+                                    path: osrmData.data.route_coordinates,
+                                    name: 'Đường bộ'
+                                }],
+                                duration: osrmData.data.duration_min ? Math.ceil(osrmData.data.duration_min) : 30,
+                                distance: osrmData.data.distance_km ? osrmData.data.distance_km : 0,
+                                walk_distance: osrmData.data.distance_km ? Math.ceil(osrmData.data.distance_km * 1000) : 0,
+                                labels: ["Đi bộ"], // ✅ QUAN TRỌNG: Thêm labels để tránh lỗi
+                                description: `Di chuyển ${Math.ceil(osrmData.data.distance_km * 1000)}m`,
+                                start_coords: res.start_coords,
+                                end_coords: res.end_coords
+                            };
+                            
+                            // ✅ Chuẩn hóa dữ liệu
+                            finalRoute = normalizeRouteData(finalRoute); 
+                            
+                            console.log("✅ Final fallback route:", finalRoute);
+                            
+                            // ✅ Truyền finalRoute đã chuẩn hóa, KHÔNG phải osrmData.data
+                            renderBusOptionsList([finalRoute], userStart, userEnd);
+                            
+                        } else {
+                            alert("❌ OSRM error: " + (osrmData.error || "Unknown"));
+                        }
+                    } catch (osrmError) {
+                        console.error("OSRM error:", osrmError);
+                        alert("❌ Lỗi OSRM: " + osrmError.message);
+                    }
+                }
+            else {
+                alert("❌ " + (res.error || "Không tìm thấy tuyến xe"));
             }
         }
     } catch (e) {
-        console.error("❌ Lỗi:", e);
-        alert("Lỗi kết nối: " + e.message);
+        console.error("❌ Error:", e);
+        alert("Lỗi: " + e.message);
     } finally {
         if (priceEl) priceEl.textContent = originalText;
     }
@@ -529,48 +627,76 @@ async function handleMultiStopBusRoute(waypoints) {
             const res = await response.json();
             
             if (res.success && res.routes && res.routes.length > 0) {
-                // Lấy tuyến tốt nhất (tuyến đầu tiên)
                 const bestRoute = res.routes[0];
                 
-                // Chuyển đổi sang format leg
+                // ✅ CHECK OSRM NEEDED CHO ĐA ĐIỂM
+                let finalRoute = bestRoute;
+                
+                if (bestRoute.osrm_needed) {
+                    try {
+                        const osrmRes = await fetch('/api/find-route-osm', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                start: bestRoute.start_coords,
+                                end: bestRoute.end_coords,
+                                vehicle_type: 'car'
+                            })
+                        });
+                        
+                        const osrmData = await osrmRes.json();
+                        
+                        if (osrmData.success && osrmData.data) {
+                            finalRoute = {
+                                ...bestRoute,
+                                route_coordinates: osrmData.data.route_coordinates,
+                                segments: [{
+                                    'type': 'bus',
+                                    'path': osrmData.data.route_coordinates,
+                                    'name': bestRoute.route_name
+                                }],
+                                duration: osrmData.data.duration_min || 30,
+                                walk_distance: osrmData.data.distance_km ? Math.ceil(osrmData.data.distance_km * 1000) : 0
+                            };
+                        }
+                    } catch (osrmError) {
+                        console.error(`OSRM error for leg ${legLabel}:`, osrmError);
+                    }
+                }
+                
                 const leg = {
-                    route_name: bestRoute.route_name || `Chặng ${i + 1}`,
-                    description: bestRoute.description || `${legLabel}`,
-                    walk_to_start: bestRoute.walk_to_start,
-                    walk_from_end: bestRoute.walk_from_end,
-                    start_stop: bestRoute.start_stop,
-                    end_stop: bestRoute.end_stop,
-                    segments: bestRoute.segments,
-                    duration: bestRoute.duration || 15,
-                    walk_distance: bestRoute.walk_distance || 0,
-                    display_price: bestRoute.display_price || '7.000đ',
-                    price: bestRoute.price || 7000
+                    route_name: finalRoute.route_name || `Chặng ${i + 1}`,
+                    description: finalRoute.description || legLabel,
+                    walk_to_start: finalRoute.walk_to_start,
+                    walk_from_end: finalRoute.walk_from_end,
+                    start_stop: finalRoute.start_stop,
+                    end_stop: finalRoute.end_stop,
+                    segments: finalRoute.segments,
+                    duration: finalRoute.duration || 15,
+                    walk_distance: finalRoute.walk_distance || 0,
+                    display_price: finalRoute.display_price || '7.000đ',
+                    price: finalRoute.price || 7000
                 };
                 
                 legs.push(leg);
                 totalPrice += leg.price;
                 totalDuration += leg.duration;
                 
-                console.log(`✅ Tìm thấy route cho ${legLabel}:`, leg.route_name);
+                console.log(`✅ Chặng ${legLabel}: ${leg.route_name}`);
             } else {
-                console.error(`❌ Không tìm thấy route cho ${legLabel}`);
-                alert(`Không tìm thấy tuyến xe cho chặng ${legLabel}`);
+                alert(`❌ Không tìm thấy tuyến cho ${legLabel}`);
                 hasError = true;
                 break;
             }
         } catch (e) {
-            console.error(`❌ Lỗi khi tìm route ${legLabel}:`, e);
-            alert(`Lỗi kết nối cho chặng ${legLabel}`);
+            console.error(`Error leg ${legLabel}:`, e);
+            alert(`Lỗi chặng ${legLabel}: ${e.message}`);
             hasError = true;
             break;
         }
     }
     
-    // Nếu tìm thấy đủ tất cả chặng
     if (!hasError && legs.length === waypoints.length - 1) {
-        console.log(`✅ Đã tìm thấy đủ ${legs.length} chặng!`);
-        
-        // Tạo data object giống format backend
         const multiLegData = {
             mode_name: "Hành trình Bus Đa Điểm",
             legs: legs,
@@ -578,7 +704,6 @@ async function handleMultiStopBusRoute(waypoints) {
             duration: totalDuration
         };
         
-        // Vẽ lên map
         drawMultiLegBusRoute(multiLegData, waypoints);
     }
 }
@@ -621,17 +746,18 @@ function renderBusOptionsList(options, userStart, userEnd) {
     // 3. Render từng phương án (Option)
     options.forEach((opt, index) => {
         // Màu sắc phân biệt: Direct (Xanh lá) vs Transfer (Cam)
-        const isDirect = opt.labels.includes("Đi thẳng");
-        const badgeColor = isDirect ? '#4caf50' : '#ff9800'; // Green vs Orange
+        const labels = opt.labels || [];
+        const isDirect =  labels.includes("Đi thẳng");
 
+        const badgeColor = isDirect ? '#4caf50' : '#ff9800'; // Green vs Orange
         const badgeText = isDirect ? 'Đi thẳng' : 'Chuyển tuyến';
         
         let busBadgesHTML = ""; // Mặc định
 
         // Đảm bảo description luôn là chuỗi để tránh lỗi
-        const descText = opt.description ? opt.description : "";
+        const descText = opt.description || "";
 
-        const matches = opt.description.match(/tuyến (\d+)/g); // Tìm tất cả các cụm "tuyến ..."
+        const matches = descText.match(/tuyến (\d+)/g); // Tìm tất cả các cụm "tuyến ..."
         
         if (matches && matches.length > 0) {
             // Biến đổi từng kết quả tìm được thành HTML
@@ -834,3 +960,78 @@ window.clearExistingMapRoutes = function() {
 
     console.log("✨ Bản đồ đã được làm sạch!");
 };
+
+// Hàm phụ trợ để đảm bảo dữ liệu luôn đúng (Thêm hàm này vào cuối file hoặc đầu file)// ... (Đoạn code trong handleBusSelection)
+
+// Logic chuẩn hóa dữ liệu thông minh hơn
+function normalizeRouteData(route, userStart, userEnd) {
+    // 1. Tự tính khoảng cách nếu backend trả về null/0
+    let finalDist = route.walk_distance || 0;
+    
+    // Nếu thiếu distance, tự tính khoảng cách từ điểm đi -> điểm đến (chim bay)
+    if (!finalDist || finalDist === 0) {
+        // Lấy tọa độ start/end từ route (nếu có) hoặc từ user input
+        const sLat = route.start_coords ? route.start_coords[0] : userStart.lat;
+        const sLon = route.start_coords ? route.start_coords[1] : (userStart.lon || userStart.lng);
+        
+        const eLat = route.end_coords ? route.end_coords[0] : userEnd.lat;
+        const eLon = route.end_coords ? route.end_coords[1] : (userEnd.lon || userEnd.lng);
+
+        // Gọi hàm Haversine vừa thêm
+        finalDist = getDistanceMeters(sLat, sLon, eLat, eLon);
+        
+        // Nhân 1.3 để ước lượng đường đi thực tế (vì đường không thẳng tắp)
+        finalDist = Math.round(finalDist * 1.3); 
+    }
+
+    // 2. Tự tính thời gian nếu thiếu
+    let finalDuration = route.duration || 0;
+    if (!finalDuration || finalDuration === 0) {
+        finalDuration = estimateDuration(finalDist);
+    }
+
+    return {
+        ...route,
+        description: route.description || "", // Chống lỗi .match()
+        walk_distance: finalDist,             // Đã tự tính
+        duration: finalDuration,              // Đã tự tính
+        display_price: route.display_price || (route.price ? route.price.toLocaleString() + 'đ' : '7.000đ')
+    };
+}
+
+// ... (Sau đó dùng hàm này bọc dữ liệu trước khi render)
+// Ví dụ: 
+// const safeRoute = normalizeRouteData(finalRoute, userStart, userEnd);
+// renderBusOptionsList([safeRoute], userStart, userEnd);
+
+/**
+ * ============================================================
+ * HELPER: CÁC HÀM TÍNH TOÁN KHOẢNG CÁCH & THỜI GIAN (FALLBACK)
+ * ============================================================
+ */
+
+// 1. Công thức Haversine: Tính khoảng cách giữa 2 tọa độ (đơn vị: mét)
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0; // Thiếu tọa độ thì chịu
+
+    const R = 6371e3; // Bán kính trái đất (mét)
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return Math.round(R * c); // Trả về số mét làm tròn
+}
+
+// 2. Ước lượng thời gian (phút) dựa trên khoảng cách
+// Giả sử: Tốc độ trung bình (Bus + Đi bộ) khoảng 20km/h = 333m/phút
+function estimateDuration(distanceMeters) {
+    const avgSpeedMetersPerMin = 300; // Tốc độ trung bình (hơi chậm để trừ hao kẹt xe)
+    const minutes = Math.ceil(distanceMeters / avgSpeedMetersPerMin);
+    return minutes < 5 ? 5 : minutes; // Tối thiểu 5 phút
+}

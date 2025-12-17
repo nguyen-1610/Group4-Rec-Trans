@@ -63,3 +63,5 @@ data/
 build/
 release/
 debug/
+
+venv/

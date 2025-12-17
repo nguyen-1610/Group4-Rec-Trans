@@ -310,3 +310,97 @@ document.addEventListener('DOMContentLoaded', function() {
     // Gọi ngay khi trang load để set initial state
     updateActiveNavOnScroll();
 });
+// ==========================================================================
+// [REPLACEMENT] BỘ QUẢN LÝ VIÊN NANG (CAPSULE) - PHIÊN BẢN ỔN ĐỊNH
+// ==========================================================================
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log(">>> [UI] Khởi động bộ quản lý Viên Nang...");
+
+    // -----------------------------------------------------------
+    // 1. XỬ LÝ OAUTH (FACEBOOK / GOOGLE) TRẢ VỀ TỪ URL
+    // -----------------------------------------------------------
+    const hash = window.location.hash;
+    
+    // Nếu phát hiện URL chứa Token (do FB/Google trả về)
+    if (hash && hash.includes('access_token')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const token = params.get('access_token');
+        
+        if (token) {
+            console.log(">>> [OAUTH] Đã bắt được Token. Đang lưu...");
+            
+            // BƯỚC QUAN TRỌNG NHẤT: LƯU TOKEN NGAY LẬP TỨC
+            localStorage.setItem('supa_token', token);
+            
+            // Xóa Token trên thanh địa chỉ cho đẹp (nhưng không reload)
+            history.replaceState(null, null, ' '); 
+
+            // Gửi Token về Backend để đồng bộ session (cho các tính năng cần session)
+            // Gửi Token về Backend và CHỜ KẾT QUẢ để Reload
+            fetch('/api/auth/sync-session', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ access_token: token })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(">>> [SYNC] Đồng bộ thành công! Reload trang để hiện Profile cũ.");
+                    // QUAN TRỌNG: Reload để Jinja2 nhận diện current_user
+                    window.location.reload(); 
+                } else {
+                    console.error(">>> [SYNC] Lỗi đồng bộ:", data.message);
+                }
+            })
+            .catch(err => console.error(">>> [SYNC] Lỗi mạng:", err));
+        }
+    }
+
+    // -----------------------------------------------------------
+    // 2. KIỂM TRA & VẼ VIÊN NANG (CHẠY MỖI LẦN LOAD TRANG)
+    // -----------------------------------------------------------
+    const savedToken = localStorage.getItem('supa_token');
+
+    if (savedToken) {
+        // Nếu có Token trong kho -> Hỏi server xem Token của ai
+        try {
+            const res = await fetch('/api/get-capsule-info', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ access_token: savedToken })
+            });
+            
+            // Nếu server trả về lỗi 401/500 -> Token hỏng
+            if (!res.ok) throw new Error("Token hết hạn");
+            
+            const data = await res.json();
+
+            if (data.success) {
+                // Token ngon -> Vẽ viên nang
+                drawCapsule(data.user);
+            } else {
+                // Token lởm -> Xóa đi
+                console.log(">>> [UI] Token không hợp lệ. Đăng xuất.");
+                localStorage.removeItem('supa_token');
+            }
+        } catch (e) {
+            console.error("Lỗi xác thực Viên nang:", e);
+            // Có thể xóa token nếu muốn chắc chắn: localStorage.removeItem('supa_token');
+        }
+    }
+
+    // -----------------------------------------------------------
+    // 4. HÀM ĐĂNG XUẤT TOÀN CỤC
+    // -----------------------------------------------------------
+    window.logoutCapsule = function() {
+        if(confirm("Bạn có chắc muốn đăng xuất?")) {
+            // Xóa sạch dấu vết
+            localStorage.removeItem('supa_token');
+            localStorage.removeItem('temp_login_email');
+            
+            // Báo backend (nếu cần) rồi reload
+            fetch('/api/logout', {method: 'POST'})
+                .finally(() => window.location.href = "/");
+        }
+    };
+});
