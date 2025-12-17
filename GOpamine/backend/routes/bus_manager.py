@@ -373,8 +373,8 @@ class BusDataManager:
         
         transfer_points = []
         
-        for s1 in stations1:
-            for s2 in stations2:
+        for s1 in list(stations1):
+            for s2 in list(stations2):
                 # Điều kiện: gần nhau + tên giống (hoặc cặp)
                 close_position = (
                     abs(s1.get('Lat', 0) - s2.get('Lat', 0)) < 0.005 and
