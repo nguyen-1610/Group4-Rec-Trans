@@ -336,12 +336,23 @@ document.addEventListener('DOMContentLoaded', async function() {
             history.replaceState(null, null, ' '); 
 
             // Gửi Token về Backend để đồng bộ session (cho các tính năng cần session)
-            // Không chờ kết quả, cứ chạy tiếp để vẽ UI cho nhanh
+            // Gửi Token về Backend và CHỜ KẾT QUẢ để Reload
             fetch('/api/auth/sync-session', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ access_token: token })
-            });
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(">>> [SYNC] Đồng bộ thành công! Reload trang để hiện Profile cũ.");
+                    // QUAN TRỌNG: Reload để Jinja2 nhận diện current_user
+                    window.location.reload(); 
+                } else {
+                    console.error(">>> [SYNC] Lỗi đồng bộ:", data.message);
+                }
+            })
+            .catch(err => console.error(">>> [SYNC] Lỗi mạng:", err));
         }
     }
 
@@ -376,61 +387,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             console.error("Lỗi xác thực Viên nang:", e);
             // Có thể xóa token nếu muốn chắc chắn: localStorage.removeItem('supa_token');
         }
-    }
-
-    // -----------------------------------------------------------
-    // 3. HÀM VẼ GIAO DIỆN (UI)
-    // -----------------------------------------------------------
-    function drawCapsule(user) {
-        // 1. Ẩn tất cả các nút đăng nhập/đăng ký cũ
-        const selectors = [
-            '.login-btn', '.register-btn', '.auth-buttons', 
-            'a[href="/login"]', 'a[href="/register"]', 
-            '#login-nav', '#guest-login-btn'
-        ];
-        selectors.forEach(sel => {
-            document.querySelectorAll(sel).forEach(el => el.style.display = 'none');
-        });
-        
-        // 2. Tìm vị trí chèn (Header)
-        const headerRight = document.querySelector('.header-right') || document.querySelector('nav') || document.body;
-        
-        // 3. Xóa capsule cũ nếu lỡ có (tránh trùng lặp)
-        const oldCap = document.getElementById('user-capsule-ui');
-        if (oldCap) oldCap.remove();
-
-        // 4. HTML Viên nang (Style chuẩn)
-        const capsuleHTML = `
-            <div id="user-capsule-ui" style="
-                display: flex; align-items: center; gap: 10px; 
-                background: rgba(30, 30, 30, 0.95); padding: 4px 15px 4px 4px; 
-                border-radius: 50px; border: 1px solid rgba(255,255,255,0.2); 
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
-                margin-left: 15px; cursor: default; backdrop-filter: blur(5px);
-                transition: transform 0.2s;
-            ">
-                <img src="${user.avatar}" style="
-                    width: 34px; height: 34px; border-radius: 50%; 
-                    object-fit: cover; border: 2px solid #3C7363;
-                ">
-                <div style="display: flex; flex-direction: column; line-height: 1.1;">
-                    <span style="color: white; font-weight: bold; font-size: 13px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${user.name}
-                    </span>
-                    <span style="color: #bbb; font-size: 10px;">Thành viên</span>
-                </div>
-                <button onclick="logoutCapsule()" style="
-                    background: none; border: none; color: #ff5555; 
-                    font-size: 16px; cursor: pointer; margin-left: 8px; 
-                    padding: 4px; display: flex; align-items: center;
-                    transition: transform 0.2s;
-                " title="Đăng xuất" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
-                    <i class="fas fa-power-off"></i>
-                </button>
-            </div>
-        `;
-        
-        headerRight.insertAdjacentHTML('beforeend', capsuleHTML);
     }
 
     // -----------------------------------------------------------
