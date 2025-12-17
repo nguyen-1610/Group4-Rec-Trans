@@ -5,8 +5,6 @@ Flask-Login
 Flask-WTF
 WTForms
 python-dotenv
-psycopg2
-psycopg2-binary
 
 # --- AI (Google Gemini) ---
 google-generativeai
@@ -32,3 +30,6 @@ gunicorn
 logging
 datetime
 supabase
+scipy
+redis
+numpy
