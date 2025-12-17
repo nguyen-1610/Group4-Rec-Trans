@@ -795,8 +795,13 @@ def build_response( s, e, type, trans=None):
             }
         }
     else:
+        no1 = get_route_no(s['RouteId'])
+        no2 = get_route_no(e['RouteId'])
+        
+        # 2. Lấy tên đầy đủ nếu cần hiển thị chi tiết
         name1 = get_route_name(s['RouteId'])
         name2 = get_route_name(e['RouteId'])
+        
         path1 = get_official_path_from_db(s['RouteId'], s['StationDirection'], s['StationOrder'], trans['Order1'])
         path2 = get_official_path_from_db(e['RouteId'], e['StationDirection'], trans['Order2'], e['StationOrder'])
         
@@ -804,9 +809,12 @@ def build_response( s, e, type, trans=None):
             'success': True,
             'type': 'transfer', 
             'data': {
-                'route_name': f"Xe {name1} ➝ Xe {name2}", 
-                'description': f"Đổi xe tại {trans['StationName']}", 
-                # [NEW] Thêm ID
+                # [QUAN TRỌNG] Sửa route_name để hiển thị trên Header của Card
+                'route_name': f"Xe {no1} ➝ Xe {no2}", 
+                
+                # [QUAN TRỌNG] Sửa description để hiển thị dòng chữ nhỏ bên dưới
+                'description': f"Tuyến {no1} & {no2} - Đổi xe tại {trans['StationName']}", 
+                
                 'option_id': f"trans_{s['RouteId']}_{e['RouteId']}",
                 'walk_to_start': [s['Lat'], s['Lng']],
                 'walk_from_end': [e['Lat'], e['Lng']], 
