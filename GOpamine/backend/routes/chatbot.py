@@ -288,8 +288,8 @@ def build_advanced_pricing_context(form_data):
 
         # Gọi AStarRouter
         result = ROUTER.plan_multi_stop_trip(
-            start_id=int(start_id),
-            destination_ids=[int(x) for x in dest_ids],
+            start_id=int(start_input),
+            destination_ids=[int(x) for x in dest_input],
         )
 
         if not result['success']:

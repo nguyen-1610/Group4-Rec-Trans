@@ -310,3 +310,141 @@ document.addEventListener('DOMContentLoaded', function() {
     // Gọi ngay khi trang load để set initial state
     updateActiveNavOnScroll();
 });
+// ==========================================================================
+// [REPLACEMENT] BỘ QUẢN LÝ VIÊN NANG (CAPSULE) - PHIÊN BẢN ỔN ĐỊNH
+// ==========================================================================
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log(">>> [UI] Khởi động bộ quản lý Viên Nang...");
+
+    // -----------------------------------------------------------
+    // 1. XỬ LÝ OAUTH (FACEBOOK / GOOGLE) TRẢ VỀ TỪ URL
+    // -----------------------------------------------------------
+    const hash = window.location.hash;
+    
+    // Nếu phát hiện URL chứa Token (do FB/Google trả về)
+    if (hash && hash.includes('access_token')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const token = params.get('access_token');
+        
+        if (token) {
+            console.log(">>> [OAUTH] Đã bắt được Token. Đang lưu...");
+            
+            // BƯỚC QUAN TRỌNG NHẤT: LƯU TOKEN NGAY LẬP TỨC
+            localStorage.setItem('supa_token', token);
+            
+            // Xóa Token trên thanh địa chỉ cho đẹp (nhưng không reload)
+            history.replaceState(null, null, ' '); 
+
+            // Gửi Token về Backend để đồng bộ session (cho các tính năng cần session)
+            // Không chờ kết quả, cứ chạy tiếp để vẽ UI cho nhanh
+            fetch('/api/auth/sync-session', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ access_token: token })
+            });
+        }
+    }
+
+    // -----------------------------------------------------------
+    // 2. KIỂM TRA & VẼ VIÊN NANG (CHẠY MỖI LẦN LOAD TRANG)
+    // -----------------------------------------------------------
+    const savedToken = localStorage.getItem('supa_token');
+
+    if (savedToken) {
+        // Nếu có Token trong kho -> Hỏi server xem Token của ai
+        try {
+            const res = await fetch('/api/get-capsule-info', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ access_token: savedToken })
+            });
+            
+            // Nếu server trả về lỗi 401/500 -> Token hỏng
+            if (!res.ok) throw new Error("Token hết hạn");
+            
+            const data = await res.json();
+
+            if (data.success) {
+                // Token ngon -> Vẽ viên nang
+                drawCapsule(data.user);
+            } else {
+                // Token lởm -> Xóa đi
+                console.log(">>> [UI] Token không hợp lệ. Đăng xuất.");
+                localStorage.removeItem('supa_token');
+            }
+        } catch (e) {
+            console.error("Lỗi xác thực Viên nang:", e);
+            // Có thể xóa token nếu muốn chắc chắn: localStorage.removeItem('supa_token');
+        }
+    }
+
+    // -----------------------------------------------------------
+    // 3. HÀM VẼ GIAO DIỆN (UI)
+    // -----------------------------------------------------------
+    function drawCapsule(user) {
+        // 1. Ẩn tất cả các nút đăng nhập/đăng ký cũ
+        const selectors = [
+            '.login-btn', '.register-btn', '.auth-buttons', 
+            'a[href="/login"]', 'a[href="/register"]', 
+            '#login-nav', '#guest-login-btn'
+        ];
+        selectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => el.style.display = 'none');
+        });
+        
+        // 2. Tìm vị trí chèn (Header)
+        const headerRight = document.querySelector('.header-right') || document.querySelector('nav') || document.body;
+        
+        // 3. Xóa capsule cũ nếu lỡ có (tránh trùng lặp)
+        const oldCap = document.getElementById('user-capsule-ui');
+        if (oldCap) oldCap.remove();
+
+        // 4. HTML Viên nang (Style chuẩn)
+        const capsuleHTML = `
+            <div id="user-capsule-ui" style="
+                display: flex; align-items: center; gap: 10px; 
+                background: rgba(30, 30, 30, 0.95); padding: 4px 15px 4px 4px; 
+                border-radius: 50px; border: 1px solid rgba(255,255,255,0.2); 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+                margin-left: 15px; cursor: default; backdrop-filter: blur(5px);
+                transition: transform 0.2s;
+            ">
+                <img src="${user.avatar}" style="
+                    width: 34px; height: 34px; border-radius: 50%; 
+                    object-fit: cover; border: 2px solid #3C7363;
+                ">
+                <div style="display: flex; flex-direction: column; line-height: 1.1;">
+                    <span style="color: white; font-weight: bold; font-size: 13px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${user.name}
+                    </span>
+                    <span style="color: #bbb; font-size: 10px;">Thành viên</span>
+                </div>
+                <button onclick="logoutCapsule()" style="
+                    background: none; border: none; color: #ff5555; 
+                    font-size: 16px; cursor: pointer; margin-left: 8px; 
+                    padding: 4px; display: flex; align-items: center;
+                    transition: transform 0.2s;
+                " title="Đăng xuất" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
+                    <i class="fas fa-power-off"></i>
+                </button>
+            </div>
+        `;
+        
+        headerRight.insertAdjacentHTML('beforeend', capsuleHTML);
+    }
+
+    // -----------------------------------------------------------
+    // 4. HÀM ĐĂNG XUẤT TOÀN CỤC
+    // -----------------------------------------------------------
+    window.logoutCapsule = function() {
+        if(confirm("Bạn có chắc muốn đăng xuất?")) {
+            // Xóa sạch dấu vết
+            localStorage.removeItem('supa_token');
+            localStorage.removeItem('temp_login_email');
+            
+            // Báo backend (nếu cần) rồi reload
+            fetch('/api/logout', {method: 'POST'})
+                .finally(() => window.location.href = "/");
+        }
+    };
+});
