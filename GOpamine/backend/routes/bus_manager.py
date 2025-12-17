@@ -87,12 +87,12 @@ class BusDataManager:
         # Lock cho thread-safe operations
         self.data_lock = threading.RLock()
         
-        # Khởi tạo dữ liệu
-        self.refresh_data()
+        # # Khởi tạo dữ liệu
+        # self.refresh_data()
         
-        # Start auto-refresh thread (nếu enabled)
-        if CACHE_CONFIG["AUTO_REFRESH"]:
-            self._start_auto_refresh()
+        # # Start auto-refresh thread (nếu enabled)
+        # if CACHE_CONFIG["AUTO_REFRESH"]:
+        #     self._start_auto_refresh()
         
         logger.info("✅ BusDataManager initialized")
     
@@ -444,8 +444,12 @@ class BusDataManager:
 
 
 # ==================== GLOBAL INSTANCE ====================
-bus_data = BusDataManager.get_instance()
+bus_data = None
 
+def init_bus_data():
+    global bus_data
+    if bus_data is None:
+        bus_data = BusDataManager.get_instance()
 
 # ==================== CONVENIENCE FUNCTIONS ====================
 def find_nearby_stations(lat: float, lng: float, radius_km: float = 1.0) -> List[Dict]:

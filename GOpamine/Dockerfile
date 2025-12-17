@@ -5,7 +5,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Copy và cài đặt dependencies
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy toàn bộ code
@@ -15,4 +15,6 @@ COPY . .
 EXPOSE 10000
 
 # LỆNH CHẠY QUAN TRỌNG: Không dùng ngoặc vuông []
-CMD gunicorn --bind 0.0.0.0:${PORT:-10000} backend.app:app
+ENTRYPOINT ["sh", "-c"]
+CMD ["sh", "-c", "gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:${PORT} backend.app:app"]
+

@@ -26,7 +26,7 @@ from backend.routes.bus_routes import bus_bp
 from backend.routes.chatbot import chatbot_bp
 from backend.routes.auth import auth_bp, setup_oauth  # Import setup_oauth từ auth mới
 from backend.routes.transport_routes import transport_bp
-from backend.routes.bus_manager import bus_data
+from backend.routes.bus_manager import init_bus_data, BusDataManager
 
 # Import database và models
 from database.supabase_client import supabase
@@ -53,11 +53,21 @@ login_manager.login_view = 'auth.login'  # Redirect đến trang login nếu ch�
 login_manager.login_message = 'Vui lòng đăng nhập để truy cập trang này.'
 
 
-@app.before_request
-def init_cache():
-    if not hasattr(app, 'cache_initialized'):
-        bus_data.refresh_data()
-        app.cache_initialized = True
+    
+
+@app.before_first_request
+def warm_bus_data():
+    print("🚀 Initializing bus data...")
+    init_bus_data()
+     # Lấy instance
+    manager = BusDataManager.get_instance()
+
+    # Load dữ liệu (chạy sau khi server bind port)
+    manager.refresh_data()
+
+ 
+    print("✅ Bus data ready")
+
     
 @login_manager.user_loader
 def load_user(user_id):
@@ -217,25 +227,25 @@ def forbidden(e):
 
 # ========== RUN APP ==========
 
-if __name__ == '__main__':
-    # Lấy cấu hình từ environment variables
-    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    host = os.getenv('FLASK_HOST', '0.0.0.0')
-    port = int(os.getenv('FLASK_PORT', 5000))
+# if __name__ == '__main__':
+#     # Lấy cấu hình từ environment variables
+#     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+#     host = os.getenv('FLASK_HOST', '0.0.0.0')
+#     port = int(os.getenv('FLASK_PORT', 5000))
     
-    print(f"""
-    ╔═══════════════════════════════════════╗
-    ║  🚀 GOPamine Server Starting...       ║
-    ╠═══════════════════════════════════════╣
-    ║  🌐 Host: {host:<25}                  ║
-    ║  🔌 Port: {port:<25}                  ║
-    ║  🐛 Debug: {str(debug_mode):<24}      ║
-    ║  🔒 Auth: Supabase Auth               ║
-    ╚═══════════════════════════════════════╝
-    """)
+#     print(f"""
+#     ╔═══════════════════════════════════════╗
+#     ║  🚀 GOPamine Server Starting...       ║
+#     ╠═══════════════════════════════════════╣
+#     ║  🌐 Host: {host:<25}                  ║
+#     ║  🔌 Port: {port:<25}                  ║
+#     ║  🐛 Debug: {str(debug_mode):<24}      ║
+#     ║  🔒 Auth: Supabase Auth               ║
+#     ╚═══════════════════════════════════════╝
+#     """)
     
-    app.run(
-        debug=debug_mode,
-        host=host,
-        port=port
-    )
+#     app.run(
+#         debug=debug_mode,
+#         host=host,
+#         port=port
+#     )
