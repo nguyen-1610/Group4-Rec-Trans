@@ -1,26 +1,18 @@
-# 1. Chọn môi trường Python (nhẹ và ổn định)
+# Sử dụng Python làm base
 FROM python:3.10-slim
 
-# 2. Thiết lập thư mục làm việc bên trong container
+# Thiết lập thư mục làm việc
 WORKDIR /app
 
-ENV FLASK_HOST=0.0.0.0
+# Copy và cài đặt dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Copy file requirements từ máy bạn vào container trước
-# (Lưu ý đường dẫn backend/requirements.txt dựa trên ảnh bạn gửi)
-COPY backend/requirements.txt .
-
-# 4. Cài đặt các thư viện
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# 5. Copy toàn bộ code (cả backend lẫn frontend) vào container
+# Copy toàn bộ code
 COPY . .
 
-# 6. Mở cổng 5000 (cổng mặc định của Flask)
-EXPOSE 5000
+# Mở cổng (Render sẽ tự map cổng này)
+EXPOSE 10000
 
-# 7. Lệnh chạy app khi container khởi động
-# Vì app.py nằm trong folder backend, ta phải gọi python backend/app.py
-ENV PORT=10000
-CMD ["gunicorn", "--bind", "0.0.0.0:10000", "backend.app:app"]
+# LỆNH CHẠY QUAN TRỌNG: Không dùng ngoặc vuông []
+CMD gunicorn --bind 0.0.0.0:${PORT:-10000} backend.app:app
