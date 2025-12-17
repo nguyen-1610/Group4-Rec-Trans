@@ -893,7 +893,7 @@ if (profileTrigger && profileDropdown) {
 // === LOGOUT FUNCTION ===
 async function handleLogout() {
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/logout', {
+        const response = await fetch('https://gopamine-web.onrender.com/api/logout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include'

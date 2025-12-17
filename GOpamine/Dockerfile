@@ -22,4 +22,4 @@ EXPOSE 5000
 
 # 7. Lệnh chạy app khi container khởi động
 # Vì app.py nằm trong folder backend, ta phải gọi python backend/app.py
-CMD ["python", "backend/app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:${PORT:-5000}", "backend.app:app"]

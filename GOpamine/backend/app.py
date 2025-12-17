@@ -45,8 +45,6 @@ app = Flask(
 # Secret key cho session (ĐỔI THÀNH KEY PHỨC TẠP TRONG PRODUCTION!)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-change-in-production')
 
-# Redirect từ 127.0.0.1 sang localhost
-
 # ========== CẤU HÌNH FLASK-LOGIN ==========
 
 login_manager = LoginManager()
@@ -221,7 +219,7 @@ def forbidden(e):
 
 if __name__ == '__main__':
     # Lấy cấu hình từ environment variables
-    debug_mode = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     host = os.getenv('FLASK_HOST', '0.0.0.0')
     port = int(os.getenv('FLASK_PORT', 5000))
     

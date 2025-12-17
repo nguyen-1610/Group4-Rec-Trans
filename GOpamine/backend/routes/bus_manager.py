@@ -393,10 +393,13 @@ class BusDataManager:
                     })
                     break  # Tìm được 1 → qua trạm tiếp theo
         
-        # Cache kết quả
-        cache_set(cache_key_str, transfer_points, ttl=CACHE_CONFIG["TTL"]["transfer_points"])
+       # Cache sau khi loop xong (không trong loop)
+        try:
+            cache_set(cache_key_str, transfer_points, ttl=CACHE_CONFIG["TTL"]["transfer_points"])
+        except:
+            pass  # Bỏ qua lỗi cache, vẫn return kết quả
         return transfer_points
-    
+
     def get_stats(self) -> Dict:
         """Trả về statistics"""
         with self.data_lock:
