@@ -30,3 +30,6 @@ gunicorn
 logging
 datetime
 supabase
+scipy
+redis
+numpy

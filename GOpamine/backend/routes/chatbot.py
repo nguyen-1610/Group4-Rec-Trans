@@ -275,84 +275,157 @@ def build_pricing_context(form_data, weather_payload, traffic_payload):
 
 def build_advanced_pricing_context(form_data):
     """
-    Sử dụng AStarRouter để tính toán và so sánh giá các hãng (Grab, Be, XanhSM, Bus).
+    ===================================================================
+    VERSION 2.0 - SIMPLIFIED & EFFECTIVE
+    ===================================================================
+    Sử dụng AStarRouter và bus_routing để tạo context rõ ràng cho AI
     """
     try:
         start_input = form_data.get('origin') or form_data.get('start_id')
         dest_input = form_data.get('destinations') or form_data.get('destination_ids')
         
-        if not start_input or not dest_input:
-            print("[Pricing] Thiếu thông tin điểm đi/đến trong form_data")
+        def parse_int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        start_id = parse_int(start_input)
+        if start_id is None:
+            print(f"[Pricing] start_id không hợp lệ: {start_input}")
             return None
 
+        destination_ids = []
+        if isinstance(dest_input, list):
+            destination_ids = [parse_int(x) for x in dest_input]
+        elif isinstance(dest_input, str):
+            destination_ids = [parse_int(x) for x in dest_input.split(',')]
 
-        # Gọi AStarRouter
+        destination_ids = [x for x in destination_ids if x is not None]
+
+        if not destination_ids:
+            print(f"[Pricing] destination_ids không hợp lệ: {dest_input}")
+            return None
+
+        # Lấy route data từ AStarRouter
         result = ROUTER.plan_multi_stop_trip(
-            start_id=int(start_input),
-            destination_ids=[int(x) for x in dest_input],
+            start_id=start_id,
+            destination_ids=destination_ids,
         )
 
         if not result['success']:
             return None
 
         data = result['data']
-        summary = data.get('summary', []) # Đã sort từ rẻ -> đắt
+        summary = data.get('summary', [])
         segments = data.get('segments', [])
-
-        # Lấy danh sách điểm đã tối ưu để tìm bus (Đây là danh sách chuẩn mà Map đang dùng)
         optimized_waypoints = data.get('optimized_order', [])
 
-        # Xây dựng context cho Gemini
+        # ===================================================================
+        # PHẦN 1: THÔNG TIN TỔNG QUAN
+        # ===================================================================
         lines = [
-            "\n[DỮ LIỆU LỘ TRÌNH & BẢNG GIÁ CÁC HÃNG XE]",
-            f"- Tổng hành trình: {data['total_distance_km']} km (qua {len(segments)} chặng di chuyển).",
-            "- BẢNG GIÁ ƯỚC TÍNH (Tổng chuyến đi):"
+            "="*70,
+            "📊 BẢNG GIÁ CÁC PHƯƠNG TIỆN (Hệ thống đã tính toán)",
+            "="*70,
+            f"📏 Tổng khoảng cách: {data['total_distance_km']} km",
+            f"🚩 Số chặng: {len(segments)} chặng",
+            ""
         ]
+
+        # ===================================================================
+        # PHẦN 2: BẢNG GIÁ TỔNG (Đây là dữ liệu chính xác từ hệ thống)
+        # ===================================================================
+        lines.append("💰 GIÁ TỔNG CHUYẾN ĐI:")
+        lines.append("-" * 70)
         
-        # Liệt kê tất cả các hãng để người dùng chọn
         for item in summary: 
             icon = "🚌" if "Buýt" in item['name'] else ("🏍️" if "Bike" in item['name'] else "🚗")
-            lines.append(f"  {icon} {item['name']}: {item['display_total']}")
-
-        lines.append("\n- Chi tiết từng chặng (Tham khảo):")
-        for seg in segments:
-            # Lấy giá của phương tiện rẻ nhất (thường là bus) và đắt nhất (car) để làm khoảng giá
-            prices = seg.get('prices', {})
-            # Ví dụ lấy giá GrabBike để hiển thị mẫu
-            grab_bike = prices.get('grab_bike', {}).get('display', 'N/A')
-            lines.append(f"  + {seg['from_name']} -> {seg['to_name']} ({seg['distance_km']}km) | GrabBike: ~{grab_bike}")
+            lines.append(f"  {icon} {item['name']:<20} {item['display_total']:>15}")
         
-        # [QUAN TRỌNG] GỌI LOGIC TÌM BUS CHÍNH CHỦ TỪ BUS_ROUTING
-        # ============================================================
+        lines.append("-" * 70)
+        lines.append("")
+
+        # ===================================================================
+        # PHẦN 3: THÔNG TIN XE BUÝT (NẾU CÓ) - ĐÂY LÀ PHẦN QUAN TRỌNG NHẤT
+        # ===================================================================
+        bus_available = False
+        
         if optimized_waypoints and len(optimized_waypoints) >= 2:
             try:
-                bus_result = plan_multi_stop_bus_trip(optimized_waypoints)
+                bus_result = plan_multi_stop_bus_trip(optimized_waypoints, max_walk_km=1.5)
                 
                 if bus_result['success']:
-                    lines.append("\n[⚡ DỮ LIỆU XE BUÝT CHÍNH XÁC TỪ HỆ THỐNG - BẮT BUỘC DÙNG]:")
-                    lines.append("(AI Lưu ý: Không được tự bịa ra tuyến khác, chỉ dùng thông tin dưới đây)")
-                    
+                    bus_available = True
                     legs = bus_result['data'].get('legs', [])
                     
-                    for i, leg in enumerate(legs):
+                    lines.append("🚌 TUYẾN XE BUÝT ĐÃ TÌM THẤY:")
+                    lines.append("="*70)
+                    lines.append("⚠️  QUAN TRỌNG: Hệ thống ĐÃ tìm thấy tuyến xe buýt phù hợp!")
+                    lines.append("    Bạn PHẢI đề xuất xe buýt như một phương án khả thi.")
+                    lines.append("")
+                    
+                    for i, leg in enumerate(legs, 1):
                         route_name = leg.get('route_name', 'Không rõ')
                         bus_no = route_name.split(' - ')[0] if ' - ' in route_name else route_name
+                        start_stop = leg.get('start_stop', 'N/A')
+                        end_stop = leg.get('end_stop', 'N/A')
                         
-                        start_stop = leg.get('start_stop', 'Trạm không xác định')
-                        end_stop = leg.get('end_stop', 'Trạm không xác định')
-                        
-                        lines.append(f"  * Chặng {i+1}: Đi **Tuyến {bus_no}** ({route_name})")
-                        lines.append(f"    - Đi bộ ra trạm đón: {start_stop}")
-                        lines.append(f"    - Xuống xe tại trạm: {end_stop}")
-                else:
-                    # Nếu Map tìm ra mà ở đây không tìm ra thì rất lạ, nhưng cứ handle
-                    lines.append("\n[Lưu ý về Bus]: Hệ thống xác nhận KHÔNG có tuyến xe buýt đi thẳng phù hợp cho lộ trình này.")
-            
+                        lines.append(f"Chặng {i}:")
+                        lines.append(f"  • Tuyến: {bus_no} - {route_name}")
+                        lines.append(f"  • Lên xe: {start_stop}")
+                        lines.append(f"  • Xuống xe: {end_stop}")
+                        lines.append("")
+                    
+                    lines.append("="*70)
+                    lines.append("")
+                    
             except Exception as e:
                 print(f"[Bus Context Error]: {e}")
-        # ============================================================
 
-        lines.append("[Hết dữ liệu - Hãy tư vấn dựa trên bảng giá các hãng ở trên]")
+        # Nếu không tìm thấy bus
+        if not bus_available:
+            lines.append("🚌 THÔNG TIN XE BUÝT:")
+            lines.append("-" * 70)
+            lines.append("❌ Hệ thống không tìm thấy tuyến xe buýt phù hợp cho hành trình này.")
+            lines.append("   Các lý do có thể:")
+            lines.append("   • Khoảng cách giữa các điểm quá xa trạm xe buýt (>1.5km)")
+            lines.append("   • Không có tuyến xe buýt nào phù hợp")
+            lines.append("")
+
+        # ===================================================================
+        # PHẦN 4: CHI TIẾT TỪNG CHẶNG (Tham khảo thêm)
+        # ===================================================================
+        lines.append("📍 CHI TIẾT TỪNG CHẶNG:")
+        lines.append("-" * 70)
+        for i, seg in enumerate(segments, 1):
+            prices = seg.get('prices', {})
+            grab_bike = prices.get('grab_bike', {}).get('display', 'N/A')
+            lines.append(f"{i}. {seg['from_name']} → {seg['to_name']}")
+            lines.append(f"   Khoảng cách: {seg['distance_km']} km")
+            lines.append(f"   Giá tham khảo (GrabBike): {grab_bike}")
+            lines.append("")
+
+        lines.append("="*70)
+        lines.append("")
+        
+        # ===================================================================
+        # PHẦN 5: HƯỚNG DẪN CHO AI
+        # ===================================================================
+        lines.append("📝 LƯU Ý KHI TƯ VẤN:")
+        lines.append("-" * 70)
+        if bus_available:
+            lines.append("✅ Xe buýt CÓ khả dụng - Bạn NÊN đề xuất phương án này")
+            lines.append("   • Giá rẻ nhất trong tất cả các phương án")
+            lines.append("   • Thân thiện với môi trường")
+            lines.append("   • Phù hợp cho người có ngân sách hạn chế")
+        else:
+            lines.append("❌ Xe buýt KHÔNG khả dụng cho tuyến đường này")
+            lines.append("   • Tập trung vào các phương án khác (Grab, Be, XanhSM)")
+        
+        lines.append("")
+        lines.append("Dựa vào bảng giá và thông tin trên để đưa ra tư vấn phù hợp!")
+        lines.append("="*70)
         
         return "\n".join(lines)
 
@@ -361,6 +434,7 @@ def build_advanced_pricing_context(form_data):
         import traceback
         traceback.print_exc()
         return None
+
 
 
 def normalize_priorities(preferences):

@@ -26,6 +26,7 @@ from backend.routes.bus_routes import bus_bp
 from backend.routes.chatbot import chatbot_bp
 from backend.routes.auth import auth_bp, setup_oauth  # Import setup_oauth từ auth mới
 from backend.routes.transport_routes import transport_bp
+from backend.routes.bus_manager import bus_data
 
 # Import database và models
 from database.supabase_client import supabase
@@ -53,6 +54,13 @@ login_manager.init_app(app)
 login_manager.login_view = 'auth.login'  # Redirect đến trang login nếu chưa đăng nhập
 login_manager.login_message = 'Vui lòng đăng nhập để truy cập trang này.'
 
+
+@app.before_request
+def init_cache():
+    if not hasattr(app, 'cache_initialized'):
+        bus_data.refresh_data()
+        app.cache_initialized = True
+    
 @login_manager.user_loader
 def load_user(user_id):
     """

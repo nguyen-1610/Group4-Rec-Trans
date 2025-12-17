@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Đang đăng nhập...</title>
+</head>
+<body>
+  <p>Đang đăng nhập, vui lòng chờ...</p>
+
+  <script>
+    // Supabase trả token trong URL fragment (#)
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+
+    const accessToken = params.get('access_token');
+
+    if (!accessToken) {
+      document.body.innerText = "❌ Không lấy được access token";
+    } else {
+      fetch('/api/auth/sync-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          window.location.href = '/';
+        } else {
+          document.body.innerText = '❌ Login thất bại';
+        }
+      })
+      .catch(err => {
+        document.body.innerText = '❌ Lỗi hệ thống';
+      });
+    }
+  </script>
+</body>
+</html>

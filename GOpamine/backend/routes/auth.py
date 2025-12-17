@@ -6,10 +6,12 @@ Hỗ trợ: Email/Password, OAuth (Google, Facebook), Guest Login
 import os
 import uuid
 from datetime import datetime
-from flask import Blueprint, request, jsonify, redirect, url_for, session, render_template_string
+from flask import Blueprint, request, jsonify, redirect, url_for, session, render_template
 from flask_login import login_user, logout_user, login_required, current_user, UserMixin
 from dotenv import load_dotenv
 from supabase import create_client
+from backend.models.user_model import users as User 
+from urllib.parse import urlencode
 
 # Import Supabase client
 import sys
@@ -26,14 +28,14 @@ auth_bp = Blueprint('auth', __name__)
 # ==============================================================================
 # USER CLASS cho Flask-Login
 # ==============================================================================
-class User(UserMixin):
-    def __init__(self, user_id, email, username, auth_type='email', is_guest=False):
-        self.id = user_id  # Flask-Login yêu cầu thuộc tính này
-        self.user_id = user_id
-        self.email = email
-        self.username = username
-        self.auth_type = auth_type
-        self.is_guest = is_guest
+# class User(UserMixin):
+#     def __init__(self, user_id, email, username, auth_type='email', is_guest=False):
+#         self.id = user_id  # Flask-Login yêu cầu thuộc tính này
+#         self.user_id = user_id
+#         self.email = email
+#         self.username = username
+#         self.auth_type = auth_type
+#         self.is_guest = is_guest
 
 # ==============================================================================
 # HELPER FUNCTIONS
@@ -317,30 +319,40 @@ def get_current_user():
 # ==============================================================================
 @auth_bp.route('/api/login/google')
 def login_google():
-    """Chuyển hướng đến Google OAuth"""
     try:
-        # Supabase sẽ tự động xử lý redirect
-        redirect_url = f"{os.getenv('SUPABASE_URL')}/auth/v1/authorize?provider=google&redirect_to={request.host_url}"
-        
+        callback_url = f"{request.host_url}api/auth/callback"
+
+        params = {
+            "provider": "google",
+            "redirect_to": callback_url
+        }
+
+        redirect_url = f"{os.getenv('SUPABASE_URL')}/auth/v1/authorize?{urlencode(params)}"
+
         print(f"🔗 [GOOGLE LOGIN] Redirect to: {redirect_url}")
         return redirect(redirect_url)
-        
+
     except Exception as e:
         print(f"❌ [GOOGLE LOGIN ERROR]: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
-
 # ==============================================================================
 # OAUTH - FACEBOOK LOGIN
 # ==============================================================================
 @auth_bp.route('/api/login/facebook')
 def login_facebook():
-    """Chuyển hướng đến Facebook OAuth"""
     try:
-        redirect_url = f"{os.getenv('SUPABASE_URL')}/auth/v1/authorize?provider=facebook&redirect_to={request.host_url}"
-        
+        callback_url = f"{request.host_url}api/auth/callback"
+
+        params = {
+            "provider": "facebook",
+            "redirect_to": callback_url
+        }
+
+        redirect_url = f"{os.getenv('SUPABASE_URL')}/auth/v1/authorize?{urlencode(params)}"
+
         print(f"🔗 [FACEBOOK LOGIN] Redirect to: {redirect_url}")
         return redirect(redirect_url)
-        
+
     except Exception as e:
         print(f"❌ [FACEBOOK LOGIN ERROR]: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -348,22 +360,11 @@ def login_facebook():
 # ==============================================================================
 # OAUTH CALLBACK - Xử lý sau khi OAuth thành công
 # ==============================================================================
-@auth_bp.route('/auth/callback')
-def auth_callback():
-    """
-    Supabase sẽ redirect về đây sau khi OAuth thành công
-    URL format: /auth/callback#access_token=...&refresh_token=...
-    """
-    try:
-        # Supabase gửi token qua URL fragment (#), cần xử lý ở frontend
-        # Hoặc có thể lấy từ query params nếu config đúng
-        
-        return redirect('/')  # Redirect về trang chủ, frontend sẽ xử lý token
-        
-    except Exception as e:
-        print(f"❌ [AUTH CALLBACK ERROR]: {e}")
-        return redirect('/?error=auth_failed')
 
+@auth_bp.route('/api/auth/callback')
+def auth_callback():
+    return render_template("oauth_callback.html")
+# ==============================================================================
 
 def setup_oauth(app):
     # Hàm này không cần làm gì cả vì ta đang dùng Supabase Client-side
@@ -517,78 +518,66 @@ def register_v2_admin():
 # ==============================================================================
 @auth_bp.route('/api/auth/sync-session', methods=['POST'])
 def sync_session():
-    # Import cục bộ để tránh mọi lỗi thiếu thư viện tiềm ẩn
-    from supabase import create_client
     import os
-    
-    try:
-        # 1. Lấy dữ liệu
-        data = request.json
-        access_token = data.get('access_token')
-        
-        if not access_token:
-            return jsonify({'success': False, 'message': 'Thiếu Access Token'}), 400
 
-        # 2. Kết nối ADMIN (Để ghi đè RLS và Check Constraint)
+    try:
+        data = request.json or {}
+        access_token = data.get('access_token')
+
+        if not access_token:
+            return jsonify({'success': False, 'message': 'Thiếu access_token'}), 400
+
         sb_url = os.getenv("SUPABASE_URL")
         sb_service_key = os.getenv("SUPABASE_SERVICE_KEY")
-        
+
         if not sb_service_key:
-            return jsonify({'success': False, 'message': 'Lỗi Server: Thiếu Service Key'}), 500
-            
+            return jsonify({'success': False, 'message': 'Server misconfig'}), 500
+
         supabase_admin = create_client(sb_url, sb_service_key)
 
-        # 3. Lấy thông tin User từ Supabase Auth
-        # (Dùng client thường để verify token cũng được, hoặc admin đều OK)
         user_response = supabase_admin.auth.get_user(access_token)
         if not user_response or not user_response.user:
-            return jsonify({'success': False, 'message': 'Token Facebook/Google không hợp lệ'}), 401
+            return jsonify({'success': False, 'message': 'Token không hợp lệ'}), 401
 
         user = user_response.user
-        
-        # 4. CHUẨN BỊ DỮ LIỆU (QUAN TRỌNG NHẤT)
         meta = user.user_metadata or {}
-        full_name = meta.get('full_name') or meta.get('name') or user.email.split('@')[0]
-        
-        # Xử lý trường hợp Facebook không trả về email (dùng ID làm email giả)
-        safe_email = user.email if user.email else f"{user.id}@facebook.no-email"
 
-        # [FIX CRITICAL] LUÔN DÙNG 'email' ĐỂ TRÁNH LỖI CHECK CONSTRAINT CỦA DB
-        # Database của bạn đang chặn các từ khóa lạ như 'facebook', 'google'
-        auth_type_value = 'email' 
+        full_name = meta.get('full_name') or meta.get('name') or user.email.split('@')[0]
+        safe_email = user.email or f"{user.id}@no-email.provider"
 
         user_data = {
             "user_id": user.id,
             "email": safe_email,
             "username": full_name,
-            "auth_type": auth_type_value, # <--- Luôn là 'email' -> DB OK
+            "auth_type": "email",
+            "social_id": user.id,
             "is_guest": False,
-            "created_at": datetime.now().isoformat()
         }
 
-        # 5. GHI VÀO DB (Dùng Admin Client)
-        print(f"⚡ [SYNC] Đang đồng bộ Facebook/Google: {safe_email}")
         supabase_admin.table("users").upsert(user_data).execute()
-        
-        # Ghi Profile phụ
+
         try:
             supabase_admin.table("UserProfile").upsert({
                 "user_id": user.id,
                 "default_mode": 0,
                 "age_group": "balanced"
-            }, on_conflict='user_id').execute()
-        except Exception as e:
-            print(f"⚠️ Lỗi tạo profile (không sao): {e}")
+            }, on_conflict="user_id").execute()
+        except Exception:
+            pass
 
-        # 6. Login Flask (Để server nhớ phiên)
-        local_user = User(user.id, safe_email, full_name, auth_type_value, False)
+        local_user = User(
+            user.id,
+            safe_email,
+            full_name,
+            "email",
+            False
+        )
         login_user(local_user, remember=True)
-        
+
         return jsonify({'success': True})
 
     except Exception as e:
-        print(f"❌ [SYNC ERROR]: {e}")
-        # Trả về message rõ ràng để Frontend không báo 'undefined'
+        print("❌ sync-session error:", e)
         return jsonify({'success': False, 'message': str(e)}), 500
 
 # ==============================================================================

@@ -68,13 +68,13 @@ Chào bạn! Với ngân sách 114.000 VNĐ và ưu tiên tiết kiệm cho 2 ng
      4. Dinh Độc Lập nằm ở số 135 Nam Kỳ Khởi Nghĩa.
    * **Lưu ý:** Vì bạn có 2 người, tổng chi phí sẽ là 12.000 VNĐ, vẫn rất tiết kiệm so với ngân sách của bạn.
 
-2. **Xe máy 🛵:**
+2. **Xe ôm công nghệ (Grab /Be /XanhSm Bike) 🛵:**
    * **Ưu điểm:** Nhanh chóng, tiện lợi.
    * **Thời gian:** Khoảng 4 phút.
    * **Chi phí:** Khoảng 13.371 VNĐ.
-   * **Lưu ý:** Nếu bạn có xe máy hoặc có thể thuê xe, đây là một lựa chọn tốt.
+   * **Lưu ý:** Nếu bạn đặt xe, đây là một lựa chọn tốt.
 
-3. **Ô tô 🚗:**
+3. **Taxi công nghệ (Grab /Be /XanhSm Car) 🚗:**
    * **Ưu điểm:** Thoải mái, mát mẻ.
    * **Thời gian:** Khoảng 4 phút.
    * **Chi phí:** Khoảng 28.925 VNĐ.
@@ -85,8 +85,8 @@ Chào bạn! Với ngân sách 114.000 VNĐ và ưu tiên tiết kiệm cho 2 ng
 * **Giao thông:** Hiện tại giao thông khá thông thoáng, không có kẹt xe đáng kể 🚦
 
 ⏰ **Gợi ý "giờ vàng":**
-* Nên đi trước 7h sáng hoặc sau 9h để tránh giờ cao điểm
-* Buổi trưa 11h-13h giao thông thông thoáng hơn
+* Hiện tại là 21:32, giao thông đang khá thông thoáng, bạn có thể di chuyển ngay.
+* Nếu bạn muốn tránh giờ cao điểm, hãy cân nhắc di chuyển trước 7:30 sáng hoặc sau 8:30 tối để tránh kẹt xe.
 
 **Kết luận:**
 * Nếu bạn muốn tiết kiệm nhất, xe buýt là lựa chọn số một.

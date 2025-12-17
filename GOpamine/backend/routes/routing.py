@@ -1,5 +1,7 @@
 from flask import Blueprint, request, jsonify
 import requests
+from backend.routes.bus_manager import find_nearby_stations
+from backend.utils.bus_routing import find_smart_bus_route
 
 # Blueprint chỉ chứa logic/API của form để app.py phụ trách render template
 form_bp = Blueprint('form_api', __name__)
@@ -94,6 +96,38 @@ def find_route_osm():
             'error': str(e)
         }), 500
 
+@form_bp.route('/api/find-bus-route', methods=['POST'])
+def find_bus_route():
+    """
+    Tìm tuyến xe bus giữa 2 điểm
+    """
+    try:
+        from bus_routes import find_smart_bus_route
+        
+        data = request.json or {}
+        start = data.get('start')
+        end = data.get('end')
+        limit = data.get('limit', 3)
+        
+        if not start or not end:
+            return jsonify({
+                'success': False,
+                'error': 'Thiếu start/end'
+            }), 400
+        
+        start_coords = {'lat': start['lat'], 'lon': start['lon']}
+        end_coords = {'lat': end['lat'], 'lon': end['lon']}
+        
+        # Gọi hàm bus routing
+        result = find_smart_bus_route(start_coords, end_coords, skip_validation=True, limit=limit)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @form_bp.route('/api/geocode', methods=['GET'])
 def geocode_place():
