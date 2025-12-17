@@ -23,9 +23,9 @@ except ImportError:  # Nếu lỗi (do chạy từ thư mục khác cấu trúc)
 # Bảng cấu hình tốc độ (km/h) cho từng loại xe trong 2 trường hợp: Bình thường & Cao điểm
 SPEED_CONFIG = {
     'walking': {'normal': 5,  'rush': 5},   # Đi bộ: Tốc độ không đổi (5km/h)
-    'bus':     {'normal': 25, 'rush': 15},  # Bus: Giảm mạnh khi kẹt xe
-    'bike':    {'normal': 30, 'rush': 22},  # Xe máy: Nhanh, ít bị ảnh hưởng hơn
-    'car':     {'normal': 25, 'rush': 13}   # Ô tô: Dễ bị kẹt cứng nhất khi cao điểm
+    'bus':     {'normal': 20, 'rush': 15},  # Bus: Giảm mạnh khi kẹt xe
+    'bike':    {'normal': 35, 'rush': 25},  # Xe máy: Nhanh, ít bị ảnh hưởng hơn
+    'car':     {'normal': 28, 'rush': 18}   # Ô tô: Dễ bị kẹt cứng nhất khi cao điểm
 }
 
 # ==============================================================================
@@ -39,7 +39,7 @@ class UserRequest:  # Class chứa thông tin người dùng gửi lên
         self.priorities = set(priorities) if priorities else set()  # Lưu các ưu tiên (nhanh, rẻ...) vào set để tra cứu
         
         # Xử lý ngân sách: Nếu không nhập hoặc nhập sai thì mặc định là 10 triệu (coi như vô hạn)
-        self.budget = float(budget) if budget and float(budget) > 0 else 10_000_000
+        self.budget = float(budget) if budget and float(budget) > 0 else 1_000_000
         
         # --- [DEBUG TRACE 4] Kiểm tra self.budget sau khi logic if/else chạy ---
         print(f"🔍 [DEBUG TRACE 4] Final self.budget: {self.budget}")
@@ -183,111 +183,115 @@ def _compute_score(metrics, user, distance_km, weather_ctx):
     brand = str(mode.get('brand', '')).lower()
     capacity = mode.get('capacity', 4)
     is_peak = metrics['is_peak']
-
+    
     if 'bike' in raw_type: mode_type = 'bike'
     elif 'car' in raw_type or 'taxi' in raw_type: mode_type = 'car'
     elif 'bus' in raw_type: mode_type = 'bus'
     elif 'walk' in raw_type: mode_type = 'walk'
     else: mode_type = raw_type
-
+    
     is_raining = getattr(weather_ctx, 'is_raining', False)
     is_hot = getattr(weather_ctx, 'is_hot', False)
     priorities = set(user.priorities)
-
     score = 0.0
-
+    
     # ===============================
-    # 1. BASE SCORE (KEY FIX)
+    # 1. BASE SCORE (BALANCED)
     # ===============================
     base_score = {
         'car': 5.0,
         'bike': 4.5,
-        'bus': 3.5,   # 👈 BUS BASE THẤP
+        'bus': 4.0,   # ✅ Tăng từ 3.5
         'walk': 2.5
     }
     score += base_score.get(mode_type, 4.0)
-
+    
     # ===============================
-    # 2. CAPACITY & GROUP LOGIC
+    # 2. CAPACITY & GROUP LOGIC (FIXED)
     # ===============================
     if mode_type == 'bus':
         if user.passenger_count >= 4:
-            score += 1.5
+            score += 2.0  # ✅ Bonus cho nhóm đông
         elif user.passenger_count <= 2:
-            score -= 2.0   # 👈 đi ít người bus bị phạt
-
+            score += 0.5  # ✅ Vẫn OK cho 1-2 người
+    
     if mode_type == 'bike' and user.passenger_count > 2:
-        score -= 6.0
-
+        score -= 3.0  # Giữ nguyên
+    
     if mode_type == 'car' and capacity >= 7 and user.passenger_count <= 2:
-        score -= 3.0
-
+        score -= 2.0  # ✅ Giảm từ -3.0
+    
     # ===============================
-    # 3. PRIORITY SCORING
+    # 3. PRIORITY SCORING (BALANCED)
     # ===============================
     # SPEED
     if 'speed' in priorities:
-        if mode_type == 'bike': score += 2.5
+        if mode_type == 'bike': score += 3.5
         elif mode_type == 'car': score += 1.5
-        elif mode_type == 'bus': score -= 3.0
+        elif mode_type == 'bus': score -= 1.5  # ✅ Giảm từ -3.0
         elif mode_type == 'walk': score -= 4.0
-
+        
         if is_peak:
             if mode_type == 'bike': score += 1.0
             else: score -= 1.5
-
+    
     # SAVING
     if {'saving', 'cheap', 'budget'} & priorities:
-        if mode_type == 'bus': score += 2.5
-        elif mode_type == 'walk': score += 2.0
-        elif mode_type == 'car': score -= 2.0
-
-    # COMFORT
+        if mode_type == 'bus': score += 3.0  # ✅ Tăng từ 2.5
+        elif mode_type == 'walk': score += 2.5  # ✅ Tăng từ 2.0
+        elif mode_type == 'bike': score += 2.4  # ✅ Thêm bonus
+        elif mode_type == 'car': score -= 1.8
+    
+    # COMFORT (KEY FIX!)
     if 'comfort' in priorities:
-        if mode_type == 'car': score += 3.5
-        elif mode_type == 'bus': score += 0.5
-        elif mode_type == 'bike': score -= 1.5
+        if mode_type == 'car': score += 2.5      # ✅ Giảm từ 3.5
+        elif mode_type == 'bus': score += 0.8    # ✅ Tăng từ 0.5
+        elif mode_type == 'bike': score += 0.1   # ✅ GIẢM TỪ -1.5
         elif mode_type == 'walk': score -= 2.5
-
+    
     # SAFETY
     if 'safety' in priorities:
         if mode_type in ['car', 'bus']: score += 1.5
         if mode_type == 'bike': score -= 0.5
-
+    
     # ===============================
-    # 4. PRICE (WEIGHTED)
+    # 4. PRICE (STRONGER WEIGHT)
     # ===============================
     price_weight = 1.0
     if 'comfort' in priorities:
-        price_weight = 0.4
+        price_weight = 0.6  # ✅ Tăng từ 0.4
     elif 'saving' in priorities:
-        price_weight = 1.3
-
+        price_weight = 2.0  # ✅ Tăng từ 1.3
+    
     price_score = 0.0
     if price > user.budget:
-        price_score -= 4.0
-    elif price < 50000:
-        price_score += 1.5
-    elif price > 200000:
-        price_score -= 1.5
-
+        price_score -= 5.0  # ✅ Tăng penalty
+    elif price < 20000:  # Bus, walk
+        price_score += 2.5  # ✅ Bonus mạnh
+    elif price < 50000:  # Bike
+        price_score += 1.9
+    elif price < 100000:  # Trung bình
+        price_score += 0.8
+    elif price > 200000:  # Car
+        price_score -= 2.0
+    
     score += price_score * price_weight
-
+    
     # ===============================
-    # 5. CONTEXT
+    # 5. CONTEXT (Giữ nguyên)
     # ===============================
     if is_raining:
         if mode_type == 'car': score += 2.0
         elif mode_type == 'bus': score += 1.0
         elif mode_type == 'bike': score -= 3.0
         elif mode_type == 'walk': score -= 4.0
-
+    
     if distance_km > 12:
         if mode_type == 'walk': score -= 8.0
-        elif mode_type == 'bike': score -= 2.0
+        elif mode_type == 'bike': score -= 1.0
         elif mode_type == 'car': score += 1.0
         elif mode_type == 'bus': score += 0.5
-
+    
     # ===============================
     # 6. CLAMP
     # ===============================
@@ -302,15 +306,15 @@ def _generate_labels(metrics, score, weather_ctx, distance_km):  # Hàm tạo nh
     brand_name = str(mode.get('brand', '')).lower()
     
     # Nhãn cảnh báo
-    if metrics['is_peak'] and mode['type'] == 'car': labels.append("🚦 Dễ kẹt")  # Cảnh báo kẹt xe
-    if weather_ctx.is_raining and mode['type'] == 'bike': labels.append("🌧️ Mặc áo mưa") # Cảnh báo mưa
+    if metrics['is_peak'] and mode['type'] == 'car': labels.append("Dễ kẹt")  # Cảnh báo kẹt xe
+    if weather_ctx.is_raining and mode['type'] == 'bike': labels.append(" Mặc áo mưa") # Cảnh báo mưa
     
-    if score >= 8.5: labels.append("⭐ Gợi ý tốt") # Nếu điểm cao -> Gắn nhãn gợi ý
+    if score >= 8.5: labels.append("Gợi ý tốt") # Nếu điểm cao -> Gắn nhãn gợi ý
     
     # Nhãn Brand đặc trưng (Marketing points)
-    if 'be' in brand_name: labels.append("💸 Nhiều ưu đãi")
-    if 'xanh' in brand_name: labels.append("🌿 Xe điện êm")
-    if 'grab' in brand_name and mode['type'] == 'bike': labels.append("🚀 Tài xế nhanh")
+    if 'be' in brand_name: labels.append("Nhiều ưu đãi")
+    if 'xanh' in brand_name: labels.append("Xe điện êm")
+    if 'grab' in brand_name and mode['type'] == 'bike': labels.append("Tài xế nhanh")
         
     return labels
 
@@ -334,8 +338,8 @@ def calculate_adaptive_scores(user, trip_distance, weather_ctx, traffic_level=0.
     results = []
 
     for mode in modes:
-        if not _check_hard_constraints(mode, user):  # B2: Lọc cứng (VD: quá số người)
-            continue 
+        # if not _check_hard_constraints(mode, user):  # B2: Lọc cứng (VD: quá số người)
+        #     continue 
 
         # B3: Tính toán chỉ số (Tiền, Thời gian...)
         metrics = _calculate_metrics(mode, user, trip_distance, weather_ctx)

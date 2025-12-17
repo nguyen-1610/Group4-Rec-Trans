@@ -38,6 +38,10 @@ document.addEventListener('DOMContentLoaded', async function() {
             tag_fast: "Nhanh",
             tag_saving: "Tiết kiệm",
             tag_eco: "Xe điện",
+            tag_best: "Gợi ý tốt",
+            tag_promo: "Nhiều ưu đãi",
+            tag_traffic: "Dễ kẹt",
+            tag_rain: "Mặc áo mưa",
         },
         en: {
             map_add_stop: "Add Destination",
@@ -63,6 +67,11 @@ document.addEventListener('DOMContentLoaded', async function() {
             tag_fast: "Fast",
             tag_saving: "Saving",
             tag_eco: "Electric",
+            tag_best: "Recommended",
+            tag_promo: "High Offers",
+            tag_traffic: "Traffic Jam",
+            tag_rain: "Rain gear needed",
+
         }
     };
 
@@ -542,7 +551,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                 else if (lowerL.includes("nhanh") || lowerL.includes("fast")) labelText = window.getTrans('tag_fast');
                 else if (lowerL.includes("rẻ")) labelText = window.getTrans('tag_cheap');
                 else if (lowerL.includes("điện") || lowerL.includes("eco")) labelText = window.getTrans('tag_eco');
-                
+
+                else if (lowerL.includes("gợi ý tốt")) labelText = window.getTrans('tag_best');
+                else if (lowerL.includes("nhiều ưu đãi")) labelText = window.getTrans('tag_promo');
+                else if (lowerL.includes("dễ kẹt")) labelText = window.getTrans('tag_traffic');
+                else if (lowerL.includes("áo mưa")) labelText = window.getTrans('tag_rain');
+                            
                 
                 return `<span style="font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 5px; border-radius:3px; margin-right:3px;">${labelText}</span>`;
             }).join('');
