@@ -327,29 +327,52 @@ def build_advanced_pricing_context(form_data):
         if optimized_waypoints and len(optimized_waypoints) >= 2:
             try:
                 bus_result = plan_multi_stop_bus_trip(optimized_waypoints)
-                
+
                 if bus_result['success']:
-                    lines.append("\n[⚡ DỮ LIỆU XE BUÝT CHÍNH XÁC TỪ HỆ THỐNG - BẮT BUỘC DÙNG]:")
-                    lines.append("(AI Lưu ý: Không được tự bịa ra tuyến khác, chỉ dùng thông tin dưới đây)")
-                    
+                    # ===== GROUND TRUTH (CỰC KỲ QUAN TRỌNG) =====
+                    lines.append("\n[GROUND_TRUTH_BUS_DATA]")
+                    lines.append("status = AVAILABLE")
+                    lines.append("source = INTERNAL_BUS_ROUTING_SYSTEM")
+                    lines.append("instruction = MUST_USE_THIS_DATA_ONLY")
+                    lines.append("prohibition = DO_NOT_DENY_OR_OVERRIDE")
+
+                    # ===== RULES =====
+                    lines.append("\n[RULES_FOR_AI]")
+                    lines.append("- If GROUND_TRUTH_BUS_DATA.status == AVAILABLE:")
+                    lines.append("  - Bus routes ARE AVAILABLE.")
+                    lines.append("  - You MUST mention route_number.")
+                    lines.append("  - You MUST NOT deny bus availability.")
+
+                    # ===== RESPONSE FORMAT =====
+                    lines.append("\n[RESPONSE_FORMAT]")
+                    lines.append("1. Available transport modes:")
+                    lines.append("   - Bus: YES (must match GROUND_TRUTH_BUS_DATA)")
+                    lines.append("2. Bus routes used:")
+                    lines.append("   - Route number")
+                    lines.append("   - Boarding stop → Alighting stop")
+
+                    # ===== STRUCTURED BUS DATA =====
                     legs = bus_result['data'].get('legs', [])
-                    
+
                     for i, leg in enumerate(legs):
                         route_name = leg.get('route_name', 'Không rõ')
                         bus_no = route_name.split(' - ')[0] if ' - ' in route_name else route_name
-                        
                         start_stop = leg.get('start_stop', 'Trạm không xác định')
                         end_stop = leg.get('end_stop', 'Trạm không xác định')
-                        
-                        lines.append(f"  * Chặng {i+1}: Đi **Tuyến {bus_no}** ({route_name})")
-                        lines.append(f"    - Đi bộ ra trạm đón: {start_stop}")
-                        lines.append(f"    - Xuống xe tại trạm: {end_stop}")
+
+                        lines.append(f"\n- leg_{i+1}:")
+                        lines.append(f"  route_number: {bus_no}")
+                        lines.append(f"  route_full_name: {route_name}")
+                        lines.append(f"  start_stop: {start_stop}")
+                        lines.append(f"  end_stop: {end_stop}")
+
                 else:
-                    # Nếu Map tìm ra mà ở đây không tìm ra thì rất lạ, nhưng cứ handle
-                    lines.append("\n[Lưu ý về Bus]: Hệ thống xác nhận KHÔNG có tuyến xe buýt đi thẳng phù hợp cho lộ trình này.")
-            
+                    lines.append("\n[GROUND_TRUTH_BUS_DATA]")
+                    lines.append("status = NOT_AVAILABLE")
+
             except Exception as e:
                 print(f"[Bus Context Error]: {e}")
+
         # ============================================================
 
         lines.append("[Hết dữ liệu - Hãy tư vấn dựa trên bảng giá các hãng ở trên]")
